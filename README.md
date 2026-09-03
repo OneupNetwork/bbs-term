@@ -1,5 +1,9 @@
 # ptt-term
 
+[![Deploy to GitHub Pages](../../actions/workflows/deploy.yml/badge.svg)](../../actions/workflows/deploy.yml)
+[![CodeQL](../../actions/workflows/dynamic/github-code-scanning/codeql/badge.svg)](../../actions/workflows/dynamic/github-code-scanning/codeql)
+[![Dependabot Updates](../../actions/workflows/dynamic/dependabot/dependabot-updates/badge.svg)](../../actions/workflows/dynamic/dependabot/dependabot-updates)
+
 An HTML5 web client for ANSI terminals via WebSocket, optimized for
 Taiwanese BBSes.
 
