@@ -9,6 +9,7 @@ import { _ } from './i18n';
 import { setTimer } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
 import { stringWidth } from './string_util';
+import { DEFAULT_PREFS } from './pref.js';
 
 const DEFINE_INPUT_BUFFER_SIZE = 12;
 
@@ -35,15 +36,15 @@ export class TermView extends EventEmitter {
   this.highlightBG = 2;
   this._charset = 'big5';
   //this.highlightFG = 7;
-  this.fontFitWindowWidth = false;
-  this.useCanvasEngine = true;
-  this.smoothAnsiArt = true;
+  this.fontFitWindowWidth = DEFAULT_PREFS.fontFitWindowWidth;
+  this.useCanvasEngine = DEFAULT_PREFS.useCanvasEngine;
+  this.smoothAnsiArt = DEFAULT_PREFS.smoothAnsiArt;
   //new pref - end
 
-  this.viewMargin = 0;
+  this.viewMargin = DEFAULT_PREFS.termMargin;
 
   this.app = options.app || null;
-  this.buf = options.buf || new TermBuf(80, 24);
+  this.buf = options.buf || new TermBuf(DEFAULT_PREFS.termSize.cols, DEFAULT_PREFS.termSize.rows);
   this.buf.view = this;
   this.buf.on('change', () => this.update());
   this.buf.on('cursor-move', () => this.updateCursorPos());
@@ -67,9 +68,9 @@ export class TermView extends EventEmitter {
   this.input = document.getElementById('t');
   this.cursor = document.getElementById('cursor');
   this.termWin = document.getElementById('TermWindow');
-  this.cursorStyle = 'blink';
-  this.lineHeight = 1.0;
-  this.fontSizePx = 24;
+  this.cursorStyle = DEFAULT_PREFS.cursorStyle;
+  this.lineHeight = DEFAULT_PREFS.lineHeight;
+  this.fontSizePx = DEFAULT_PREFS.fontSize;
   this.enableLinkHoverPreview = true;
   this.renderHyperlinkPreview = null;
   this.scaleX = 1;
@@ -1041,7 +1042,9 @@ export class TermView extends EventEmitter {
     if (!values) return;
     this.innerBounds = this.getWindowInnerBounds();
     this.resizer = null;
-    const effectiveMode = isMobile ? 'fixed-font-size' : values.termSizeMode;
+    const effectiveMode = isMobile
+      ? 'fixed-font-size'
+      : values.termSizeMode || DEFAULT_PREFS.termSizeMode;
     const resizeTerm =
       typeof onResizeTerm === 'function'
         ? onResizeTerm
@@ -1050,7 +1053,7 @@ export class TermView extends EventEmitter {
     switch (effectiveMode) {
       case 'fixed-term-size': {
         this.fontFitWindowWidth = values.fontFitWindowWidth;
-        const size = values.termSize;
+        const size = values.termSize || DEFAULT_PREFS.termSize;
         resizeTerm(size.cols, size.rows);
         this.fontResize();
         this.redraw(true);
@@ -1058,7 +1061,7 @@ export class TermView extends EventEmitter {
       }
       case 'fixed-font-size': {
         this.fontFitWindowWidth = false;
-        const fontSize = values.fontSize || 24;
+        const fontSize = values.fontSize || DEFAULT_PREFS.fontSize;
         this.resizer = () => {
           const size = this.calcTermSizeFromFont(fontSize);
           resizeTerm(size.cols, size.rows);
@@ -1073,8 +1076,8 @@ export class TermView extends EventEmitter {
         const maxFontSize =
           values.maxFontSize !== undefined
             ? values.maxFontSize
-            : values.fontSize || 999;
-        const minSize = { cols: 80, rows: 24 };
+            : values.fontSize || DEFAULT_PREFS.maxFontSize;
+        const minSize = DEFAULT_PREFS.termSize;
         this.resizer = () => {
           const scaledFontSize = this.calcFontSizeFromTerm(
             minSize.cols,

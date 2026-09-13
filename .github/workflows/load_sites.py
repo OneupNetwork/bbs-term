@@ -170,6 +170,19 @@ def load_sites(sites_dir=None):
         )
         data['DEFAULT_PLUGINS'] = normalize_default_plugins(raw_plugins, fname)
 
+        # Normalize DEFAULT_PREFS (supports dict or JSON string)
+        raw_prefs = data.get('DEFAULT_PREFS')
+        if raw_prefs is None or raw_prefs == '' or raw_prefs == {}:
+            data['DEFAULT_PREFS'] = ''
+        elif isinstance(raw_prefs, dict):
+            data['DEFAULT_PREFS'] = json.dumps(raw_prefs, separators=(',', ':'))
+        elif isinstance(raw_prefs, str):
+            data['DEFAULT_PREFS'] = raw_prefs.strip()
+        else:
+            raise ValueError(
+                f"Site config '{fname}' has invalid DEFAULT_PREFS format: {type(raw_prefs).__name__}"
+            )
+
         # DYNAMIC_TITLE must be string 'true' or 'false'
         dynamic_title = data.get('DYNAMIC_TITLE', 'false')
         data['DYNAMIC_TITLE'] = str(dynamic_title).lower()

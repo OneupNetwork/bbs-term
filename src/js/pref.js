@@ -62,7 +62,7 @@ export const DEFAULT_PREFS = {
   fontSize: 24,
   maxFontSize: 999,
   termSize: { cols: 80, rows: 24 },
-  termSizeMode: "max-font-size",
+  termSizeMode: "fixed-term-size",
   termMargin: 0,
 };
 
@@ -201,6 +201,28 @@ export const parseDefaultPlugins = (
   return result;
 };
 
+export const parseDefaultPrefs = (
+  raw = typeof process !== "undefined" && process.env ? process.env.DEFAULT_PREFS : ""
+) => {
+  if (!raw) return {};
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    return { ...raw };
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return {};
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      return {};
+    }
+  }
+  return {};
+};
+
 export const getDefaultPwaPrompt = () => {
   if (isStandaloneMode()) return false;
   return isMobileEnvironment();
@@ -210,19 +232,37 @@ export const getDefaultVirtualKeyboard = () => {
   return isMobileEnvironment();
 };
 
-export const getDefaultPrefs = () => ({
-  ...DEFAULT_PREFS,
-  enablePwaPrompt: getDefaultPwaPrompt(),
-  enableVirtualKeyboard: getDefaultVirtualKeyboard(),
-  ...parseDefaultPlugins(),
-  termSize: { ...DEFAULT_PREFS.termSize },
-  customColors: [...DEFAULT_PREFS.customColors],
-  customDefaultBg: DEFAULT_PREFS.customDefaultBg,
-  customDefaultFg: DEFAULT_PREFS.customDefaultFg,
-  customDefaultLink: DEFAULT_PREFS.customDefaultLink,
-  customForcePlainText: DEFAULT_PREFS.customForcePlainText,
-  minimumContrast: DEFAULT_PREFS.minimumContrast,
-});
+export const getDefaultPrefs = () => {
+  const customDefaults = parseDefaultPrefs();
+  return {
+    ...DEFAULT_PREFS,
+    enablePwaPrompt: getDefaultPwaPrompt(),
+    enableVirtualKeyboard: getDefaultVirtualKeyboard(),
+    ...parseDefaultPlugins(),
+    ...customDefaults,
+    termSize: {
+      ...DEFAULT_PREFS.termSize,
+      ...(customDefaults.termSize && typeof customDefaults.termSize === "object"
+        ? customDefaults.termSize
+        : {}),
+    },
+    customColors:
+      Array.isArray(customDefaults.customColors) &&
+      customDefaults.customColors.length === 16
+        ? [...customDefaults.customColors]
+        : [...DEFAULT_PREFS.customColors],
+    customDefaultBg:
+      customDefaults.customDefaultBg ?? DEFAULT_PREFS.customDefaultBg,
+    customDefaultFg:
+      customDefaults.customDefaultFg ?? DEFAULT_PREFS.customDefaultFg,
+    customDefaultLink:
+      customDefaults.customDefaultLink ?? DEFAULT_PREFS.customDefaultLink,
+    customForcePlainText:
+      customDefaults.customForcePlainText ?? DEFAULT_PREFS.customForcePlainText,
+    minimumContrast:
+      customDefaults.minimumContrast ?? DEFAULT_PREFS.minimumContrast,
+  };
+};
 
 export const readValuesWithDefault = () => {
   try {
