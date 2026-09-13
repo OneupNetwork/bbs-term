@@ -349,3 +349,25 @@ test('parseDefaultPrefs and getDefaultPrefs apply site-specific DEFAULT_PREFS', 
   }
 });
 
+test('readValuesWithDefault migrates legacy useMouseBrowsing preference key', () => {
+  const originalWindow = globalThis.window;
+  try {
+    const mockStorage = new MockLocalStorage();
+    globalThis.window = { localStorage: mockStorage };
+
+    mockStorage.setItem(
+      PREF_STORAGE_KEY,
+      JSON.stringify({
+        values: {
+          useMouseBrowsing: true,
+        },
+      })
+    );
+
+    const prefs = readValuesWithDefault();
+    assert.equal(prefs.enableMouseBrowsing, true);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
