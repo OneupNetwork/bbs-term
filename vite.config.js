@@ -208,6 +208,7 @@ export default defineConfig(({ mode, command }) => {
       'process.env.DEVELOPER_MODE': JSON.stringify(isDevelopment),
       'process.env.SITE_TYPE': JSON.stringify(process.env.SITE_TYPE || 'auto'),
       'process.env.DEFAULT_PLUGINS': JSON.stringify(process.env.DEFAULT_PLUGINS || ''),
+      'process.env.DEFAULT_PREFS': JSON.stringify(process.env.DEFAULT_PREFS || ''),
       ...(() => {
         const appInfo = {
           NAME: process.env.npm_package_name || pkg.name,

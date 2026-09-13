@@ -205,6 +205,7 @@ test('DEFAULT_PREFS includes new terminal settings with sensible defaults', () =
   assert.equal(DEFAULT_PREFS.backspaceKey, 'control-h');
   assert.equal(DEFAULT_PREFS.deleteKey, 'escape-sequence');
   assert.equal(DEFAULT_PREFS.lineHeight, 1.0);
+  assert.equal(DEFAULT_PREFS.termSizeMode, 'fixed-term-size');
 });
 
 test('TermKeyboard maps Backspace and Delete keys dynamically based on settings', () => {
@@ -1008,22 +1009,20 @@ test('Bug report helper detects site, client, OS, browser, settings, and builds 
 
   // 6. Extra settings checkboxes indices
   assert.deepEqual(detectExtraSettings({
-    termSizeMode: 'max-font-size',
+    ...DEFAULT_PREFS,
     fontFitWindowWidth: false,
-    cursorStyle: 'blink',
     smoothAnsiArt: false,
     fontFamily: '',
-    colorScheme: 'default',
     enableVirtualKeyboard: false,
   }), []);
 
   assert.deepEqual(detectExtraSettings({
-    termSizeMode: 'fixed-term-size',
+    termSizeMode: DEFAULT_PREFS.termSizeMode === 'fixed-term-size' ? 'max-font-size' : 'fixed-term-size',
     fontFitWindowWidth: true,
-    cursorStyle: 'block',
+    cursorStyle: DEFAULT_PREFS.cursorStyle === 'blink' ? 'block' : 'blink',
     smoothAnsiArt: true,
     fontFamily: 'Noto Sans Mono',
-    colorScheme: 'nord',
+    colorScheme: DEFAULT_PREFS.colorScheme === 'default' ? 'nord' : 'default',
     enableVirtualKeyboard: true,
   }), [0, 1, 2, 3, 4, 5, 6]);
 

@@ -24,6 +24,8 @@ BRANCH: 'gh-pages'     # Target branch in TARGET_REPO (default: 'gh-pages')
 # DEFAULT_PLUGINS:     # Override default enabled/disabled state for plugins (optional)
 #   easy_reading: true
 #   mouse_browsing: false
+# DEFAULT_PREFS:       # Override default preferences for this site (optional)
+#   termSizeMode: 'max-font-size'
 # DEPLOY_BRANCH: 'prod' # Source branch in this repository triggering deployment (optional)
 # DEPLOY_TOKEN_SECRET: 'GH_PAT_MYSITE' # Secret name in repository secrets (optional)
 # enabled: true        # Set to false to temporarily skip building this site
@@ -46,6 +48,7 @@ BRANCH: 'gh-pages'     # Target branch in TARGET_REPO (default: 'gh-pages')
 | `DYNAMIC_TITLE` | No | `false` | Whether to update window title with current BBS screen |
 | `BRANCH` | No | `gh-pages` | Target branch in `TARGET_REPO` |
 | `DEFAULT_PLUGINS` | No | Built-in defaults | Map (or comma-separated `+plugin, -plugin` string) overriding default plugin states |
+| `DEFAULT_PREFS` | No | Built-in defaults | Map or JSON string overriding default preferences (e.g. `termSizeMode`, `colorScheme`) |
 | `DEPLOY_BRANCH` | No | `*` (any branch) | Source branch in this repository triggering deployment (`prod`, `beta`, etc.) |
 | `DEPLOY_TOKEN_SECRET`| No | `GH_PAT` / `GITHUB_TOKEN` | Repository secret name for deploy token |
 | `enabled` | No | `true` | Set to `false` to disable deploying this site |

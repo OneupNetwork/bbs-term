@@ -5,6 +5,7 @@ import {
   PREF_STORAGE_KEY,
   getDefaultPrefs,
   parseDefaultPlugins,
+  parseDefaultPrefs,
   readValuesWithDefault,
   writeValues,
   updatePrefs,
@@ -34,6 +35,7 @@ test('getDefaultPrefs returns default preferences with cloned termSize', () => {
   assert.equal(prefs.enableMediaPreviewer, true);
   assert.equal(prefs.fontSize, 24);
   assert.equal(prefs.smoothAnsiArt, true);
+  assert.equal(prefs.termSizeMode, 'fixed-term-size');
   assert.deepEqual(prefs.termSize, { cols: 80, rows: 24 });
 
   // Mutating the returned termSize must not mutate DEFAULT_PREFS
@@ -316,6 +318,34 @@ test('getDefaultPrefs applies process.env.DEFAULT_PLUGINS overrides while preser
       process.env.DEFAULT_PLUGINS = originalEnv;
     }
     globalThis.window = originalWindow;
+  }
+});
+
+test('parseDefaultPrefs and getDefaultPrefs apply site-specific DEFAULT_PREFS', () => {
+  assert.deepEqual(parseDefaultPrefs(''), {});
+  assert.deepEqual(parseDefaultPrefs('invalid-json'), {});
+  assert.deepEqual(parseDefaultPrefs('{"termSizeMode":"max-font-size","fontSize":28}'), {
+    termSizeMode: 'max-font-size',
+    fontSize: 28,
+  });
+
+  const originalEnv = process.env.DEFAULT_PREFS;
+  try {
+    process.env.DEFAULT_PREFS = JSON.stringify({
+      termSizeMode: 'max-font-size',
+      fontSize: 30,
+      termSize: { cols: 100 },
+    });
+    const defaults = getDefaultPrefs();
+    assert.equal(defaults.termSizeMode, 'max-font-size');
+    assert.equal(defaults.fontSize, 30);
+    assert.deepEqual(defaults.termSize, { cols: 100, rows: 24 });
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.DEFAULT_PREFS;
+    } else {
+      process.env.DEFAULT_PREFS = originalEnv;
+    }
   }
 });
 

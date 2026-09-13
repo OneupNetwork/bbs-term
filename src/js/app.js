@@ -12,7 +12,7 @@ import { setupI18n } from './i18n';
 import { setTimer, parseConnectUrl } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
 import { setTerminalBellEnabled, setWindowFocused, playTerminalBell } from './bell.js';
-import { readValuesWithDefault, writeValues } from './pref.js';
+import { DEFAULT_PREFS, readValuesWithDefault, writeValues } from './pref.js';
 import { applyColorScheme } from './color_schemes.js';
 import AppOverlay from '../components/AppOverlay';
 import { getSite } from './sites';
@@ -52,10 +52,10 @@ export class App extends EventEmitter {
     if (typeof document !== 'undefined') {
       document.title = this.title;
     }
-    this.enableVisualBell = false;
-    this.backspaceKey = 'control-h';
-    this.deleteKey = 'escape-sequence';
-    this.lineHeight = 1.0;
+    this.enableVisualBell = DEFAULT_PREFS.enableVisualBell;
+    this.backspaceKey = DEFAULT_PREFS.backspaceKey;
+    this.deleteKey = DEFAULT_PREFS.deleteKey;
+    this.lineHeight = DEFAULT_PREFS.lineHeight;
     this.buf.on('bell', () => {
       playTerminalBell();
       if (this.enableVisualBell) {
@@ -110,11 +110,11 @@ export class App extends EventEmitter {
 
     this.lastSelection = null;
 
-    this.copyOnSelect = false;
-    this.warnBeforeClose = true;
-    this.colorScheme = 'default';
-    this.trimTrailingSpaces = true;
-    this.rightClickAction = 'menu';
+    this.copyOnSelect = DEFAULT_PREFS.copyOnSelect;
+    this.warnBeforeClose = DEFAULT_PREFS.warnBeforeClose;
+    this.colorScheme = DEFAULT_PREFS.colorScheme;
+    this.trimTrailingSpaces = DEFAULT_PREFS.trimTrailingSpaces;
+    this.rightClickAction = DEFAULT_PREFS.rightClickAction;
 
     this.mouse = new MouseController(this);
 
@@ -910,7 +910,7 @@ export class App extends EventEmitter {
           this.view?.setKeyMapOptions?.({ deleteKey: value });
           break;
         case 'lineHeight':
-          this.lineHeight = parseFloat(value) || 1.0;
+          this.lineHeight = parseFloat(value) || DEFAULT_PREFS.lineHeight;
           if (this.view) {
             this.view.lineHeight = this.lineHeight;
           }
@@ -1046,7 +1046,7 @@ export class App extends EventEmitter {
 
   zoomFont(delta) {
     if (!this.view) return;
-    const currentSize = this.view.chh || 24;
+    const currentSize = this.view.chh || DEFAULT_PREFS.fontSize;
     const newSize = Math.max(12, Math.min(60, currentSize + delta * 2));
     if (newSize === currentSize) return;
 

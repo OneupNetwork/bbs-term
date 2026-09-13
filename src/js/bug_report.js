@@ -4,6 +4,8 @@
  * GitHub issue URLs.
  */
 
+import { DEFAULT_PREFS } from "./pref.js";
+
 export function detectSite(app, win = typeof window !== "undefined" ? window : undefined) {
   const webHost = (win?.location?.hostname || "").toLowerCase();
   const connHost = (app?.connectedUrl?.hostname || "").toLowerCase();
@@ -183,13 +185,13 @@ export function detectBrowserVersion(
 export function detectExtraSettings(values) {
   if (!values) return [];
   const indices = [];
-  if (values.termSizeMode === "fixed-term-size") {
+  if (values.termSizeMode && values.termSizeMode !== DEFAULT_PREFS.termSizeMode) {
     indices.push(0);
   }
-  if (Boolean(values.fontFitWindowWidth)) {
+  if (Boolean(values.fontFitWindowWidth) !== Boolean(DEFAULT_PREFS.fontFitWindowWidth)) {
     indices.push(1);
   }
-  if (values.cursorStyle && values.cursorStyle !== "blink") {
+  if (values.cursorStyle && values.cursorStyle !== DEFAULT_PREFS.cursorStyle) {
     indices.push(2);
   }
   if (Boolean(values.smoothAnsiArt)) {
@@ -198,7 +200,7 @@ export function detectExtraSettings(values) {
   if (values.fontFamily && values.fontFamily.trim() !== "") {
     indices.push(4);
   }
-  if (values.colorScheme && values.colorScheme !== "default") {
+  if (values.colorScheme && values.colorScheme !== DEFAULT_PREFS.colorScheme) {
     indices.push(5);
   }
   if (Boolean(values.enableVirtualKeyboard)) {
@@ -257,8 +259,8 @@ export function buildBugReportUrl({
     params.set("browser-version", browserVersion);
   }
 
-  const useCanvas = values?.useCanvasEngine !== false;
-  const termSizeMode = values?.termSizeMode || "max-font-size";
+  const useCanvas = values?.useCanvasEngine ?? DEFAULT_PREFS.useCanvasEngine;
+  const termSizeMode = values?.termSizeMode || DEFAULT_PREFS.termSizeMode;
 
   const envLines = [];
   if (buildText) {
@@ -298,14 +300,14 @@ export function buildBugReportUrl({
   if (values) {
     let termSizeDetail = termSizeMode;
     if (termSizeMode === "fixed-term-size") {
-      const cols = values.termSize?.cols ?? 80;
-      const rows = values.termSize?.rows ?? 24;
+      const cols = values.termSize?.cols ?? DEFAULT_PREFS.termSize.cols;
+      const rows = values.termSize?.rows ?? DEFAULT_PREFS.termSize.rows;
       const fitWidth = Boolean(values.fontFitWindowWidth);
       termSizeDetail = `fixed-term-size (${cols}x${rows}, fontFitWindowWidth=${fitWidth})`;
     } else if (termSizeMode === "fixed-font-size") {
-      termSizeDetail = `fixed-font-size (fontSize=${values.fontSize || 24})`;
+      termSizeDetail = `fixed-font-size (fontSize=${values.fontSize || DEFAULT_PREFS.fontSize})`;
     } else if (termSizeMode === "max-font-size") {
-      termSizeDetail = `max-font-size (maxFontSize=${values.maxFontSize || 40})`;
+      termSizeDetail = `max-font-size (maxFontSize=${values.maxFontSize || DEFAULT_PREFS.maxFontSize})`;
     }
     envLines.push(`Terminal Size: ${termSizeDetail}`);
   }
@@ -330,10 +332,10 @@ export function buildBugReportUrl({
     const extra = [];
     if (values.smoothAnsiArt) extra.push("smoothAnsiArt");
     if (values.fontFamily) extra.push(`font=${values.fontFamily}`);
-    if (values.colorScheme && values.colorScheme !== "default") {
+    if (values.colorScheme && values.colorScheme !== DEFAULT_PREFS.colorScheme) {
       extra.push(`colorScheme=${values.colorScheme}`);
     }
-    if (values.cursorStyle && values.cursorStyle !== "blink") {
+    if (values.cursorStyle && values.cursorStyle !== DEFAULT_PREFS.cursorStyle) {
       extra.push(`cursorStyle=${values.cursorStyle}`);
     }
     if (values.enableVirtualKeyboard) extra.push("virtualKeyboard");
