@@ -32,6 +32,13 @@ export const LEFT_BLOCK_MAP = {
   "\u25a0": 1.0, // ■ black square
 };
 
+export const RIGHT_BLOCK_MAP = {
+  "\u2595": 1 / 8, // ▕ right 1/8
+  "\u2590": 4 / 8, // ▐ right 1/2
+  "\u2588": 1.0, // █ full block
+  "\u25a0": 1.0, // ■ black square
+};
+
 export const ANSI_BLOCK_SET = new Set([
   "\u2588", // █ full block
   "\u25a0", // ■ black square
@@ -86,8 +93,69 @@ export function hasAnsiArt(lines, dirtyRows) {
 export const hasAnsiBlock = hasAnsiArt;
 
 export class SmoothAnsiArt {
+  static isSolidColor(cell, colorIndex) {
+    if (!cell || colorIndex === undefined) return false;
+    if (cell.type === "\u2588" || cell.type === "\u25a0") {
+      return cell.fgIndex === colorIndex;
+    }
+    return false;
+  }
+
+  static getLeftBoundaryX(cell, leftColor, rightColor) {
+    if (!cell) return null;
+    if (cell.type === "\u2588" || cell.type === "\u25a0") {
+      if (cell.fgIndex === leftColor) return 1.0;
+      if (rightColor !== undefined && cell.fgIndex === rightColor) return 0.0;
+      return null;
+    }
+    if (LEFT_BLOCK_MAP[cell.type] !== undefined) {
+      if (
+        cell.fgIndex === leftColor &&
+        (rightColor === undefined ||
+          cell.bgIndex === rightColor ||
+          rightColor === leftColor)
+      ) {
+        return LEFT_BLOCK_MAP[cell.type];
+      }
+    }
+    if (RIGHT_BLOCK_MAP[cell.type] !== undefined) {
+      if (
+        rightColor !== undefined &&
+        cell.fgIndex === rightColor &&
+        (leftColor === undefined || cell.bgIndex === leftColor)
+      ) {
+        return 1.0 - RIGHT_BLOCK_MAP[cell.type];
+      }
+    }
+    return null;
+  }
+
+  static hasLRBoundary(cell, grid, cols, chw, leftColor, rightColor) {
+    if (!cell || !grid) return false;
+    const x = this.getLeftBoundaryX(cell, leftColor, rightColor);
+    if (x !== null && x > 0.0 && x < 1.0) {
+      return true;
+    }
+    if (cell.type === "\u2588" || cell.type === "\u25a0") {
+      const stepCol = cell.w > chw ? 2 : 1;
+      if (cell.fgIndex === rightColor && cell.bgIndex === leftColor) {
+        const leftNeighbor =
+          cell.c > 0 ? grid[cell.r * cols + cell.c - 1] : null;
+        return this.isSolidColor(leftNeighbor, leftColor);
+      }
+      if (cell.fgIndex === leftColor && cell.bgIndex === rightColor) {
+        const rightNeighbor =
+          cell.c + stepCol < cols
+            ? grid[cell.r * cols + cell.c + stepCol]
+            : null;
+        return this.isSolidColor(rightNeighbor, rightColor);
+      }
+    }
+    return false;
+  }
+
   static drawBlock(ctx, item, grid, cols, rows, chw, chh) {
-    const { type, r, c, x, y, w, h, fgIndex } = item;
+    const { type, x, y, w, h } = item;
 
     if (type === "\u2588" || type === "\u25a0") {
       if (this.drawLowerBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
@@ -97,6 +165,9 @@ export class SmoothAnsiArt {
         return;
       }
       if (this.drawLeftBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
+        return;
+      }
+      if (this.drawRightBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
         return;
       }
       const xR = this.getAdjustedRightX(item, grid, cols, chw);
@@ -119,15 +190,12 @@ export class SmoothAnsiArt {
       return;
     }
 
+    if (RIGHT_BLOCK_MAP[type] !== undefined) {
+      this.drawRightBlockRamp(ctx, item, grid, cols, rows, chw, chh);
+      return;
+    }
+
     switch (type) {
-      case "\u2590": // ▐ right half block
-        ctx.rect(x + w / 2, y, w / 2, h);
-        break;
-
-      case "\u2595": // ▕ right 1/8 block
-        ctx.rect(x + (w * 7) / 8, y, w / 8, h);
-        break;
-
       case "\u25e2": // ◢ lower right triangle
       case "\u25e3": // ◣ lower left triangle
       case "\u25e5": // ◥ upper right triangle
@@ -300,33 +368,177 @@ export class SmoothAnsiArt {
   }
 
   static drawLeftBlockRamp(ctx, item, grid, cols, rows, chw, chh) {
-    const { x, y, w, h, r, c, fgIndex, type } = item;
+    const { x, y, w, h, r, c, fgIndex, bgIndex, type } = item;
     const curW = LEFT_BLOCK_MAP[type];
     if (curW === undefined) return false;
 
-    const topCell = r > 0 ? grid[(r - 1) * cols + c] : null;
-    const isSameTop =
+    const L = fgIndex;
+    const R = bgIndex;
+    const stepCol = w > chw ? 2 : 1;
+
+    const topCell = r > 0 && grid ? grid[(r - 1) * cols + c] : null;
+    const bottomCell = r + 1 < rows && grid ? grid[(r + 1) * cols + c] : null;
+    const leftCell = c > 0 && grid ? grid[r * cols + c - 1] : null;
+    const rightCell =
+      c + stepCol < cols && grid ? grid[r * cols + c + stepCol] : null;
+
+    let topW = this.getLeftBoundaryX(topCell, L, R);
+    if (
+      topW === null &&
       topCell &&
-      topCell.fgIndex === fgIndex &&
-      LEFT_BLOCK_MAP[topCell.type] !== undefined;
+      topCell.fgIndex === L &&
+      LEFT_BLOCK_MAP[topCell.type] !== undefined
+    ) {
+      topW = LEFT_BLOCK_MAP[topCell.type];
+    }
 
-    const bottomCell = r + 1 < rows ? grid[(r + 1) * cols + c] : null;
-    const isSameBottom =
+    let bottomW = this.getLeftBoundaryX(bottomCell, L, R);
+    if (
+      bottomW === null &&
       bottomCell &&
-      bottomCell.fgIndex === fgIndex &&
-      LEFT_BLOCK_MAP[bottomCell.type] !== undefined;
-
-    const topW = isSameTop ? LEFT_BLOCK_MAP[topCell.type] : null;
-    const bottomW = isSameBottom ? LEFT_BLOCK_MAP[bottomCell.type] : null;
+      bottomCell.fgIndex === L &&
+      LEFT_BLOCK_MAP[bottomCell.type] !== undefined
+    ) {
+      bottomW = LEFT_BLOCK_MAP[bottomCell.type];
+    }
 
     if (type === "\u2588" || type === "\u25a0") {
       const touchesLeftRamp =
-        (topW !== null && topW < 1.0) || (bottomW !== null && bottomW < 1.0);
-      if (!touchesLeftRamp) return false;
+        (topW !== null && topW > 0.0 && topW < 1.0) ||
+        (bottomW !== null && bottomW > 0.0 && bottomW < 1.0);
+      if (!touchesLeftRamp) {
+        if (this.isSolidColor(rightCell, R)) {
+          const topLeftCell =
+            r > 0 && c >= stepCol ? grid[(r - 1) * cols + c - stepCol] : null;
+          const topRightCell =
+            r > 0 && c + stepCol < cols
+              ? grid[(r - 1) * cols + c + stepCol]
+              : null;
+          const bottomLeftCell =
+            r + 1 < rows && c >= stepCol
+              ? grid[(r + 1) * cols + c - stepCol]
+              : null;
+          const bottomRightCell =
+            r + 1 < rows && c + stepCol < cols
+              ? grid[(r + 1) * cols + c + stepCol]
+              : null;
+
+          // Down-left diagonal step (◤)
+          if (
+            (!bottomCell || this.isSolidColor(bottomCell, R)) &&
+            topCell &&
+            !this.isSolidColor(topCell, R) &&
+            leftCell &&
+            !this.isSolidColor(leftCell, R) &&
+            (this.hasLRBoundary(topRightCell, grid, cols, chw, L, R) ||
+              this.hasLRBoundary(bottomLeftCell, grid, cols, chw, L, R))
+          ) {
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + w, y);
+            ctx.lineTo(x, y + h);
+            ctx.closePath();
+            return true;
+          }
+          // Up-left diagonal step (◣)
+          if (
+            (!topCell || this.isSolidColor(topCell, R)) &&
+            bottomCell &&
+            !this.isSolidColor(bottomCell, R) &&
+            leftCell &&
+            !this.isSolidColor(leftCell, R) &&
+            (this.hasLRBoundary(bottomRightCell, grid, cols, chw, L, R) ||
+              this.hasLRBoundary(topLeftCell, grid, cols, chw, L, R))
+          ) {
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + w, y + h);
+            ctx.lineTo(x, y + h);
+            ctx.closePath();
+            return true;
+          }
+        }
+        return false;
+      }
+    }
+
+    let pinnedWT = null;
+    let pinnedWB = null;
+
+    if (topW === 0.0) {
+      const topLeftCell =
+        r > 0 && c >= stepCol && grid
+          ? grid[(r - 1) * cols + c - stepCol]
+          : null;
+      const topLeftX = this.getLeftBoundaryX(topLeftCell, L, R);
+      if (
+        topLeftX !== null &&
+        topLeftX > 0.0 &&
+        topLeftX < 1.0 &&
+        this.isSolidColor(leftCell, L)
+      ) {
+        pinnedWT = 0.0;
+      }
+    } else if (topW === 1.0) {
+      const topRightCell =
+        r > 0 && c + stepCol < cols && grid
+          ? grid[(r - 1) * cols + c + stepCol]
+          : null;
+      if (
+        this.hasLRBoundary(topRightCell, grid, cols, chw, L, R) &&
+        this.isSolidColor(rightCell, R)
+      ) {
+        pinnedWT = 1.0;
+      }
+    }
+
+    if (bottomW === 1.0) {
+      const bottomRightCell =
+        r + 1 < rows && c + stepCol < cols && grid
+          ? grid[(r + 1) * cols + c + stepCol]
+          : null;
+      if (
+        this.hasLRBoundary(bottomRightCell, grid, cols, chw, L, R) &&
+        rightCell &&
+        !this.isSolidColor(rightCell, L)
+      ) {
+        pinnedWB = 1.0;
+      }
+    } else if (bottomW === 0.0) {
+      const bottomLeftCell =
+        r + 1 < rows && c >= stepCol && grid
+          ? grid[(r + 1) * cols + c - stepCol]
+          : null;
+      const bottomLeftX = this.getLeftBoundaryX(bottomLeftCell, L, R);
+      if (
+        bottomLeftX !== null &&
+        bottomLeftX > 0.0 &&
+        bottomLeftX < 1.0 &&
+        this.isSolidColor(leftCell, L)
+      ) {
+        pinnedWB = 0.0;
+      }
     }
 
     let wT, wB;
-    if (topW !== null && bottomW !== null) {
+    if (pinnedWT !== null && pinnedWB !== null) {
+      wT = pinnedWT;
+      wB = pinnedWB;
+    } else if (pinnedWT !== null) {
+      wT = pinnedWT;
+      if (bottomW !== null) {
+        wB = (curW + bottomW) / 2;
+      } else {
+        const delta = curW - wT;
+        wB = Math.min(1.0, Math.max(0.0, curW + delta));
+      }
+    } else if (pinnedWB !== null) {
+      wB = pinnedWB;
+      if (topW !== null) {
+        wT = (topW + curW) / 2;
+      } else {
+        const delta = wB - curW;
+        wT = Math.min(1.0, Math.max(0.0, curW - delta));
+      }
+    } else if (topW !== null && bottomW !== null) {
       wT = (topW + curW) / 2;
       wB = (curW + bottomW) / 2;
     } else if (topW !== null) {
@@ -344,22 +556,150 @@ export class SmoothAnsiArt {
       wB = curW;
     }
 
-    const yB = isSameBottom ? y + h + 0.5 : y + h;
+    const isSameBottom =
+      pinnedWB === null && bottomCell && bottomCell.fgIndex === fgIndex;
 
     ctx.moveTo(x, y);
     ctx.lineTo(x + wT * w, y);
 
     const isPeak =
-      topW !== null && bottomW !== null && curW > topW && curW > bottomW;
+      topW !== null &&
+      bottomW !== null &&
+      pinnedWT === null &&
+      pinnedWB === null &&
+      curW > topW &&
+      curW > bottomW;
     const isValley =
-      topW !== null && bottomW !== null && curW < topW && curW < bottomW;
+      topW !== null &&
+      bottomW !== null &&
+      pinnedWT === null &&
+      pinnedWB === null &&
+      curW < topW &&
+      curW < bottomW;
 
     if (isPeak || isValley) {
       ctx.lineTo(x + curW * w, y + h / 2);
     }
 
-    ctx.lineTo(x + wB * w, yB);
-    ctx.lineTo(x, yB);
+    ctx.lineTo(x + wB * w, y + h);
+    if (isSameBottom) {
+      ctx.lineTo(x + wB * w, y + h + 0.5);
+      ctx.lineTo(x, y + h + 0.5);
+    } else {
+      ctx.lineTo(x, y + h);
+    }
+    ctx.closePath();
+    return true;
+  }
+
+  static drawRightBlockRamp(ctx, item, grid, cols, rows, chw, chh) {
+    const { x, y, w, h, r, c, fgIndex, bgIndex, type } = item;
+    const curRightW = RIGHT_BLOCK_MAP[type];
+    if (curRightW === undefined) return false;
+
+    const R = fgIndex;
+    const L = bgIndex;
+    const curX = 1.0 - curRightW;
+    const stepCol = w > chw ? 2 : 1;
+
+    const topCell = r > 0 && grid ? grid[(r - 1) * cols + c] : null;
+    const bottomCell = r + 1 < rows && grid ? grid[(r + 1) * cols + c] : null;
+    const leftCell = c > 0 && grid ? grid[r * cols + c - 1] : null;
+    const rightCell =
+      c + stepCol < cols && grid ? grid[r * cols + c + stepCol] : null;
+
+    const topX = this.getLeftBoundaryX(topCell, L, R);
+    const bottomX = this.getLeftBoundaryX(bottomCell, L, R);
+
+    let pinnedXT = null;
+    let pinnedXB = null;
+
+    if (type === "\u2588" || type === "\u25a0") {
+      if (!this.isSolidColor(leftCell, L)) {
+        return false;
+      }
+      const touchesFractionalRamp =
+        (topX !== null && topX > 0.0 && topX < 1.0) ||
+        (bottomX !== null && bottomX > 0.0 && bottomX < 1.0);
+      if (!touchesFractionalRamp) {
+        const topLeftCell =
+          r > 0 && c >= stepCol ? grid[(r - 1) * cols + c - stepCol] : null;
+        const topRightCell =
+          r > 0 && c + stepCol < cols
+            ? grid[(r - 1) * cols + c + stepCol]
+            : null;
+        const bottomLeftCell =
+          r + 1 < rows && c >= stepCol
+            ? grid[(r + 1) * cols + c - stepCol]
+            : null;
+        const bottomRightCell =
+          r + 1 < rows && c + stepCol < cols
+            ? grid[(r + 1) * cols + c + stepCol]
+            : null;
+
+        // Down-right diagonal step (◥): left & bottom are solid L, top & right are shape
+        if (
+          (!bottomCell || this.isSolidColor(bottomCell, L)) &&
+          topCell &&
+          !this.isSolidColor(topCell, L) &&
+          rightCell &&
+          !this.isSolidColor(rightCell, L) &&
+          (this.hasLRBoundary(topLeftCell, grid, cols, chw, L, R) ||
+            this.hasLRBoundary(bottomRightCell, grid, cols, chw, L, R))
+        ) {
+          pinnedXT = 0.0;
+          pinnedXB = 1.0;
+        } else if (
+          // Up-right diagonal step (◢): left & top are solid L, bottom & right are shape
+          (!topCell || this.isSolidColor(topCell, L)) &&
+          bottomCell &&
+          !this.isSolidColor(bottomCell, L) &&
+          rightCell &&
+          !this.isSolidColor(rightCell, L) &&
+          (this.hasLRBoundary(bottomLeftCell, grid, cols, chw, L, R) ||
+            this.hasLRBoundary(topRightCell, grid, cols, chw, L, R))
+        ) {
+          pinnedXT = 1.0;
+          pinnedXB = 0.0;
+        } else {
+          return false;
+        }
+      }
+    }
+
+    let xT, xB;
+    if (pinnedXT !== null && pinnedXB !== null) {
+      xT = pinnedXT;
+      xB = pinnedXB;
+    } else if (topX !== null && bottomX !== null) {
+      xT = (topX + curX) / 2;
+      xB = (curX + bottomX) / 2;
+    } else if (topX !== null) {
+      xT = (topX + curX) / 2;
+      const delta = (curX - topX) / 2;
+      xB = Math.min(1.0, Math.max(0.0, curX + delta));
+    } else if (bottomX !== null) {
+      const delta = (bottomX - curX) / 2;
+      xT = Math.min(1.0, Math.max(0.0, curX - delta));
+      xB = (curX + bottomX) / 2;
+    } else {
+      xT = curX;
+      xB = curX;
+    }
+
+    const xR = this.getAdjustedRightX(item, grid, cols, chw);
+    const isSameBottom =
+      pinnedXB === null && bottomCell && bottomCell.fgIndex === fgIndex;
+
+    ctx.moveTo(x + xT * w, y);
+    ctx.lineTo(xR, y);
+    if (isSameBottom) {
+      ctx.lineTo(xR, y + h + 0.5);
+      ctx.lineTo(x + xB * w, y + h + 0.5);
+    } else {
+      ctx.lineTo(xR, y + h);
+    }
+    ctx.lineTo(x + xB * w, y + h);
     ctx.closePath();
     return true;
   }

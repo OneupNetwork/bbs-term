@@ -1,7 +1,6 @@
-import { termColors, termDefaultBg, termDefaultFg, termDefaultLink } from "../../js/term_buf";
-import { getContrastColor } from "../../js/color_schemes";
-import { SmoothAnsiArt, ANSI_BLOCK_SET, hasAnsiArt } from "./SmoothAnsiArt";
-import { CanvasSelection } from "./CanvasSelection";
+import { termColors, termDefaultBg, termDefaultFg, termDefaultLink, getContrastColor } from "../../js/color_schemes.js";
+import { SmoothAnsiArt, ANSI_BLOCK_SET, hasAnsiArt } from "./SmoothAnsiArt.js";
+import { CanvasSelection } from "./CanvasSelection.js";
 
 // URL underline color matches DOM mode's URL underline (#ff6600)
 const URL_UNDERLINE_COLOR = "#ff6600";
@@ -91,7 +90,6 @@ export class CanvasRenderer {
     isWide = false,
     trailBgIndex = bgIndex
   ) {
-    if (bgIndex === 0) return false;
     if (isWide && bgIndex !== trailBgIndex) return false;
     const isSolid =
       fgIndex === bgIndex ||
