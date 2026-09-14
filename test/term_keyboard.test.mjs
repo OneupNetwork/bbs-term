@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { TermKeyboard } from '../src/js/term_keyboard.js';
 import { EventEmitter } from '../src/js/event.js';
 import { PttSite, BaseSite, Maple3Site, AutoSite } from '../src/js/sites/index.js';
@@ -370,5 +372,99 @@ test('TermView delegates sendKey to TermKeyboard for BaseSite DBCS cursor handli
   assert.equal(sent.join(''), '\b\b', 'Should send double Backspace via mockView.sendKey -> kb.sendKey');
 });
 
+test('ConnectionAlert keydown handler reconnects on Enter from terminal input (#t) but ignores modals and form inputs', () => {
+  const src = fs.readFileSync(path.resolve('src/components/ConnectionAlert.js'), 'utf-8');
+  const match = src.match(/export const handleConnectionAlertKeyDown = (\([\s\S]*?\n};)/);
+  assert.ok(match, 'ConnectionAlert.js must export handleConnectionAlertKeyDown');
+  const handleConnectionAlertKeyDown = new Function('return ' + match[1])();
 
+  const origWindow = globalThis.window;
+  const origDocument = globalThis.document;
 
+  try {
+    const termInput = { id: 't', tagName: 'INPUT', closest: () => null };
+    globalThis.window = { app: { inputArea: termInput, modalShown: false } };
+    globalThis.document = { body: { classList: { contains: () => false } } };
+
+    // 1. Pressing Enter while terminal input (#t) is focused -> triggers onDismiss and swallows event
+    let dismissed = false;
+    let prevented = false;
+    let stopped = false;
+    handleConnectionAlertKeyDown(
+      {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        target: termInput,
+        preventDefault: () => { prevented = true; },
+        stopImmediatePropagation: () => { stopped = true; },
+      },
+      () => { dismissed = true; }
+    );
+    assert.equal(dismissed, true, 'Enter on input#t must trigger reconnect (onDismiss)');
+    assert.equal(prevented, true, 'Enter on input#t must preventDefault');
+    assert.equal(stopped, true, 'Enter on input#t must stopImmediatePropagation');
+
+    // 2. Pressing non-Enter key on input#t while disconnected -> swallows event without reconnect
+    dismissed = false;
+    prevented = false;
+    stopped = false;
+    handleConnectionAlertKeyDown(
+      {
+        key: 'a',
+        code: 'KeyA',
+        keyCode: 65,
+        target: termInput,
+        preventDefault: () => { prevented = true; },
+        stopImmediatePropagation: () => { stopped = true; },
+      },
+      () => { dismissed = true; }
+    );
+    assert.equal(dismissed, false, 'Non-Enter key must not trigger reconnect');
+    assert.equal(prevented, true, 'Non-Enter key on input#t must preventDefault when disconnected');
+    assert.equal(stopped, true, 'Non-Enter key on input#t must stopImmediatePropagation when disconnected');
+
+    // 3. Pressing Enter inside a non-terminal input (e.g. Settings form field) -> ignored by ConnectionAlert
+    dismissed = false;
+    prevented = false;
+    stopped = false;
+    const settingsInput = { id: 'site-url', tagName: 'INPUT', closest: () => null };
+    handleConnectionAlertKeyDown(
+      {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        target: settingsInput,
+        preventDefault: () => { prevented = true; },
+        stopImmediatePropagation: () => { stopped = true; },
+      },
+      () => { dismissed = true; }
+    );
+    assert.equal(dismissed, false, 'Enter in form input must not dismiss ConnectionAlert');
+    assert.equal(prevented, false, 'Enter in form input must not preventDefault');
+    assert.equal(stopped, false, 'Enter in form input must not stopImmediatePropagation');
+
+    // 4. Pressing Enter while a modal is open (app.modalShown === true) -> ignored by ConnectionAlert
+    globalThis.window.app.modalShown = true;
+    dismissed = false;
+    prevented = false;
+    stopped = false;
+    handleConnectionAlertKeyDown(
+      {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        target: termInput,
+        preventDefault: () => { prevented = true; },
+        stopImmediatePropagation: () => { stopped = true; },
+      },
+      () => { dismissed = true; }
+    );
+    assert.equal(dismissed, false, 'Enter while modal is shown must not dismiss ConnectionAlert');
+    assert.equal(prevented, false, 'Enter while modal is shown must not preventDefault');
+    assert.equal(stopped, false, 'Enter while modal is shown must not stopImmediatePropagation');
+  } finally {
+    globalThis.window = origWindow;
+    globalThis.document = origDocument;
+  }
+});
