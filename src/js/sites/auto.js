@@ -64,6 +64,34 @@ export class AutoSite extends BaseSite {
     return this.detectedSite || this.pttSite;
   }
 
+  get pageState() {
+    const active = this.getActiveSite();
+    return active && active !== this ? active.pageState : this._pageState ?? 0;
+  }
+
+  set pageState(val) {
+    const active = this.getActiveSite();
+    if (active && active !== this) {
+      active.pageState = val;
+    } else {
+      this._pageState = val;
+    }
+  }
+
+  get prevPageState() {
+    const active = this.getActiveSite();
+    return active && active !== this ? active.prevPageState : this._prevPageState ?? 0;
+  }
+
+  set prevPageState(val) {
+    const active = this.getActiveSite();
+    if (active && active !== this) {
+      active.prevPageState = val;
+    } else {
+      this._prevPageState = val;
+    }
+  }
+
   attach(term) {
     if (this.pttSite) this.pttSite._attachedTerm = term;
     if (this.maple3Site) this.maple3Site._attachedTerm = term;

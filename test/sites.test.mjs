@@ -184,7 +184,7 @@ test('PttSite parses prompt text patterns', () => {
   assert.equal(parseReqNotMetText('一般文章內容'), false);
 });
 
-test('PttSite parses reading status row', () => {
+test('PttSite parses reading status row including 1000+ page live threads and variations (Issue #38)', () => {
   const statusMid = '  瀏覽 第 2/10 頁 ( 20%)  目前顯示: 第 024~046 行 (y)回應(X%)推文(h)說明 (←)離開 ';
   const parsedMid = parseStatusRow(statusMid);
   assert.ok(parsedMid);
@@ -201,7 +201,54 @@ test('PttSite parses reading status row', () => {
   assert.equal(parsedEnd.pagePercent, 100);
   assert.equal(parsedEnd.isEnd, true);
 
+  // 1000+ page C_Chat Hololive live thread with shortened footer
+  const status1000End = '  瀏覽 第 1024/1024 頁 (100%)  目前顯示: 第 22500~22536 行 (h)說明 (←/q)離開 ';
+  const parsed1000End = parseStatusRow(status1000End);
+  assert.ok(parsed1000End);
+  assert.equal(parsed1000End.pageIndex, 1024);
+  assert.equal(parsed1000End.pageTotal, 1024);
+  assert.equal(parsed1000End.pagePercent, 100);
+  assert.equal(parsed1000End.rowIndexStart, 22500);
+  assert.equal(parsed1000End.rowIndexEnd, 22536);
+  assert.equal(parsed1000End.isEnd, true);
+
+  // Page 1 of a 1250-page live thread
+  const status1000Start = '  瀏覽 第 1/1250 頁 (  0%)  目前顯示: 第 01~37 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+  const parsed1000Start = parseStatusRow(status1000Start);
+  assert.ok(parsed1000Start);
+  assert.equal(parsed1000Start.pageIndex, 1);
+  assert.equal(parsed1000Start.pageTotal, 1250);
+  assert.equal(parsed1000Start.isEnd, false);
+
+  // Horizontal shifted view (顯示範圍)
+  const statusShifted = '  瀏覽 第 50/100 頁 ( 50%)  顯示範圍: 第 1100~1122 行, 第 02~81 字 (←)離開 ';
+  const parsedShifted = parseStatusRow(statusShifted);
+  assert.ok(parsedShifted);
+  assert.equal(parsedShifted.pageIndex, 50);
+  assert.equal(parsedShifted.pageTotal, 100);
+  assert.equal(parsedShifted.rowIndexStart, 1100);
+  assert.equal(parsedShifted.rowIndexEnd, 1122);
+
+  // Old status bar mode
+  const statusOld = '瀏覽 P.1024(100%)  (y)回應(X)推文(h)說明(←)離開 ';
+  const parsedOld = parseStatusRow(statusOld);
+  assert.ok(parsedOld);
+  assert.equal(parsedOld.pageIndex, 1024);
+  assert.equal(parsedOld.pagePercent, 100);
+  assert.equal(parsedOld.isEnd, true);
+
   assert.equal(parseStatusRow('這是普通內文不是狀態列'), null);
+
+  // AutoSite forwards pageState and prevPageState properly
+  const autoSite = new AutoSite();
+  const mockTerm38 = {
+    rows: 38,
+    cols: 80,
+    isLineEmpty: (r) => false,
+    getRowText: (r) => (r === 37 ? status1000End : '推 hololive: 實況推文'),
+  };
+  autoSite.setPageState(mockTerm38);
+  assert.equal(autoSite.pageState, PAGE_STATE.READING, 'AutoSite proxy must reflect active site pageState');
 });
 
 test('PttSite parses board list status row', () => {

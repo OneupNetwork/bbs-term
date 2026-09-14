@@ -32,17 +32,31 @@ export function parseReqNotMetText(it) {
 }
 
 export function parseStatusRow(str) {
-  const regex = /  瀏覽 第 (\d{1,3})(?:\/(\d{1,3}))? 頁 *\( *(\d{1,3})%\)  目前顯示: 第 0*(\d+)~0*(\d+) 行 *(?:\(y\)回應)?(?:\(X\/?%\)推文)?(?:\(h\)說明)? *\(←\/?q?\)離開 /g;
+  const regex = /  瀏覽 第 (\d+)(?:\/(\d+))? 頁 *\( *(\d+)%\)  (?:目前顯示|顯示範圍): 第 0*(\d+)~0*(\d+) 行/;
   const result = regex.exec(str);
 
   if (result && result.length === 6) {
-    const pagePercent = parseInt(result[3]);
+    const pagePercent = parseInt(result[3], 10);
     return {
-      pageIndex:     parseInt(result[1]),
-      pageTotal:     parseInt(result[2]),
+      pageIndex:     parseInt(result[1], 10),
+      pageTotal:     result[2] ? parseInt(result[2], 10) : NaN,
       pagePercent:   pagePercent,
-      rowIndexStart: parseInt(result[4]),
-      rowIndexEnd:   parseInt(result[5]),
+      rowIndexStart: parseInt(result[4], 10),
+      rowIndexEnd:   parseInt(result[5], 10),
+      isEnd:         pagePercent === 100
+    };
+  }
+
+  const oldRegex = /瀏覽 P\.(\d+)\( *(\d+)%\) *(?:\(y\)回[應信]|\(X\/?%\)推文|\(h\)說明|\(←\/?q?\)離開)/;
+  const oldResult = oldRegex.exec(str);
+  if (oldResult) {
+    const pagePercent = parseInt(oldResult[2], 10);
+    return {
+      pageIndex:     parseInt(oldResult[1], 10),
+      pageTotal:     NaN,
+      pagePercent:   pagePercent,
+      rowIndexStart: NaN,
+      rowIndexEnd:   NaN,
       isEnd:         pagePercent === 100
     };
   }

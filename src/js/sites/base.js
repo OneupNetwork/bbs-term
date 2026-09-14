@@ -593,6 +593,9 @@ export class BaseSite extends EventEmitter {
    * @returns {string}
    */
   getRefreshLiveThreadCommand(termBuf) {
+    if (this.pageState === PAGE_STATE.LIST) {
+      return '\x1b[C\x1b[4~';
+    }
     return '\x1b[D\x1b[C\x1b[4~';
   }
 
