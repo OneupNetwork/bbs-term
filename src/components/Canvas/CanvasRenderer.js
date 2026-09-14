@@ -51,29 +51,19 @@ export class CanvasRenderer {
     this.markDirty();
   }
 
-  getTextItem(
-    text,
-    x,
-    y,
-    isDBCS,
-    clip = null,
-    bgIndex = 0,
-    devX = x,
-    devY = y
-  ) {
+  getTextItem(text, x0, cellW, devY, isDBCS, clip = null, bgIndex = 0) {
     let item = this.textPool[this.textPoolIndex];
     if (!item) {
-      item = { text, x, y, isDBCS, clip, bgIndex, devX, devY };
+      item = { text, x0, cellW, devY, isDBCS, clip, bgIndex };
       this.textPool[this.textPoolIndex] = item;
     } else {
       item.text = text;
-      item.x = x;
-      item.y = y;
+      item.x0 = x0;
+      item.cellW = cellW;
+      item.devY = devY;
       item.isDBCS = isDBCS;
       item.clip = clip;
       item.bgIndex = bgIndex;
-      item.devX = devX;
-      item.devY = devY;
     }
     this.textPoolIndex++;
     return item;
@@ -113,22 +103,22 @@ export class CanvasRenderer {
     return item;
   }
 
-  getCharMetrics(ctx, text, isDBCS, chw) {
+  getCharMetrics(ctx, text, isDBCS, targetWidthDev) {
     const key = isDBCS ? text + "\x01" : text;
-    let scale = this.metricsCache.get(key);
-    if (scale !== undefined) return scale;
+    let cached = this.metricsCache.get(key);
+    if (cached !== undefined) return cached;
 
     if (this.metricsCache.size > 20000) {
       this.metricsCache.clear();
     }
     const textWidth = ctx.measureText(text).width;
-    const targetWidth = isDBCS ? chw * 2 : chw;
-    scale =
-      textWidth > 0 && Math.abs(textWidth - targetWidth) > 0.5
-        ? targetWidth / textWidth
+    const scale =
+      textWidth > 0 && Math.abs(textWidth - targetWidthDev) > 0.5
+        ? targetWidthDev / textWidth
         : 1;
-    this.metricsCache.set(key, scale);
-    return scale;
+    const result = { scale, textWidth };
+    this.metricsCache.set(key, result);
+    return result;
   }
 
   draw(canvas, options) {
@@ -256,12 +246,14 @@ export class CanvasRenderer {
     const targetWidth = colX(cols);
     const targetHeight = rowY(rows);
 
-    ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
-
     const fontFace = options.fontFace || "MingLiu, monospace";
-    const fontSize = options.fontSize || (chw ? chw * 2 : chh);
-    const fontString = `${fontSize}px ${fontFace}`;
-    const fontKey = `${fontSize}px ${fontFace}:${chw}:${effScaleX}:${effScaleY}`;
+    const rawFontSize = options.fontSize || (chw ? chw * 2 : chh);
+    const devFontSize =
+      chh * effScaleY >= 4
+        ? Math.max(2, Math.round((rawFontSize * effScaleY) / 2) * 2)
+        : rawFontSize * effScaleY;
+    const fontString = `${devFontSize}px ${fontFace}`;
+    const fontKey = `${devFontSize}px ${fontFace}:${chw * effScaleX}`;
 
     if (this.lastFontKey !== fontKey) {
       this.metricsCache.clear();
@@ -339,6 +331,10 @@ export class CanvasRenderer {
         const y0 = rowY(r);
         const y1 = rowY(r + 1);
         const h = y1 - y0;
+        const devDrawY =
+          h >= 4
+            ? y0 + Math.round((h - devFontSize) / 2) + devFontSize / 2
+            : y0 + h / 2;
         const urlUnderlineY =
           y0 + Math.min(h - underlineH, Math.round((h - underlineH) * 0.9));
         const textUnderlineY = y1 - underlineH;
@@ -570,10 +566,6 @@ export class CanvasRenderer {
                   }
                 }
               } else {
-                const devCenterX = xL + wFull / 2;
-                const devCenterY = y0 + h / 2;
-                const logX = devCenterX / effScaleX;
-                const logY = devCenterY / effScaleY;
                 if (
                   !isLeadSolid &&
                   !isTrailSolid &&
@@ -583,13 +575,12 @@ export class CanvasRenderer {
                   textBuckets[leadFgIndex].push(
                     this.getTextItem(
                       ch.ch,
-                      logX,
-                      logY,
+                      xL,
+                      wFull,
+                      devDrawY,
                       true,
                       null,
-                      leadBgIndex,
-                      devCenterX,
-                      devCenterY
+                      leadBgIndex
                     )
                   );
                 } else {
@@ -597,13 +588,12 @@ export class CanvasRenderer {
                     textBuckets[leadFgIndex].push(
                       this.getTextItem(
                         ch.ch,
-                        logX,
-                        logY,
+                        xL,
+                        wFull,
+                        devDrawY,
                         true,
                         { x: xL, y: y0, w: wL, h },
-                        leadBgIndex,
-                        devCenterX,
-                        devCenterY
+                        leadBgIndex
                       )
                     );
                   }
@@ -611,13 +601,12 @@ export class CanvasRenderer {
                     textBuckets[trailFgIndex].push(
                       this.getTextItem(
                         ch.ch,
-                        logX,
-                        logY,
+                        xL,
+                        wFull,
+                        devDrawY,
                         true,
                         { x: xM, y: y0, w: wR, h },
-                        trailBgIndex,
-                        devCenterX,
-                        devCenterY
+                        trailBgIndex
                       )
                     );
                   }
@@ -696,19 +685,8 @@ export class CanvasRenderer {
             ansiBlockBuckets[fgIndex].push(item);
             if (blockGrid) blockGrid[r * cols + c] = item;
           } else {
-            const devCenterX = x0 + w / 2;
-            const devCenterY = y0 + h / 2;
             textBuckets[fgIndex].push(
-              this.getTextItem(
-                charStr,
-                devCenterX / effScaleX,
-                devCenterY / effScaleY,
-                false,
-                null,
-                bgIndex,
-                devCenterX,
-                devCenterY
-              )
+              this.getTextItem(charStr, x0, w, devDrawY, false, null, bgIndex)
             );
           }
 
@@ -840,7 +818,14 @@ export class CanvasRenderer {
       }
     }
 
-    ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (ctx.font !== fontString) {
+      ctx.font = fontString;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+    }
+    const targetW1 = chw * effScaleX;
+    const targetW2 = 2 * chw * effScaleX;
     for (let cIdx = 0; cIdx < 16; ++cIdx) {
       const bucket = textBuckets[cIdx];
       if (bucket.length === 0) continue;
@@ -869,22 +854,26 @@ export class CanvasRenderer {
           ctx.beginPath();
           ctx.rect(item.clip.x, item.clip.y, item.clip.w, item.clip.h);
           ctx.clip();
-          ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
         }
-        const scale = this.getCharMetrics(ctx, item.text, item.isDBCS, chw);
+        const targetW = item.isDBCS ? targetW2 : targetW1;
+        const { scale, textWidth } = this.getCharMetrics(
+          ctx,
+          item.text,
+          item.isDBCS,
+          targetW
+        );
+        const renderedW = textWidth * scale;
+        const xLeft =
+          item.cellW >= 4
+            ? item.x0 + Math.round((item.cellW - renderedW) / 2)
+            : item.x0 + (item.cellW - renderedW) / 2;
+        const devDrawX = xLeft + renderedW / 2;
         if (scale === 1) {
-          ctx.fillText(item.text, item.x, item.y);
+          ctx.fillText(item.text, devDrawX, item.devY);
         } else {
-          ctx.setTransform(
-            effScaleX * scale,
-            0,
-            0,
-            effScaleY,
-            item.devX,
-            item.devY
-          );
+          ctx.setTransform(scale, 0, 0, 1, devDrawX, item.devY);
           ctx.fillText(item.text, 0, 0);
-          ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
         }
         if (item.clip) {
           ctx.restore();
