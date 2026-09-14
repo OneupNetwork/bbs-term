@@ -222,11 +222,18 @@ export class TouchController {
           site?.pageState === PAGE_STATE.LIST &&
           app.buf
         ) {
+          const pos = app.clientToPos
+            ? app.clientToPos(this.touchedCenter.x, this.touchedCenter.y)
+            : null;
+          const lastRowNum = site?.getLastRowNum
+            ? site.getLastRowNum(app.buf)
+            : app.buf.rows - 1;
+          const isBottomRow = Boolean(pos && pos.row === lastRowNum);
           const isHighlighted =
             app.view &&
             typeof app.view.highlightedRow === "number" &&
             app.view.highlightedRow !== -1;
-          if (isHighlighted) {
+          if (isHighlighted || isBottomRow) {
             app.onMouse_click(
               {
                 clientX: this.touchedCenter.x,
