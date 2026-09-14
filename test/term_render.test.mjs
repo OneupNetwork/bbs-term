@@ -4086,3 +4086,100 @@ test('TouchController list_scroll release on 24th row (bottom status bar) trigge
     'Releasing list_scroll gesture on 24th row (row 23) must trigger onMouse_click'
   );
 });
+
+test('IME composition input #t has higher z-order than #cursor and hides #cursor during composition (Issue #28)', () => {
+  const indexHtml = fs.readFileSync(path.resolve('index.html'), 'utf-8');
+  const mainCss = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
+  const currentTermViewSource = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+
+  // 1. Static z-index check in index.html & main.css
+  assert.ok(indexHtml.includes('z-index:13'), 'index.html #t must have z-index:13 (higher than #cursor z-index:12)');
+  assert.ok(mainCss.includes('#t {\n  z-index: 13;\n}'), 'main.css must define z-index: 13 for #t');
+  assert.ok(mainCss.includes('#t[bshow="1"] ~ #cursor {\n  display: none !important;\n}'), 'main.css must hide #cursor when #t[bshow="1"]');
+  assert.ok(mainCss.includes('background-color: transparent !important;'), 'main.css must enforce transparent background on underline cursor');
+  assert.ok(mainCss.includes('forced-color-adjust: none;'), 'main.css must disable forced-color-adjust on cursor');
+
+  // 2. Behavioral verification in TermView during composition lifecycle
+  const updateCursorPosBody = currentTermViewSource.match(/updateCursorPos\(\)\s*\{([\s\S]*?\n  )\}/)[1];
+  const updateInputBufferPosBody = currentTermViewSource.match(/updateInputBufferPos\(\)\s*\{([\s\S]*?\n  )\}/)[1];
+  const onCompositionStartBody = currentTermViewSource.match(/onCompositionStart\(e\)\s*\{([\s\S]*?\n  )\}/)[1];
+  const onCompositionEndBody = currentTermViewSource.match(/onCompositionEnd\(e\)\s*\{([\s\S]*?\n  )\}/)[1];
+
+  const termColors = ['#000000', '#800000', '#008000', '#808000', '#000080', '#800080', '#008080', '#c0c0c0'];
+  const termInvColors = ['#ffffff', '#ff0000', '#00ff00', '#ffff00', '#0000ff', '#ff00ff', '#00ffff', '#000000'];
+  const termDefaultBg = '#000000';
+  const termDefaultFg = '#c0c0c0';
+  const getContrastColor = (fg) => fg;
+
+  const mockCursor = {
+    style: { display: '', left: '0px', top: '0px', color: '' },
+    classList: {
+      add() {},
+      remove() {},
+    },
+  };
+  const mockInput = {
+    value: '',
+    style: {},
+    attrs: { bshow: '0' },
+    getAttribute(k) { return this.attrs[k]; },
+    setAttribute(k, v) { this.attrs[k] = v; },
+  };
+
+  const mockView = {
+    buf: { cur_x: 5, cur_y: 10, cols: 80, rows: 24, lines: [] },
+    chw: 12,
+    chh: 24,
+    scaleX: 1,
+    scaleY: 1,
+    cursorStyle: 'underline',
+    innerBounds: { width: 960, height: 576 },
+    cursor: mockCursor,
+    input: mockInput,
+    isComposition: false,
+    convertMN2XYEx: (x, y) => [x * 12, y * 24],
+  };
+
+  mockView.updateInputBufferPos = new Function(
+    'termColors', 'termInvColors', 'termDefaultBg', 'termDefaultFg', 'getContrastColor',
+    `return function updateInputBufferPos() { ${updateInputBufferPosBody} }`
+  )(termColors, termInvColors, termDefaultBg, termDefaultFg, getContrastColor).bind(mockView);
+
+  mockView.updateCursorPos = new Function(
+    'termInvColors',
+    `return function updateCursorPos() { ${updateCursorPosBody} }`
+  )(termInvColors).bind(mockView);
+
+  mockView.onCompositionStart = new Function(
+    'e',
+    onCompositionStartBody
+  ).bind(mockView);
+
+  mockView.onCompositionEnd = new Function(
+    'e',
+    onCompositionEndBody
+  ).bind(mockView);
+
+  // Initial state: cursor visible
+  mockView.updateCursorPos();
+  assert.equal(mockCursor.style.display, '', 'Cursor should be visible when not composing');
+
+  // Start composition: cursor must be hidden and #t z-index set to 13
+  mockView.onCompositionStart({});
+  assert.equal(mockView.isComposition, true);
+  assert.equal(mockInput.getAttribute('bshow'), '1');
+  assert.equal(mockCursor.style.display, 'none', 'Cursor must be hidden during IME composition');
+  assert.equal(mockInput.style.zIndex, '13', '#t zIndex must be 13 during composition');
+  assert.equal(mockInput.style.forcedColorAdjust, 'none', '#t forcedColorAdjust must be none');
+
+  // Even if cursor-move fires during composition, cursor remains hidden
+  mockView.buf.cur_x = 6;
+  mockView.updateCursorPos();
+  assert.equal(mockCursor.style.display, 'none', 'Cursor must stay hidden when updateCursorPos runs during composition');
+
+  // End composition: cursor becomes visible again
+  mockView.onCompositionEnd({});
+  assert.equal(mockView.isComposition, false);
+  assert.equal(mockInput.getAttribute('bshow'), '0');
+  assert.equal(mockCursor.style.display, '', 'Cursor must be restored after IME composition ends');
+});

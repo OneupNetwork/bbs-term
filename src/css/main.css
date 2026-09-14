@@ -17,14 +17,24 @@
   -webkit-touch-callout: none;
 }
 
+#t {
+  z-index: 13;
+}
+
+#t[bshow="1"] ~ #cursor {
+  display: none !important;
+}
+
 #cursor {
   display: none;
   user-select: none;
+  forced-color-adjust: none;
 }
 
 #cursor.cursor--underline {
   display: block;
-  background-color: transparent;
+  background-color: transparent !important;
+  background: transparent !important;
   mix-blend-mode: normal;
   pointer-events: none;
 }
