@@ -2,33 +2,42 @@ import React, { useEffect } from "react";
 import { _ } from "../js/i18n";
 import "./PageTopAlert.css";
 
+export const handleConnectionAlertKeyDown = (e, onDismiss) => {
+  const target = e.target;
+  const isTermInput =
+    target &&
+    (target.id === "t" ||
+      (typeof window !== "undefined" && target === window.app?.inputArea));
+  const isEditable =
+    target &&
+    !isTermInput &&
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable);
+  const isInModal =
+    (typeof document !== "undefined" &&
+      document.body?.classList?.contains("modal-open")) ||
+    (typeof window !== "undefined" && Boolean(window.app?.modalShown)) ||
+    (target &&
+      typeof target.closest === "function" &&
+      (target.closest(".modal") || target.closest("dialog[open]")));
+
+  if (isEditable || isInModal) {
+    return;
+  }
+
+  if (e.key === "Enter" || e.code === "Enter" || e.keyCode === 13) {
+    onDismiss();
+  }
+  // Kills everything because we don't want any further action performed under ConnectionAlert status
+  e.preventDefault();
+  e.stopImmediatePropagation();
+};
+
 export const ConnectionAlert = ({ onDismiss }) => {
   useEffect(() => {
-    const handler = (e) => {
-      const target = e.target;
-      const isEditable =
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable);
-      const isInModal =
-        document.body.classList.contains("modal-open") ||
-        (target &&
-          typeof target.closest === "function" &&
-          (target.closest(".modal") || target.closest("dialog[open]")));
-
-      if (isEditable || isInModal) {
-        return;
-      }
-
-      if (e.key === "Enter" || e.code === "Enter" || e.keyCode === 13) {
-        onDismiss();
-      }
-      // Kills everything because we don't want any further action performed under ConnectionAlert status
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    };
+    const handler = (e) => handleConnectionAlertKeyDown(e, onDismiss);
 
     window.addEventListener("keydown", handler, true);
     return () => {
