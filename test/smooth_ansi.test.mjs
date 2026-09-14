@@ -407,3 +407,96 @@ test('Dual-color DBCS block characters render as geometric blocks without fallin
     'Left half and right half of dual-color block must share exact integer boundary'
   );
 });
+
+test('CanvasRenderer snaps text draw coordinates and glyph em-box top to exact integer device pixels when lineHeight > 1.0 produces odd cell heights', () => {
+  const renderer = new CanvasRenderer();
+  const textCalls = [];
+  let appliedFont = '';
+  let currentTransform = [1, 0, 0, 1, 0, 0];
+
+  const mockCtx = {
+    fillStyle: '',
+    get font() {
+      return appliedFont;
+    },
+    set font(val) {
+      appliedFont = val;
+    },
+    setTransform(a, b, c, d, e, f) {
+      currentTransform = [a, b, c, d, e, f];
+    },
+    save() {},
+    restore() {},
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    clip() {},
+    rect() {},
+    fill() {},
+    fillRect() {},
+    fillText(text, x, y) {
+      // Compute actual device pixel draw coordinate taking transform into account
+      const devX = currentTransform[0] * x + currentTransform[4];
+      const devY = currentTransform[3] * y + currentTransform[5];
+      textCalls.push({
+        text,
+        devX,
+        devY,
+        scaleY: currentTransform[3],
+        font: appliedFont,
+      });
+    },
+    measureText(str) {
+      return { width: str.length === 1 && str.charCodeAt(0) > 127 ? 24 : 12 };
+    },
+  };
+
+  const row0 = [
+    new MockChar('測試', 7, 0),
+    new MockChar('', 7, 0),
+    new MockChar('A', 7, 0),
+  ];
+  row0[0].isDBCSLead = true;
+  row0[1].isDBCSTrail = true;
+  const row1 = [
+    new MockChar('行高', 7, 0),
+    new MockChar('', 7, 0),
+    new MockChar('B', 7, 0),
+  ];
+  row1[0].isDBCSLead = true;
+  row1[1].isDBCSTrail = true;
+
+  // Case: fontSize = 24, lineHeight = 1.2 => chh = 29 (ODD cell height!)
+  renderer.drawContent(mockCtx, 3, 2, 12, 29, 36, 58, 1, true, null, {
+    lines: [row0, row1],
+    fontSize: 24,
+    effScaleX: 1,
+    effScaleY: 1,
+  });
+
+  assert.equal(textCalls.length, 4);
+  for (const call of textCalls) {
+    assert.equal(
+      call.font,
+      '24px MingLiu, monospace',
+      'Device font size should be an even integer'
+    );
+    assert.equal(
+      call.scaleY,
+      1,
+      'Vertical transform scale must be 1 to prevent stretching bitmap font strikes'
+    );
+    assert.equal(
+      call.devY % 1,
+      0,
+      `Vertical draw coordinate devY (${call.devY}) must be an exact integer, never .5`
+    );
+    const glyphTop = call.devY - 24 / 2;
+    assert.equal(
+      glyphTop % 1,
+      0,
+      `Glyph em-box top (${glyphTop}) must land on an exact integer device pixel`
+    );
+  }
+});
