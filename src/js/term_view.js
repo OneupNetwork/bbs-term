@@ -524,7 +524,7 @@ export class TermView extends EventEmitter {
         this.handleRenderFrame(performance.now() - t0, false);
       }
 
-      this.app?.emit('term:screen-update', { changedLineHtmlStrs });
+      this.app?.emit('term:screen-update', { changedLineHtmlStrs, force: Boolean(force) });
     }
   }
 

@@ -68,6 +68,7 @@ export class EasyReading extends PluginBase {
     this.easyReadingReachedPageEnd = false;
     this.sendCommandAfterUpdate = '';
     this.ignoreOneUpdate = false;
+    this._reenteringArticle = false;
     this._pageDownInFlight = false;
     this._lastRequestedPageIndex = null;
     this._lastRequestedRowIndexStart = null;
@@ -83,7 +84,11 @@ export class EasyReading extends PluginBase {
         this._changeHandled = false;
         return;
       }
+      const wasReentering = this._reenteringArticle;
       this._onChanged(e);
+      if (wasReentering && !this._reenteringArticle && this.enabled) {
+        this.updatePage();
+      }
     };
     this._onBufViewUpdated = (e) => this._onViewUpdated(e);
     this._onBufCursorMove = () => this._onCursorMove();
@@ -104,7 +109,8 @@ export class EasyReading extends PluginBase {
     });
     this.listenAppWhileEnabled('term:screen-update', (e) => {
       const changedLineHtmlStrs = e?.changedLineHtmlStrs !== undefined ? e.changedLineHtmlStrs : e?.detail?.changedLineHtmlStrs;
-      this.onScreenUpdate(changedLineHtmlStrs);
+      const force = Boolean(e?.force ?? e?.detail?.force);
+      this.onScreenUpdate(changedLineHtmlStrs, force);
     });
     this.listenAppWhileEnabled('term:font-update', (e) => {
       this.onFontUpdate(e?.detail || e);
@@ -129,13 +135,20 @@ export class EasyReading extends PluginBase {
   _enterEasyReadingIfReading() {
     this.leaveCurrentPost();
     this.clearRows();
+    this.ignoreOneUpdate = false;
+    this.sendCommandAfterUpdate = '';
     if (!this._initializing && this.site?.pageState === PAGE_STATE.READING && this.app?.send) {
       const cmd = this.site.getReenterArticleCommand?.(this.buf);
-      if (cmd) this.app.send(cmd);
+      if (cmd) {
+        this._reenteringArticle = true;
+        this.app.send(cmd);
+      }
     }
   }
 
   onEnable() {
+    this.ignoreOneUpdate = false;
+    this._changeHandled = false;
     if (typeof document !== 'undefined' && !this._uiInitialized) {
       const container = this.view?.termWin || document.getElementById('TermWindow');
       if (container) {
@@ -171,6 +184,10 @@ export class EasyReading extends PluginBase {
       });
     }
     this.leaveCurrentPost();
+    this.ignoreOneUpdate = false;
+    this.sendCommandAfterUpdate = '';
+    this._reenteringArticle = false;
+    this._changeHandled = false;
     this._resetInFlight();
     this.hide();
   }
@@ -584,6 +601,9 @@ export class EasyReading extends PluginBase {
       site.prevPageState = PAGE_STATE.READING;
       return;
     }
+    if (site.pageState === PAGE_STATE.READING && !this.started) {
+      return;
+    }
     const isFrameReady =
       typeof this.buf?.isFrameReady === 'function'
         ? this.buf.isFrameReady()
@@ -757,6 +777,10 @@ export class EasyReading extends PluginBase {
 
   _onChanged(e) {
     const site = this.site;
+    if (this._reenteringArticle && site?.pageState === PAGE_STATE.READING) {
+      this._reenteringArticle = false;
+      site.prevPageState = PAGE_STATE.NORMAL;
+    }
     console.debug("page state: " + site?.prevPageState + "->" + site?.pageState);
     const isEnteringReading =
       site?.prevPageState !== PAGE_STATE.READING &&
@@ -789,6 +813,8 @@ export class EasyReading extends PluginBase {
       this.showPushInitText = false;
       this.started = false;
       this._temporarilyHidden = false;
+      this.ignoreOneUpdate = false;
+      this.sendCommandAfterUpdate = '';
       this._resetInFlight();
     }
 
@@ -811,11 +837,18 @@ export class EasyReading extends PluginBase {
         : site.isCursorParked(this.buf);
 
       if (isParked) {
+        const result = site.parseReadingStatus(lastRowText, this.buf);
         if (this.ignoreOneUpdate) {
           this.ignoreOneUpdate = false;
-          return;
+          const isFirstPage =
+            result &&
+            result.pageIndex === 1 &&
+            (result.rowIndexStart == null || result.rowIndexStart === 1);
+          if (!isFirstPage) {
+            this.started = false;
+            return;
+          }
         }
-        const result = site.parseReadingStatus(lastRowText, this.buf);
         if (result) {
           const isEnd = site.isArticleEnd(lastRowText, this.buf, result);
 
@@ -925,13 +958,17 @@ export class EasyReading extends PluginBase {
 
   leaveCurrentPost() {
     console.debug('leave current post');
+    const wasInFlight = this._pageDownInFlight;
     this._resetInFlight();
+    this.sendCommandAfterUpdate = '';
     this._temporarilyHidden = false;
     const now = Date.now();
     const duration = (this.lastWheelTime && (now - this.lastWheelTime < 1000)) ? 1200 : 300;
     this.suppressInertialWheel(duration);
-    if (!this.easyReadingReachedPageEnd) {
+    if (this.started && wasInFlight && !this.easyReadingReachedPageEnd) {
       this.ignoreOneUpdate = true;
+    } else {
+      this.ignoreOneUpdate = false;
     }
     if (this.site) {
       this.site.prevPageState = PAGE_STATE.NORMAL;
@@ -1458,8 +1495,19 @@ export class EasyReading extends PluginBase {
 
   // --- Plugin Update Hooks ---
 
-  onScreenUpdate(changedLineHtmlStrs) {
+  onScreenUpdate(changedLineHtmlStrs, force = false) {
     if (this.enabled) {
+      if (force) {
+        if (this._reenteringArticle) {
+          return false;
+        }
+        if (this.isActive()) {
+          this._updateOverlayPadding();
+          this.updateProgress();
+          return true;
+        }
+        return false;
+      }
       this._onChanged();
       this._changeHandled = true;
       this.updatePage(changedLineHtmlStrs);
