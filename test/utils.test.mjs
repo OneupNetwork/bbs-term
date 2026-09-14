@@ -324,3 +324,35 @@ test('hasProcess and isBrowser correctly identify Node vs Browser environments',
     globalThis.document = origDoc;
   }
 });
+
+test('multi-line copy uses LF (\\n) instead of bare CR (\\r) in ClipboardManager, CanvasSelection, and TermBuf', async () => {
+  const { ClipboardManager } = await import('../src/js/clipboard.js');
+  const { CanvasSelection } = await import('../src/components/Canvas/CanvasSelection.js');
+  const { TermBuf } = await import('../src/js/term_buf.js');
+
+  const clipboard = new ClipboardManager();
+  assert.equal(clipboard.formatCopyText('line1   \r\nline2\rline3  \n'), 'line1\nline2\nline3');
+  assert.equal(clipboard.formatCopyText('line1   \r\nline2\rline3  ', false), 'line1   \nline2\nline3  ');
+  assert.equal(
+    clipboard.formatCopyText('\x1b[1;31mline1\x1b[m\r\x1b[32mline2\x1b[m'),
+    '\x1b[1;31mline1\x1b[m\n\x1b[32mline2\x1b[m'
+  );
+
+  const buf = new TermBuf(80, 24);
+  buf.puts('Row0Text\r\nRow1Text');
+  const selText = buf.getSelectionText({
+    start: { row: 0, col: 0 },
+    end: { row: 1, col: 8 },
+  });
+  assert.ok(selText.includes('\n') && !selText.includes('\r'));
+  assert.equal(clipboard.formatCopyText(selText), 'Row0Text\nRow1Text');
+
+  const canvasSelText = CanvasSelection.getSelectedText(
+    { row: 0, col: 0 },
+    { row: 1, col: 7 },
+    buf.lines,
+    80
+  );
+  assert.equal(canvasSelText, 'Row0Text\nRow1Text');
+});
+
