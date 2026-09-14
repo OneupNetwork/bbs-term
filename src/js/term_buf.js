@@ -2,7 +2,7 @@
 
 import { EventEmitter } from './event.js';
 import { ColorState, termColors, termInvColors, termDefaultBg, termDefaultFg, termDefaultLink, getContrastColor } from './color_schemes.js';
-import { getSite } from './sites';
+import { getSite } from './sites/index.js';
 import { isFullWidth } from './wcwidth.js';
 import { Locator } from './locator.js';
 
@@ -1093,8 +1093,9 @@ export class TermBuf extends EventEmitter {
    * @returns {string}
    */
   getText(row, colStart, colEnd, color, isutf8, reset, lines) {
-    if (typeof row !== 'number' || !Number.isFinite(row) || row < 0 || row >= this.rows) return '';
     const srcLines = Array.isArray(lines) ? lines : this.lines;
+    const maxRows = srcLines ? srcLines.length : this.rows;
+    if (typeof row !== 'number' || !Number.isFinite(row) || row < 0 || row >= maxRows) return '';
     const text = srcLines[row];
     if (!text) return '';
 
@@ -1145,12 +1146,13 @@ export class TermBuf extends EventEmitter {
   }
 
   /**
-   * @param {{ start: { row: number, col: number }, end: { row: number, col: number } }} selection
-   * @param {{ color?: boolean, isutf8?: boolean, reset?: boolean }} [options]
+   * @param {{ start: { row: number, col: number }, end: { row: number, col: number }, lines?: TermChar[][] }} selection
+   * @param {{ color?: boolean, isutf8?: boolean, reset?: boolean, lines?: TermChar[][] }} [options]
    * @returns {string}
    */
-  getSelectionText(selection, { color = false, isutf8 = true, reset = false } = {}) {
+  getSelectionText(selection, { color = false, isutf8 = true, reset = false, lines = undefined } = {}) {
     if (!selection || !selection.start || !selection.end) return '';
+    const effectiveLines = lines || selection.lines;
     let result = '';
     if (selection.start.row === selection.end.row) {
       result += this.getText(
@@ -1159,7 +1161,8 @@ export class TermBuf extends EventEmitter {
         selection.end.col,
         color,
         isutf8,
-        reset
+        reset,
+        effectiveLines
       );
     } else {
       for (let i = selection.start.row; i <= selection.end.row; ++i) {
@@ -1170,7 +1173,7 @@ export class TermBuf extends EventEmitter {
         } else if (i === selection.end.row) {
           ecol = selection.end.col;
         }
-        result += this.getText(i, scol, ecol, color, isutf8, reset);
+        result += this.getText(i, scol, ecol, color, isutf8, reset, effectiveLines);
         if (i !== selection.end.row) {
           result += '\r';
         }
@@ -1187,8 +1190,9 @@ export class TermBuf extends EventEmitter {
    * @returns {string}
    */
   getRowText(row, colStart, colEnd, lines) {
-    if (typeof row !== 'number' || !Number.isFinite(row) || row < 0 || row >= this.rows) return '';
     const srcLines = Array.isArray(lines) ? lines : this.lines;
+    const maxRows = srcLines ? srcLines.length : this.rows;
+    if (typeof row !== 'number' || !Number.isFinite(row) || row < 0 || row >= maxRows) return '';
     const text = srcLines[row];
     if (!text) return '';
 

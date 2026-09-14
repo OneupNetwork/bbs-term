@@ -127,6 +127,18 @@ export class InputInterceptors extends EventEmitter {
     return event.colRow;
   }
 
+  getClientToPos(cX, cY) {
+    const event = { cX, cY, pos: undefined };
+    this.emitStoppable('getClientToPos', event, (e) => e.pos !== undefined);
+    return event.pos;
+  }
+
+  getCursorPos(col, row) {
+    const event = { col, row, pos: undefined };
+    this.emitStoppable('getCursorPos', event, (e) => e.pos !== undefined);
+    return event.pos;
+  }
+
   registerInterceptor(interceptor) {
     if (!interceptor || this._registeredInterceptors?.has(interceptor)) return;
     if (!this._registeredInterceptors) {
@@ -239,6 +251,28 @@ export class InputInterceptors extends EventEmitter {
       };
       this.on('getSelectionColRow', fn);
       handlers.push(['getSelectionColRow', fn]);
+    }
+
+    if (typeof interceptor.getClientToPos === 'function') {
+      const fn = (e) => {
+        const pos = interceptor.getClientToPos(e.cX, e.cY);
+        if (pos !== undefined) {
+          e.pos = pos;
+        }
+      };
+      this.on('getClientToPos', fn);
+      handlers.push(['getClientToPos', fn]);
+    }
+
+    if (typeof interceptor.getCursorPos === 'function') {
+      const fn = (e) => {
+        const pos = interceptor.getCursorPos(e.col, e.row);
+        if (pos !== undefined) {
+          e.pos = pos;
+        }
+      };
+      this.on('getCursorPos', fn);
+      handlers.push(['getCursorPos', fn]);
     }
 
     if (typeof interceptor.selectAll === 'function') {

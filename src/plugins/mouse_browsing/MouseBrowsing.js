@@ -341,12 +341,16 @@ export class MouseBrowsing extends PluginBase {
         return false;
       }
       if (this.mouseMiddleFunction === 1) {
-        this.app?.send("\r");
+        if (!this.app?.inputInterceptors?.dispatchNavCmd?.("doEnter")) {
+          this.app?.send("\r");
+        }
         e.preventDefault?.();
         return true;
       }
       if (this.mouseMiddleFunction === 2) {
-        this.app?.send("\x1b[D");
+        if (!this.app?.inputInterceptors?.dispatchNavCmd?.("doLeft")) {
+          this.app?.send("\x1b[D");
+        }
         e.preventDefault?.();
         return true;
       }
@@ -541,10 +545,13 @@ export class MouseBrowsing extends PluginBase {
   }
 
   resetMouseCursor() {
+    this.clearHighlight();
+    this.setMouseCursor(11);
     const buf = this.buf || this.app?.buf;
     const termWin = this.app?.termWin || buf?.termWin;
-    if (termWin && termWin.style) termWin.style.cursor = "auto";
-    this.setMouseCursor(11);
+    if (termWin && termWin.style) {
+      termWin.style.cursor = "auto";
+    }
   }
 
   resetMousePos() {
@@ -553,6 +560,19 @@ export class MouseBrowsing extends PluginBase {
       const row = this.tempMouseRow ?? 0;
       this.onMouseMove(col, row, true);
     }
+  }
+
+  _navOrSend(cmd, fallbackSeq) {
+    const app = this.app;
+    if (!app) return false;
+    if (app.inputInterceptors?.dispatchNavCmd?.(cmd)) {
+      return true;
+    }
+    if (fallbackSeq) {
+      app.send(fallbackSeq);
+      return true;
+    }
+    return false;
   }
 
   handleMouseClick(e, force = false) {
@@ -564,27 +584,29 @@ export class MouseBrowsing extends PluginBase {
 
     const isForced = force || Boolean(e?.force || e?.forceMouseBrowsing);
     if (!this.enabled && !isForced) return false;
+    if (e && e.button !== undefined && e.button !== 0) return false;
+    if (typeof app.isSelectionCollapsed === "function" && !app.isSelectionCollapsed()) {
+      return false;
+    }
+    if (e?.target && e.target.closest?.("a")) {
+      return false;
+    }
 
-    const cX = e.clientX;
-    const cY = e.clientY;
+    const cX = e?.clientX ?? 0;
+    const cY = e?.clientY ?? 0;
     const currentCursor = this.mouseCursor || 0;
 
     switch (currentCursor) {
       case 1:
-        app.send("\x1b[D"); // Arrow Left
-        return true;
+        return this._navOrSend("doLeft", "\x1b[D");
       case 2:
-        app.send("\x1b[5~"); // Page Up
-        return true;
+        return this._navOrSend("doPageUp", "\x1b[5~");
       case 3:
-        app.send("\x1b[6~"); // Page Down
-        return true;
+        return this._navOrSend("doPageDown", "\x1b[6~");
       case 4:
-        app.send("\x1b[1~"); // Home
-        return true;
+        return this._navOrSend("doHome", "\x1b[1~");
       case 5:
-        app.send("\x1b[4~"); // End
-        return true;
+        return this._navOrSend("doEnd", "\x1b[4~");
       case 6: {
         if (this.nowHighlight !== -1) {
           this.navigateRowAndEnter(this.nowHighlight);
@@ -609,9 +631,11 @@ export class MouseBrowsing extends PluginBase {
           app.setNavCmd("doRight");
           return true;
         }
-        app.send("\x1b[D"); // Arrow Left
-        return true;
+        return this._navOrSend("doLeft", "\x1b[D");
       case 8: {
+        if (app.inputInterceptors?.dispatchNavCmd?.("previousThread")) {
+          return true;
+        }
         const cmd = app.site?.getThreadCommand?.("prevThread");
         if (cmd) {
           app.send(cmd);
@@ -620,6 +644,9 @@ export class MouseBrowsing extends PluginBase {
         break;
       }
       case 9: {
+        if (app.inputInterceptors?.dispatchNavCmd?.("nextThread")) {
+          return true;
+        }
         const cmd = app.site?.getThreadCommand?.("nextThread");
         if (cmd) {
           app.send(cmd);
@@ -628,6 +655,9 @@ export class MouseBrowsing extends PluginBase {
         break;
       }
       case 10: {
+        if (app.inputInterceptors?.dispatchNavCmd?.("firstThread")) {
+          return true;
+        }
         const cmd = app.site?.getThreadCommand?.("firstThread");
         if (cmd) {
           app.send(cmd);
@@ -636,6 +666,9 @@ export class MouseBrowsing extends PluginBase {
         break;
       }
       case 12: {
+        if (app.inputInterceptors?.dispatchNavCmd?.("refreshPost")) {
+          return true;
+        }
         const cmd = app.site?.getThreadCommand?.("refreshPost");
         if (cmd) {
           app.send(cmd);
@@ -644,6 +677,9 @@ export class MouseBrowsing extends PluginBase {
         break;
       }
       case 13: {
+        if (app.inputInterceptors?.dispatchNavCmd?.("lastThreadList")) {
+          return true;
+        }
         const cmd = app.site?.getThreadCommand?.("lastThreadList");
         if (cmd) {
           app.send(cmd);
@@ -652,6 +688,9 @@ export class MouseBrowsing extends PluginBase {
         break;
       }
       case 14: {
+        if (app.inputInterceptors?.dispatchNavCmd?.("lastThreadReading")) {
+          return true;
+        }
         const cmd = app.site?.getThreadCommand?.("lastThreadReading");
         if (cmd) {
           app.send(cmd);

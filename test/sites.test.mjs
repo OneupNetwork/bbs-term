@@ -2365,3 +2365,216 @@ test('ClipboardManager normalizes CRLF/LF and BaseSite.onPaste transforms ESC ch
   assert.equal(finalPasted, 'hello\r\x15[1;33myellow\x15[m');
 });
 
+test('EasyReading fixes: mouse clicks, coordinate/cursor mapping, Escape toggle, 100% navigation, push/reply cleanup, and multi-page ANSI copy', async () => {
+  const { EasyReading } = await import('../src/plugins/easy_reading/EasyReading.js');
+  const { MouseBrowsing } = await import('../src/plugins/mouse_browsing/MouseBrowsing.js');
+  const { InputInterceptors } = await import('../src/js/input_interceptors.js');
+  const { TermBuf } = await import('../src/js/term_buf.js');
+
+  const ptt = new PttSite();
+  const buf = new TermBuf(80, 24);
+  buf.site = ptt;
+
+  // 1. PttSite deterministic getPagingSlice on normal page turns vs last page
+  const statusNormal = { pageIndex: 2, rowIndexStart: 22, rowIndexEnd: 44, isEnd: false };
+  const sliceNormal = ptt.getPagingSlice(buf, statusNormal, 22, [buf.lines[0]]);
+  assert.deepEqual(sliceNormal, { beginIndex: 1, atLastPage: false });
+
+  // 2. Multi-page ANSI selection copy beyond row 24 in TermBuf
+  const multiPageLines = [];
+  for (let r = 0; r < 40; r++) {
+    const line = [];
+    for (let c = 0; c < 80; c++) {
+      line.push({
+        ch: r === 30 && c < 4 ? 'TEST'[c] : ' ',
+        fg: 1,
+        bg: 0,
+        bright: true,
+        isLeadByte: false,
+        getBg() { return this.bg; },
+        getFg() { return this.fg; },
+      });
+    }
+    multiPageLines.push(line);
+  }
+  const ansiOut = buf.getSelectionText(
+    { start: { row: 30, col: 0 }, end: { row: 30, col: 4 } },
+    { color: true, lines: multiPageLines }
+  );
+  assert.ok(ansiOut.includes('TEST'), 'getSelectionText should extract text from row 30 of custom lines array');
+
+  // 3. Set up EasyReading and InputInterceptors with mock DOM
+  function createElement(tag) {
+    const listeners = {};
+    return {
+      tagName: tag.toUpperCase(),
+      style: {},
+      childNodes: [],
+      parentNode: null,
+      setAttribute(k, v) { this[k] = v; },
+      getAttribute(k) { return this[k]; },
+      addEventListener(evt, fn) { (listeners[evt] = listeners[evt] || []).push(fn); },
+      removeEventListener() {},
+      dispatchEvent(evt) { for (const fn of (listeners[evt.type] || [])) fn(evt); },
+      appendChild(child) {
+        child.parentNode = this;
+        this.childNodes.push(child);
+        return child;
+      },
+      removeChild(child) {
+        const idx = this.childNodes.indexOf(child);
+        if (idx !== -1) {
+          child.parentNode = null;
+          this.childNodes.splice(idx, 1);
+        }
+        return child;
+      },
+      get lastChild() { return this.childNodes[this.childNodes.length - 1]; },
+      set innerHTML(html) {
+        this._html = html;
+        if (html === '') this.childNodes = [];
+      },
+      get innerHTML() { return this._html || ''; },
+      contains(other) {
+        let cur = other;
+        while (cur) {
+          if (cur === this) return true;
+          cur = cur.parentNode;
+        }
+        return false;
+      },
+    };
+  }
+
+  const mockContainer = createElement('div');
+  const originalDoc = globalThis.document;
+  try {
+    globalThis.document = {
+      createElement,
+      getElementById: (id) => (id === 'TermWindow' ? mockContainer : null),
+    };
+
+    const sent = [];
+    const interceptors = new InputInterceptors();
+    let cursorUpdates = 0;
+    const mockView = {
+      termWin: mockContainer,
+      chw: 10,
+      chh: 20,
+      fontSizePx: 20,
+      scaleX: 1,
+      scaleY: 1,
+      innerBounds: { width: 800, height: 600 },
+      _getGridOrigin: () => [0, 60],
+      convertMN2XYEx: (col, row) => [col * 10, 60 + row * 20],
+      updateCursorPos: () => { cursorUpdates++; },
+      renderRow: (line, row, forceWidth, preview, el) => {
+        el.setAttribute('data-rendered-width', String(forceWidth));
+      },
+    };
+    const mockApp = {
+      site: ptt,
+      buf,
+      view: mockView,
+      inputInterceptors: interceptors,
+      registerInputInterceptor: (i) => interceptors.registerInterceptor(i),
+      unregisterInputInterceptor: (i) => interceptors.unregisterInterceptor(i),
+      conn: { isConnected: true },
+      send: (d) => sent.push(d),
+      setNavCmd(cmd) {
+        if (this.inputInterceptors.dispatchNavCmd(cmd)) return;
+      },
+      on: () => {},
+      off: () => {},
+      emit: () => {},
+    };
+
+    const er = new EasyReading(mockApp, { enabled: true });
+    er.init({ app: mockApp, view: mockView, buf });
+    er.started = true;
+    er.show();
+    assert.equal(er.isActive(), true);
+
+    // 4. appendRows sets 0-based srow and passes forceWidth (fontSizePx = 20)
+    er.appendRows([buf.lines[0], buf.lines[1]], false);
+    assert.equal(er.content.childNodes[0].getAttribute('srow'), '0');
+    assert.equal(er.content.childNodes[1].getAttribute('srow'), '1');
+    assert.equal(er.content.childNodes[0].getAttribute('data-rendered-width'), '20');
+
+    // 5. Normal left click when MouseBrowsing is disabled does NOT close EasyReading
+    er.handleMouseClick({ button: 0, clientX: 200, clientY: 200, preventDefault() {} });
+    assert.equal(er.isActive(), true, 'Left click must not close EasyReading when MouseBrowsing is disabled');
+
+    // 6. getCursorPos returns 'hide' while reading, and footer coordinates during push/reply prompt
+    assert.equal(interceptors.getCursorPos(0, 23), 'hide');
+    er.showPushInitText = true;
+    const pushCursorPos = interceptors.getCursorPos(5, 23);
+    assert.ok(Array.isArray(pushCursorPos), 'getCursorPos should return coordinate array when push prompt is active');
+    assert.equal(pushCursorPos[0], 50);
+    er.showPushInitText = false;
+
+    // 7. Escape temporarily hides overlay without clearing pageLines; pressing Escape again restores it
+    er.pageLines = [buf.lines[0], buf.lines[1]];
+    let prevented = false;
+    er.handleKeyDown({ key: 'Escape', preventDefault() { prevented = true; } });
+    assert.equal(prevented, true);
+    assert.equal(er.isActive(), false);
+    assert.equal(er._temporarilyHidden, true);
+    assert.equal(er.pageLines.length, 2, 'Escape must preserve loaded pageLines');
+
+    prevented = false;
+    er.handleKeyDown({ key: 'Escape', preventDefault() { prevented = true; } });
+    assert.equal(prevented, true);
+    assert.equal(er.isActive(), true);
+    assert.equal(er._temporarilyHidden, false);
+
+    // 8. Space / ArrowRight / t at 100% end of article calls leaveCurrentPost and passes key through
+    er.easyReadingReachedPageEnd = true;
+    er.content.scrollTop = 1000;
+    er.content.scrollHeight = 500;
+    er.content.clientHeight = 500;
+    let leftPost = false;
+    const origLeave = er.leaveCurrentPost.bind(er);
+    er.leaveCurrentPost = () => { leftPost = true; origLeave(); };
+    prevented = false;
+    er.handleKeyDown({ key: ' ', preventDefault() { prevented = true; } });
+    assert.equal(leftPost, true, 'Pressing Space at 100% bottom should call leaveCurrentPost');
+    assert.equal(prevented, false, 'Space at 100% should pass through to PTT');
+
+    // 9. Pressing q or ArrowLeft does NOT immediately hide overlay (avoids flashing raw terminal article before list renders)
+    er.show();
+    assert.equal(er.isActive(), true);
+    er.handleKeyDown({ key: 'q', preventDefault() {} });
+    assert.equal(er.isActive(), true, 'Overlay must remain visible while waiting for article list frame from server');
+
+    // When scheduleHide runs with requestAnimationFrame, it waits for next frame before hiding
+    const rafCallbacks = [];
+    const origWindow = globalThis.window;
+    try {
+      globalThis.window = {
+        requestAnimationFrame: (cb) => {
+          rafCallbacks.push(cb);
+          return rafCallbacks.length;
+        },
+        cancelAnimationFrame: () => {},
+      };
+      ptt.pageState = PAGE_STATE.LIST;
+      er.scheduleHide();
+      assert.equal(er.isActive(), true, 'Overlay should still be visible before RAF fires');
+      assert.equal(rafCallbacks.length, 1);
+      // First RAF (before paint commit)
+      rafCallbacks.shift()();
+      assert.equal(er.isActive(), true, 'Overlay should wait for paint frame commit');
+      assert.equal(rafCallbacks.length, 1);
+      // Second RAF (after Canvas/DOM list frame is painted)
+      rafCallbacks.shift()();
+      assert.equal(er.isActive(), false, 'Overlay hides cleanly on next frame after list is painted');
+    } finally {
+      globalThis.window = origWindow;
+    }
+  } finally {
+    globalThis.document = originalDoc;
+  }
+});
+
+

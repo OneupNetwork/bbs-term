@@ -54,6 +54,7 @@ export class EasyReading extends PluginBase {
     this._replyRowDiv = null;
     this.lastRowDivContent = '';
     this.replyRowDivContent = '';
+    this._temporarilyHidden = false;
 
     this.actualRowIndex = 0;
     this._lastEasyReadingPageIndex = null;
@@ -134,6 +135,7 @@ export class EasyReading extends PluginBase {
         this._overlay.style.fontSize = this.view.mainDisplay.style.fontSize;
         this._overlay.style.lineHeight = this.view.mainDisplay.style.lineHeight;
       }
+      this._updateOverlayPadding();
     }
     if (!this._initializing) {
       if (!this._handlingSwitchEvent) {
@@ -210,6 +212,15 @@ export class EasyReading extends PluginBase {
 
   initUI(container) {
     this._initUI(container);
+  }
+
+  _updateOverlayPadding() {
+    if (!this._overlay || !this.view) return;
+    const termWinHeight =
+      this.view.innerBounds?.height || this._overlay.clientHeight || 0;
+    const rowsHeight = (this.view.chh || 16) * (this.buf?.rows || 24);
+    const padTop = Math.max(0, Math.floor((termWinHeight - rowsHeight) / 2));
+    this._overlay.style?.setProperty?.('--easy-reading-pad-top', `${padTop}px`);
   }
 
   _initUI(container) {
@@ -298,6 +309,7 @@ export class EasyReading extends PluginBase {
       this._overlay.style.fontSize = this.view.mainDisplay.style.fontSize;
       this._overlay.style.lineHeight = this.view.mainDisplay.style.lineHeight;
     }
+    this._updateOverlayPadding();
     this._uiInitialized = true;
   }
 
@@ -313,15 +325,19 @@ export class EasyReading extends PluginBase {
         this._uiInitialized = true;
       }
     }
+    this._temporarilyHidden = false;
+    this._updateOverlayPadding();
     if (this.overlay) {
       this.overlay.style.display = 'block';
     }
     this.lastWheelTime = 0;
     this.lastHideTime = 0;
+    this.view?.updateCursorPos?.();
   }
 
   hide() {
     this._resetInFlight();
+    this._temporarilyHidden = false;
     if (this.overlay) {
       this.overlay.style.display = 'none';
     }
@@ -337,6 +353,7 @@ export class EasyReading extends PluginBase {
     }
     this.pageLines = [];
     this.pageWrappedLines = [];
+    this.view?.updateCursorPos?.();
   }
 
   clearRows() {
@@ -360,16 +377,23 @@ export class EasyReading extends PluginBase {
 
   appendRows(lines, showsLinkPreview) {
     if (!this.content) return;
-    const chh = this.view?.chh || 16;
+    const forceWidth =
+      this.view?.fontSizePx ||
+      (this.view?.chw ? this.view.chw * 2 : this.view?.chh || 16);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      const rowIdx = this.content.childNodes.length;
       const el = document.createElement('span');
       el.setAttribute('type', 'termrow');
-      el.setAttribute('srow', this.content.childNodes.length);
+      el.setAttribute('srow', String(rowIdx));
       this.content.appendChild(el);
       this.renderRow(
-        line, this.content.childNodes.length, chh,
-        showsLinkPreview, el);
+        line,
+        rowIdx,
+        forceWidth,
+        showsLinkPreview,
+        el
+      );
     }
     this.updateProgress();
   }
@@ -382,8 +406,10 @@ export class EasyReading extends PluginBase {
     el.setAttribute('type', 'termrow');
     el.setAttribute('srow', '0');
     target.appendChild(el);
-    const chh = this.view?.chh || 16;
-    return this.renderRow(row, 0, chh, false, el);
+    const forceWidth =
+      this.view?.fontSizePx ||
+      (this.view?.chw ? this.view.chw * 2 : this.view?.chh || 16);
+    return this.renderRow(row, 0, forceWidth, false, el);
   }
 
   setSingleChild(par, child) {
@@ -413,6 +439,7 @@ export class EasyReading extends PluginBase {
     this.renderSingleRow(el, row);
     this.setSingleChild(this.replyRowDiv.childNodes[0] || this.replyRowDiv, el);
     this.replyRowDiv.style.display = 'block';
+    this.view?.updateCursorPos?.();
   }
 
   updatePushInitRow(row) {
@@ -423,6 +450,19 @@ export class EasyReading extends PluginBase {
     this.setSingleChild(this.lastRowDiv.childNodes[0] || this.lastRowDiv, el);
     this.lastRowDiv.style.backgroundColor = 'var(--term-bg, var(--term-color-0, black))';
     this.lastRowDiv.style.display = 'block';
+    this.view?.updateCursorPos?.();
+  }
+
+  _restoreReadingFooter() {
+    if (this.replyRowDiv) {
+      this.replyRowDiv.style.display = 'none';
+    }
+    if (this.lastRowDiv) {
+      this.lastRowDiv.style.backgroundColor = '';
+      this.lastRowDiv.style.display = 'block';
+    }
+    this.updateProgress();
+    this.view?.updateCursorPos?.();
   }
 
   populatePage() {
@@ -445,15 +485,23 @@ export class EasyReading extends PluginBase {
       : false;
     let lastRowNum = site.getLastRowNum(this.buf);
     if (site.pageState === PAGE_STATE.READING && site.prevPageState === PAGE_STATE.READING) {
-      this.show();
+      if (!this._temporarilyHidden) {
+        this.show();
+      }
       const lastRowText = this.buf.getRowText(lastRowNum, 0, this.buf.cols);
       const result = site.parseReadingStatus(lastRowText, this.buf);
       if (result) {
         const isEnd = result.isEnd || site.isArticleEnd(lastRowText, this.buf, result);
         if (result.pageIndex && result.pageIndex === this._lastEasyReadingPageIndex && !isEnd) {
+          if (!this.isPromptActive()) {
+            this._restoreReadingFooter();
+          }
           return;
         }
         if (isEnd && this._easyReadingAppendedEnd) {
+          if (!this.isPromptActive()) {
+            this._restoreReadingFooter();
+          }
           return;
         }
         if (isEnd) {
@@ -463,7 +511,14 @@ export class EasyReading extends PluginBase {
           this._lastEasyReadingPageIndex = result.pageIndex;
         }
 
-        const paging = site.getPagingSlice(this.buf, result, this.actualRowIndex, this.pageLines);
+        const wrappedCount = this.pageWrappedLines[this.actualRowIndex] || 0;
+        const paging = site.getPagingSlice(
+          this.buf,
+          result,
+          this.actualRowIndex,
+          this.pageLines,
+          wrappedCount
+        );
         let beginIndex = paging.beginIndex;
         const atLastPage = paging.atLastPage;
 
@@ -478,9 +533,16 @@ export class EasyReading extends PluginBase {
             this.pageWrappedLines[++this.actualRowIndex] = 1;
           }
         }
-        this.appendRows(this.buf.lines.slice(beginIndex, lastRowNum), showsLinkPreview);
-        // deep clone lines for selection (getRowText and get ansi color)
-        this.pageLines = (this.pageLines || []).concat(JSON.parse(JSON.stringify(this.buf.lines.slice(beginIndex, lastRowNum))));
+        if (beginIndex < lastRowNum) {
+          this.appendRows(this.buf.lines.slice(beginIndex, lastRowNum), showsLinkPreview);
+          // deep clone lines for selection (getRowText and get ansi color)
+          this.pageLines = (this.pageLines || []).concat(
+            JSON.parse(JSON.stringify(this.buf.lines.slice(beginIndex, lastRowNum)))
+          );
+        }
+        if (!this.isPromptActive()) {
+          this._restoreReadingFooter();
+        }
       }
       site.prevPageState = PAGE_STATE.READING;
     } else {
@@ -488,6 +550,7 @@ export class EasyReading extends PluginBase {
       this.pageWrappedLines = [];
       this._lastEasyReadingPageIndex = 1;
       this._easyReadingAppendedEnd = false;
+      this._temporarilyHidden = false;
       if (site.pageState === PAGE_STATE.READING) {
         const lastRowText = this.buf.getRowText(lastRowNum, 0, this.buf.cols);
         const statusResult = site.parseReadingStatus(lastRowText, this.buf);
@@ -508,14 +571,7 @@ export class EasyReading extends PluginBase {
         if (isEnd) {
           this._easyReadingAppendedEnd = true;
         }
-        if (this.lastRowDiv) {
-          this.lastRowDiv.style.backgroundColor = '';
-          this.lastRowDiv.style.display = 'block';
-        }
-        this.updateProgress();
-        if (this.replyRowDiv) {
-          this.replyRowDiv.style.display = 'none';
-        }
+        this._restoreReadingFooter();
         // deep clone lines for selection (getRowText and get ansi color)
         this.pageLines = JSON.parse(JSON.stringify(this.buf.lines.slice(0, lastRowNum)));
       } else {
@@ -571,6 +627,7 @@ export class EasyReading extends PluginBase {
     )
       return;
 
+    const prevPromptActive = this.isPromptActive();
     let lastRowNum = site.getLastRowNum(this.buf);
     const lastRowText = this.buf.getRowText(lastRowNum, 0, this.buf.cols);
     // dealing with page state jump to 0 because last row wasn't updated fully 
@@ -596,8 +653,13 @@ export class EasyReading extends PluginBase {
         }
         const result = site.parseReadingStatus(lastRowText, this.buf);
         if (result) {
+          const wasPushOrReply = this.showPushInitText || this.showReplyText;
           this.showPushInitText = false;
           this.showReplyText = false;
+          if (wasPushOrReply) {
+            // Reset appended end flag so newly submitted push comments can be appended
+            this._easyReadingAppendedEnd = false;
+          }
           const isEnd = site.isArticleEnd(lastRowText, this.buf, result);
 
           if (this._pageDownInFlight) {
@@ -644,9 +706,15 @@ export class EasyReading extends PluginBase {
         } else if (this.buf.cur_y === lastRowNum - 1) {
           this.showReplyText = false;
         }
+        if (prevPromptActive !== this.isPromptActive()) {
+          this.view?.updateCursorPos?.();
+        }
         // last line hasn't changed
         return;
       }
+    }
+    if (prevPromptActive !== this.isPromptActive()) {
+      this.view?.updateCursorPos?.();
     }
   }
 
@@ -827,8 +895,14 @@ export class EasyReading extends PluginBase {
         case 'ArrowRight':
         case ' ':
         case 't':
-          this._scrollBy(this._turnPageLines);
-          stop = true;
+          stop = this._scrollBy(this._turnPageLines);
+          if (!stop) {
+            if (!this.easyReadingReachedPageEnd) {
+              stop = true;
+            } else {
+              this.leaveCurrentPost();
+            }
+          }
           break;
         case 'PageUp':
           this._scrollBy(-this._turnPageLines);
@@ -839,8 +913,12 @@ export class EasyReading extends PluginBase {
           stop = true;
           break;
         case 'Escape':
-          // Temporarily hide easy reading overlay to reveal the underlying terminal screen
-          this.hide();
+          // Temporarily hide easy reading overlay to reveal the underlying terminal screen without wiping loaded pages
+          if (this.overlay) {
+            this._temporarilyHidden = true;
+            this.overlay.style.display = 'none';
+            this.view?.updateCursorPos?.();
+          }
           stop = true;
           break;
         case 'ArrowLeft':
@@ -911,13 +989,18 @@ export class EasyReading extends PluginBase {
   _onMouseClick(e) {
     if (!this.enabled || !this.started)
       return;
+    const mb = this.app?.pluginManager?.getPlugin?.('mouse_browsing');
+    if (mb?.enabled) {
+      return;
+    }
     let stop = false;
-    const mouseCursor = this.buf?.mouseCursor ?? 0;
+    const mouseCursor = this.buf?.mouseCursor ?? -1;
     switch (mouseCursor) {
-      case 0:
       case 1: // Arrow Left
         this.stopEasyReading();
         this.hide();
+        this._send('\x1b[D');
+        stop = true;
         break;
       case 2: // Page Up
         this._scrollBy(-this._turnPageLines);
@@ -935,9 +1018,6 @@ export class EasyReading extends PluginBase {
         this._scrollEnd();
         stop = true;
         break;
-      case 6:
-      case 7:
-        break;
       case 8: // [
       case 9: // ]
       case 10: // =
@@ -946,7 +1026,7 @@ export class EasyReading extends PluginBase {
       case 14: // Last post with the same title (READING)
         this.leaveCurrentPost();
         break;
-      default: // Do nothing
+      default: // Do nothing (never close on normal left click)
         break;
     }
     if (stop)
@@ -956,6 +1036,17 @@ export class EasyReading extends PluginBase {
   handleNavCmd(cmd) {
     if (!this.isActive()) return false;
     switch (cmd) {
+      case "doLeft":
+        this.stopEasyReading();
+        this.hide();
+        this._send('\x1b[D');
+        return true;
+      case "doHome":
+        this._scrollTop();
+        return true;
+      case "doEnd":
+        this._scrollEnd();
+        return true;
       case "doArrowUp":
         if (!this._scrollBy(-1)) {
           this.leaveCurrentPost();
@@ -984,6 +1075,17 @@ export class EasyReading extends PluginBase {
       }
       case "nextThread": {
         const tCmd = this.site?.getThreadCommand?.("nextThread");
+        if (tCmd) {
+          this.leaveCurrentPost();
+          this._send(tCmd);
+        }
+        return true;
+      }
+      case "firstThread":
+      case "lastThreadList":
+      case "lastThreadReading":
+      case "refreshPost": {
+        const tCmd = this.site?.getThreadCommand?.(cmd);
         if (tCmd) {
           this.leaveCurrentPost();
           this._send(tCmd);
@@ -1076,6 +1178,16 @@ export class EasyReading extends PluginBase {
   }
 
   handleKeyDown(e) {
+    if (this._temporarilyHidden && this.started && this.enabled) {
+      if (e.key === 'Escape') {
+        this.show();
+        e.preventDefault();
+        return true;
+      }
+      this._temporarilyHidden = false;
+      this.hide();
+      return false;
+    }
     if (!this.isActive() || this.isPromptActive())
       return false;
     this._keyDownKeyCode = e.keyCode;
@@ -1094,6 +1206,63 @@ export class EasyReading extends PluginBase {
     return false;
   }
 
+  getClientToPos(cX, cY) {
+    if (!this.isActive() || !this.view || !this.overlay) return undefined;
+    const origin = this.view._getGridOrigin ? this.view._getGridOrigin() : [0, 0];
+    const chw = (this.view.chw || 8) * (this.view.scaleX || 1);
+    const chh = (this.view.chh || 16) * (this.view.scaleY || 1);
+    const cols = this.buf?.cols || 80;
+    const rows = this.buf?.rows || 24;
+
+    let col = Math.floor((cX - origin[0]) / chw);
+    if (col < 0) col = 0;
+    else if (col >= cols) col = cols - 1;
+
+    const rect = this.overlay.getBoundingClientRect?.() || { top: 0, height: rows * chh };
+    const relY = cY - rect.top;
+    const height = rect.height || rows * chh;
+    const footerHeight = this.footer?.offsetHeight || chh;
+
+    let row;
+    if (relY >= height - footerHeight) {
+      row = rows - 1;
+    } else {
+      const padTop =
+        parseFloat(this.overlay.style?.getPropertyValue?.('--easy-reading-pad-top')) || 0;
+      const contentY = relY - padTop;
+      if (contentY < chh * 3) {
+        row = Math.max(0, Math.floor(contentY / chh));
+      } else {
+        const midY = padTop + (height - footerHeight - padTop) / 2;
+        row = relY < midY ? Math.floor(rows / 4) : Math.floor((rows * 3) / 4);
+      }
+    }
+    return { col, row };
+  }
+
+  getCursorPos(col, row) {
+    if (!this.isActive()) return undefined;
+    if (!this.isPromptActive()) return 'hide';
+    const view = this.view;
+    if (!view || typeof view.convertMN2XYEx !== 'function') return undefined;
+    const [gridX, gridY] = view.convertMN2XYEx(col, row);
+    const targetDiv = this.showReplyText ? this.replyRowDiv : this.lastRowDiv;
+    if (targetDiv && this.overlay) {
+      const termWin = view.termWin || this.overlay.parentNode;
+      if (termWin && typeof targetDiv.getBoundingClientRect === 'function') {
+        const winRect = termWin.getBoundingClientRect();
+        const divRect = targetDiv.getBoundingClientRect();
+        if (divRect.height > 0) {
+          return [gridX, divRect.top - winRect.top];
+        }
+      }
+      if (this.footer && this.footer.offsetTop > 0) {
+        return [gridX, this.footer.offsetTop];
+      }
+    }
+    return [gridX, gridY];
+  }
+
   getSelectedText() {
     if (!this.isActive())
       return undefined;
@@ -1106,7 +1275,21 @@ export class EasyReading extends PluginBase {
   getSelectionColRow() {
     if (!this.isActive())
       return undefined;
-    return null;
+    if (
+      typeof window === 'undefined' ||
+      !window.getSelection ||
+      window.getSelection().isCollapsed ||
+      window.getSelection().rangeCount === 0 ||
+      !this.view?.countCol
+    ) {
+      return null;
+    }
+    const r = window.getSelection().getRangeAt(0);
+    return {
+      start: this.view.countCol(r.startContainer, r.startOffset),
+      end: this.view.countCol(r.endContainer, r.endOffset),
+      lines: this.pageLines,
+    };
   }
 
   selectAll() {
@@ -1141,6 +1324,7 @@ export class EasyReading extends PluginBase {
       } else if (lineHeight) {
         this.overlay.style.lineHeight = lineHeight;
       }
+      this._updateOverlayPadding();
     }
   }
 }
