@@ -2922,6 +2922,184 @@ test('EasyReading works without DEC 2026 (hasFrameSync: false) for split TCP chu
   }
 });
 
+test('EasyReading handles enabling after login, toggling off/on with forced redraw, and leaving multi-page articles early without sticking at 100%', () => {
+  const originalDoc = globalThis.document;
+  const mockElements = new Map();
+  const createEl = (tag) => {
+    const el = {
+      tagName: tag.toUpperCase(),
+      style: {
+        setProperty(k, v) { this[k] = v; },
+      },
+      classList: {
+        add() {},
+        remove() {},
+        toggle() {},
+        contains() { return false; },
+      },
+      attributes: {},
+      childNodes: [],
+      innerHTML: '',
+      scrollTop: 0,
+      scrollHeight: 600,
+      clientHeight: 600,
+      offsetHeight: 20,
+      offsetTop: 460,
+      setAttribute(k, v) { this.attributes[k] = v; if (k === 'id') mockElements.set(v, this); },
+      getAttribute(k) { return this.attributes[k]; },
+      appendChild(child) { this.childNodes.push(child); child.parentNode = this; return child; },
+      removeChild(child) {
+        const idx = this.childNodes.indexOf(child);
+        if (idx >= 0) this.childNodes.splice(idx, 1);
+      },
+      get lastChild() {
+        return this.childNodes[this.childNodes.length - 1] || null;
+      },
+      addEventListener() {},
+      removeEventListener() {},
+      contains(target) { return target === this || this.childNodes.includes(target); },
+      getBoundingClientRect() {
+        return { top: 0, left: 0, width: 800, height: 480 };
+      },
+    };
+    return el;
+  };
+
+  globalThis.document = {
+    createElement: createEl,
+    getElementById: (id) => mockElements.get(id) || null,
+  };
+
+  try {
+    const ptt = new PttSite();
+    ptt.pageState = PAGE_STATE.LIST;
+    ptt.prevPageState = PAGE_STATE.LIST;
+
+    const createLine = (text, bg = 0, fg = 7) =>
+      Array.from({ length: 80 }, (_, i) => ({
+        ch: text[i] || ' ',
+        getBg: () => bg,
+        getFg: () => fg,
+      }));
+
+    const lines = Array.from({ length: 24 }, (_, r) => createLine(`Row ${r}`));
+    const sentCommands = [];
+
+    const mockBuf = Object.assign(new EventEmitter(), {
+      cols: 80,
+      rows: 24,
+      cur_x: 79,
+      cur_y: 23,
+      site: ptt,
+      hasFrameSync: false,
+      inSyncUpdate: false,
+      lines,
+      isFrameReady() {
+        if (this.hasFrameSync) return !this.inSyncUpdate;
+        return this.site.isCursorParked(this);
+      },
+      isLineEmpty(row) {
+        return this.getRowText(row).trim().length === 0;
+      },
+      getRowText(row) {
+        if (!this.lines[row]) return '';
+        return this.lines[row].map((c) => c.ch).join('');
+      },
+    });
+
+    const mockView = {
+      chw: 10,
+      chh: 20,
+      scaleX: 1,
+      scaleY: 1,
+      fontSizePx: 20,
+      termWin: createEl('div'),
+      mainDisplay: { style: { fontSize: '20px', lineHeight: '20px' } },
+      _getGridOrigin: () => [0, 0],
+      convertMN2XYEx: (col, row) => [col * 10, row * 20],
+      updateCursorPos() {},
+      renderSingleRow(target, row) {
+        target.textContent = row.map((c) => c.ch).join('').trim();
+      },
+    };
+
+    const mockApp = Object.assign(new EventEmitter(), {
+      buf: mockBuf,
+      view: mockView,
+      site: ptt,
+      send(cmd) { sentCommands.push(cmd); },
+      registerInputInterceptor() {},
+      unregisterInputInterceptor() {},
+    });
+
+    // Scenario 1: EasyReading disabled at login, enabled later during use
+    const er = new EasyReading();
+    er.init({ app: mockApp, view: mockView, buf: mockBuf, enabled: false });
+    assert.equal(er.enabled, false);
+
+    // Enable EasyReading while on article list
+    er.setEnabled(true);
+    assert.equal(er.enabled, true);
+    assert.equal(er.ignoreOneUpdate, false, 'Enabling EasyReading must not set ignoreOneUpdate = true');
+
+    // Open a 3-page article (Page 1 arrives)
+    ptt.prevPageState = PAGE_STATE.LIST;
+    ptt.pageState = PAGE_STATE.READING;
+    const statusPage1 = '  瀏覽 第 1/3 頁 ( 33%)  目前顯示: 第 01~23 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+    lines[23] = createLine(statusPage1, 7, 0);
+
+    er.onScreenUpdate(lines, false);
+    assert.equal(er.sendCommandAfterUpdate, '\x1b[6~', 'Page 1 must queue PageDown command');
+    assert.equal(er._pageDownInFlight, true);
+    mockBuf.emit('viewUpdate');
+    assert.deepEqual(sentCommands, ['\x1b[6~'], 'PageDown command sent on viewUpdate');
+    sentCommands.length = 0;
+
+    // Scenario 2: Leave multi-page article early (before reaching 100%) back to LIST
+    er.leaveCurrentPost();
+    ptt.prevPageState = PAGE_STATE.READING;
+    ptt.pageState = PAGE_STATE.LIST;
+    lines[23] = createLine('  文章選讀  (y)回應 (X)推文 (←)離開 ', 7, 0);
+    er.onScreenUpdate(lines, false);
+    assert.equal(er.ignoreOneUpdate, false, 'Returning to LIST clears ignoreOneUpdate');
+
+    // Open another multi-page article (Page 1 arrives) - should NOT be ignored!
+    ptt.prevPageState = PAGE_STATE.LIST;
+    ptt.pageState = PAGE_STATE.READING;
+    lines[23] = createLine(statusPage1, 7, 0);
+    er.onScreenUpdate(lines, false);
+    assert.equal(er.sendCommandAfterUpdate, '\x1b[6~', 'Subsequent article Page 1 must queue PageDown');
+    mockBuf.emit('viewUpdate');
+    assert.deepEqual(sentCommands, ['\x1b[6~']);
+    sentCommands.length = 0;
+
+    // Scenario 3: Toggle EasyReading OFF and ON while reading an article, followed by forced UI redraw
+    er.setEnabled(false);
+    assert.equal(er.ignoreOneUpdate, false, 'Disabling EasyReading must clear ignoreOneUpdate');
+
+    er.setEnabled(true);
+    assert.deepEqual(sentCommands, ['\x1b[D\x1b[C'], 'Re-enabling during READING sends re-enter command');
+    assert.equal(er._reenteringArticle, true);
+    sentCommands.length = 0;
+
+    // Synchronous forced UI redraw (from applyTermSizeMode / redraw(true)) fires before server responds
+    er.onScreenUpdate(lines, true);
+    assert.equal(er._reenteringArticle, true, 'Forced redraw must not clear _reenteringArticle');
+    assert.equal(er._pageDownInFlight, false, 'Forced redraw must not start in-flight PageDown on stale buffer');
+    assert.equal(er._changeHandled, false, 'Forced redraw must not set _changeHandled');
+
+    // Server responds with re-entered Page 1 of the article
+    er.onScreenUpdate(lines, false);
+    assert.equal(er._reenteringArticle, false, 'Server response clears _reenteringArticle');
+    assert.equal(er.sendCommandAfterUpdate, '\x1b[6~', 'Re-entered Page 1 queues PageDown command');
+    mockBuf.emit('viewUpdate');
+    assert.deepEqual(sentCommands, ['\x1b[6~'], 'PageDown sent after re-entering article');
+  } finally {
+    globalThis.document = originalDoc;
+  }
+});
+
+
 
 
 
