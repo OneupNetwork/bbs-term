@@ -1,6 +1,7 @@
 import { EventEmitter } from '../event.js';
 import { CHARSETS } from '../conv.js';
 import { b2u } from '../string_util.js';
+import { wrapAsciiHtml } from '../font_util.js';
 export { CHARSETS };
 
 export const PAGE_STATE = Object.freeze({
@@ -699,7 +700,7 @@ export class BaseSite extends EventEmitter {
         })
         .join('');
     }
-    return '<span align="left">' +
+    const html = '<span align="left">' +
            '<span class="q1 b7">' + spaces + '[好讀模式] </span>' +
            '<span class="' + cls + ' b7">(' + pctStr + ') </span>' +
            '<span class="q0 b7"> 滾輪/上下鍵捲動，</span>' +
@@ -707,6 +708,7 @@ export class BaseSite extends EventEmitter {
            '<span data-er-cmd="Escape" style="cursor:pointer"><span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span></span>' +
            '<span data-er-cmd="q" style="cursor:pointer"><span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span></span>' +
            '</span>';
+    return wrapAsciiHtml(html);
   }
 
   /**

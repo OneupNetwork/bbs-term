@@ -10,6 +10,7 @@ import { setTimer } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
 import { stringWidth } from './string_util';
 import { DEFAULT_PREFS, getDefaultFontSize } from './pref.js';
+import { getAsciiLetterSpacingEm } from './font_util.js';
 
 const DEFINE_INPUT_BUFFER_SIZE = 12;
 
@@ -71,6 +72,8 @@ export class TermView extends EventEmitter {
   this.cursorStyle = DEFAULT_PREFS.cursorStyle;
   this.lineHeight = DEFAULT_PREFS.lineHeight;
   this.fontSizePx = getDefaultFontSize();
+  this.chw = this.fontSizePx / 2;
+  this.chh = Math.round(this.fontSizePx * (this.lineHeight || 1.0));
   this.enableLinkHoverPreview = true;
   this.renderHyperlinkPreview = null;
   this.scaleX = 1;
@@ -103,6 +106,30 @@ export class TermView extends EventEmitter {
 
   this.mainDisplay.style.border = '0px';
   this.setFontFace(DEFAULT_PREFS.fontFace);
+  this.fixedResize(this.fontSizePx);
+
+  if (typeof document !== 'undefined' && document.fonts) {
+    if (typeof document.fonts.load === 'function') {
+      try {
+        document.fonts.load('16px SymMingLiu').catch(() => {});
+      } catch (e) {}
+    }
+    const handleFontsLoaded = () => {
+      if (this.fontFace) {
+        this.setFontFace(this.fontFace);
+        if (!this.useCanvasEngine) {
+          this.redraw(true);
+        }
+        this.updateCursorPos();
+      }
+    };
+    if (document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+      document.fonts.ready.then(handleFontsLoaded).catch(() => {});
+    }
+    if (typeof document.fonts.addEventListener === 'function') {
+      document.fonts.addEventListener('loadingdone', handleFontsLoaded);
+    }
+  }
 
   this._keyboard = new TermKeyboard((data) => this._send(data));
   this._keyboard.on('term:key', (detail) => {
@@ -370,13 +397,19 @@ export class TermView extends EventEmitter {
 
   setFontFace(fontFace) {
     this.fontFace = fontFace;
+    const asciiLsEm = getAsciiLetterSpacingEm(this.fontFace);
+    this.asciiLetterSpacing = asciiLsEm ? `${asciiLsEm}em` : '0px';
     if (this.termWin?.style) {
       this.termWin.style.setProperty('--font-face', this.fontFace);
+      this.termWin.style.setProperty('--term-ascii-ls', this.asciiLetterSpacing);
     }
     this.input?.style?.setProperty('font-family', this.fontFace, 'important');
     this.mainDisplay?.style?.setProperty('font-family', this.fontFace, 'important');
     this.cursor?.style?.setProperty('font-family', this.fontFace, 'important');
-    this.app?.emit?.('term:font-update', { fontFace: this.fontFace });
+    this.app?.emit?.('term:font-update', {
+      fontFace: this.fontFace,
+      asciiLetterSpacing: this.asciiLetterSpacing,
+    });
   }
 
   setUseCanvasEngine(enabled) {
@@ -617,10 +650,17 @@ export class TermView extends EventEmitter {
       this.termWin.style.setProperty('--term-chw', this.chw + 'px');
       this.termWin.style.setProperty('--term-chh', this.chh + 'px');
       this.termWin.style.setProperty('--term-line-height', lineHeight);
+      if (this.asciiLetterSpacing !== undefined) {
+        this.termWin.style.setProperty('--term-ascii-ls', this.asciiLetterSpacing);
+      }
     }
     this.mainDisplay.style.fontSize = fontSize;
     this.mainDisplay.style.lineHeight = lineHeight;
-    this.app?.emit?.('term:font-update', { fontSize, lineHeight });
+    this.app?.emit?.('term:font-update', {
+      fontSize,
+      lineHeight,
+      asciiLetterSpacing: this.asciiLetterSpacing,
+    });
     this.cursor.style.fontSize = fontSize;
     this.cursor.style.lineHeight = lineHeight;
     this.applyCursorStyle();
