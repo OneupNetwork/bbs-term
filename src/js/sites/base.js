@@ -52,6 +52,13 @@ export class BaseSite extends EventEmitter {
   }
 
   /**
+   * Returns true if the user has passed the initial login screen.
+   */
+  isLoggedIn() {
+    return this.pageState !== PAGE_STATE.NORMAL;
+  }
+
+  /**
    * Reset login prompt detection state (e.g. on new connection).
    */
   resetLoginPrompt() {
