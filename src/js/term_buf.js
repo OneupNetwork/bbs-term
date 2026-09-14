@@ -1175,7 +1175,7 @@ export class TermBuf extends EventEmitter {
         }
         result += this.getText(i, scol, ecol, color, isutf8, reset, effectiveLines);
         if (i !== selection.end.row) {
-          result += '\r';
+          result += '\n';
         }
       }
     }

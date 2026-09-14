@@ -80,7 +80,7 @@ export class CanvasSelection {
       }
       result.push(rowText.replace(/\s+$/, ""));
     }
-    return result.join("\r");
+    return result.join("\n");
   }
 
   static getWordSelection(pos, line, cols) {

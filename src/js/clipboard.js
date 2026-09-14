@@ -4,15 +4,18 @@ export class ClipboardManager {
   }
 
   formatCopyText(str, trimTrailingSpaces = true) {
-    if (typeof str !== 'string' || str.indexOf('\x1b') >= 0) return str;
+    if (typeof str !== 'string') return str;
+    if (str.indexOf('\x1b') >= 0) {
+      return str.replace(/\r\n|\r/g, '\n');
+    }
     if (trimTrailingSpaces !== false) {
       return str
         .split(/\r\n|\r|\n/)
         .map((line) => line.replace(/[ \t]+$/, ''))
-        .join('\r')
-        .replace(/[ \t\r]+$/, '');
+        .join('\n')
+        .replace(/[ \t\n]+$/, '');
     }
-    return str.replace(/\r\n|\n/g, '\r');
+    return str.replace(/\r\n|\r/g, '\n');
   }
 
   async copyText(str, { trimTrailingSpaces = true } = {}) {
