@@ -124,6 +124,9 @@ export class Maple3Site extends BaseSite {
   }
 
   getRefreshLiveThreadCommand(termBuf) {
+    if (this.pageState === PAGE_STATE.LIST || this.pageState === PAGE_STATE.MAPLE_LIST) {
+      return 'rG';
+    }
     return 'qrG';
   }
 

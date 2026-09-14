@@ -1605,3 +1605,69 @@ test('Issue #33 fixes: EasyReading inline image row expansion, image load progre
     'ImagePreviewer.OnHover must only apply explicit width/height styles when both dimensions are positive (> 0)'
   );
 });
+
+test('LiveUpdate immediately refreshes on start and survives mid-redraw transient PAGE_STATE.NORMAL on 38-row screens (Issue #38)', async () => {
+  const { LiveUpdate } = await import('../src/plugins/live_update/LiveUpdate.js');
+  const { PttSite, PAGE_STATE } = await import('../src/js/sites/index.js');
+
+  const app = new MockApp();
+  const site = new PttSite();
+  app.site = site;
+
+  let isLastRowEmpty = false;
+  const mockBuf = {
+    rows: 38,
+    cols: 80,
+    isLineEmpty: (r) => (r === 37 ? isLastRowEmpty : false),
+    getRowText: (r) =>
+      r === 37 && !isLastRowEmpty
+        ? '  瀏覽 第 1050/1050 頁 (100%)  目前顯示: 第 23000~23036 行 (h)說明 (←/q)離開 '
+        : '推 hololive: 實況推文',
+  };
+  app.buf = mockBuf;
+
+  const sentCommands = [];
+  app.send = (cmd) => sentCommands.push(cmd);
+
+  site.setPageState(mockBuf);
+  assert.equal(site.pageState, PAGE_STATE.READING, '1050-page live thread must set pageState to READING');
+
+  const liveUpdate = new LiveUpdate(app, { enabled: true, intervalSec: 5 });
+  liveUpdate.init();
+
+  // 1. Clicking "啟用" (start) must immediately send refresh command
+  liveUpdate.start();
+  assert.equal(liveUpdate.active, true);
+  assert.equal(sentCommands.length, 1, 'start() must immediately send initial refresh command');
+  assert.equal(sentCommands[0], '\x1b[D\x1b[C\x1b[4~');
+
+  // 2. Simulate mid-redraw transient empty last row (e.g. after \x1b[2J clear screen on 38-row canvas)
+  isLastRowEmpty = true;
+  site.setPageState(mockBuf);
+  assert.equal(site.pageState, PAGE_STATE.NORMAL, 'Empty bottom row transiently sets pageState to NORMAL');
+  app.emit('term:screen-update', {});
+  assert.equal(
+    liveUpdate.active,
+    true,
+    'LiveUpdate must NOT stop on transient PAGE_STATE.NORMAL during mid-redraw screen update'
+  );
+
+  // 3. While mid-redraw (last row empty), refresh() skips sending overlapping commands
+  assert.equal(liveUpdate.refresh(), false, 'refresh() should skip while bottom row is empty mid-redraw');
+  assert.equal(sentCommands.length, 1);
+
+  // 4. Redraw finishes
+  isLastRowEmpty = false;
+  site.setPageState(mockBuf);
+  assert.equal(site.pageState, PAGE_STATE.READING);
+  assert.equal(liveUpdate.refresh(), true);
+  assert.equal(sentCommands.length, 2);
+
+  // 5. Navigating to MENU screen DOES stop LiveUpdate
+  site.pageState = PAGE_STATE.MENU;
+  app.emit('term:screen-update', {});
+  assert.equal(liveUpdate.active, false, 'LiveUpdate must stop when entering MENU screen');
+
+  liveUpdate.destroy();
+});
+

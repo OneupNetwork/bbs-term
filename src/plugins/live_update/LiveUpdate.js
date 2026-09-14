@@ -196,7 +196,11 @@ export class LiveUpdate extends PluginBase {
     this.listenAppWhileEnabled('term:screen-update', () => {
       if (!this.active) return;
       const pageState = this.app?.site?.pageState;
-      if (pageState !== PAGE_STATE.LIST && pageState !== PAGE_STATE.READING) {
+      if (
+        pageState === PAGE_STATE.MENU ||
+        pageState === PAGE_STATE.PASS ||
+        pageState === PAGE_STATE.EDITING
+      ) {
         this.stop();
       }
     });
@@ -324,25 +328,50 @@ export class LiveUpdate extends PluginBase {
     }
     if (!this.enabled) return;
     if (this.active) {
-      this.start();
+      this.start(false);
     } else if (changed || savePref) {
       this.renderUI();
     }
   }
 
-  start() {
+  refresh() {
+    const site = this.app?.site;
+    const termBuf = this.buf || this.app?.buf;
+    const pageState = site?.pageState;
+    if (
+      pageState === PAGE_STATE.MENU ||
+      pageState === PAGE_STATE.PASS ||
+      pageState === PAGE_STATE.EDITING
+    ) {
+      return false;
+    }
+    if (termBuf && site?.getLastRowNum && termBuf.isLineEmpty?.(site.getLastRowNum(termBuf))) {
+      return false;
+    }
+    if (
+      pageState === PAGE_STATE.READING ||
+      pageState === PAGE_STATE.LIST ||
+      pageState === PAGE_STATE.MAPLE_LIST ||
+      pageState === PAGE_STATE.NORMAL
+    ) {
+      const cmd = site?.getRefreshLiveThreadCommand
+        ? site.getRefreshLiveThreadCommand(termBuf)
+        : 'r';
+      this.app?.send(cmd);
+      return true;
+    }
+    return false;
+  }
+
+  start(immediate = true) {
     this.stopTimer();
     this.active = true;
+    if (immediate) {
+      this.refresh();
+    }
     const intervalMs = (this.intervalSec || 1) * 1000;
     this.timer = this.setInterval(() => {
-      const site = this.app?.site;
-      const pageState = site?.pageState;
-      if (pageState === PAGE_STATE.READING || pageState === PAGE_STATE.LIST) {
-        const cmd = site?.getRefreshLiveThreadCommand
-          ? site.getRefreshLiveThreadCommand(this.buf || this.app?.buf)
-          : 'r';
-        this.app?.send(cmd);
-      }
+      this.refresh();
     }, intervalMs);
     this.renderUI();
   }
