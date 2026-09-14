@@ -1382,16 +1382,12 @@ export class PrefModal extends React.Component {
                     <option key="options_fixedFontSize" value="fixed-font-size">
                       {parseOptionText(_("options_fixedFontSize")).label}
                     </option>
-                    <option key="options_maxFontSize" value="max-font-size">
-                      {parseOptionText(_("options_maxFontSize")).label}
-                    </option>
                   </select>
                   {!isTouch &&
                     renderOptionDesc(
                       {
                         "fixed-term-size": _("options_fixedTermSize"),
                         "fixed-font-size": _("options_fixedFontSize"),
-                        "max-font-size": _("options_maxFontSize"),
                       }[values.termSizeMode]
                     )}
                   {isTouch && (
@@ -1457,20 +1453,6 @@ export class PrefModal extends React.Component {
                       name="fontSize"
                       type="number"
                       value={values.fontSize}
-                      onChange={this.handleNumberInputChange}
-                    />
-                  </div>
-                )}
-                {!isTouch && values.termSizeMode === "max-font-size" && (
-                  <div className="form-group" id="maxFontSize">
-                    <label className="control-label">
-                      {_("options_fontSizeMax")}
-                    </label>
-                    <input
-                      className="form-control"
-                      name="maxFontSize"
-                      type="number"
-                      value={values.maxFontSize}
                       onChange={this.handleNumberInputChange}
                     />
                   </div>

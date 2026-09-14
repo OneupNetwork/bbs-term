@@ -1034,7 +1034,7 @@ test('Bug report helper detects site, client, OS, browser, settings, and builds 
   }), []);
 
   assert.deepEqual(detectExtraSettings({
-    termSizeMode: DEFAULT_PREFS.termSizeMode === 'fixed-term-size' ? 'max-font-size' : 'fixed-term-size',
+    termSizeMode: DEFAULT_PREFS.termSizeMode === 'fixed-term-size' ? 'fixed-font-size' : 'fixed-term-size',
     fontFitWindowWidth: true,
     cursorStyle: DEFAULT_PREFS.cursorStyle === 'blink' ? 'block' : 'blink',
     smoothAnsiArt: true,
@@ -1431,4 +1431,94 @@ test('MouseController onWheel handles mouseWheelAction, mouseWheelRightAction, a
   assert.equal(controller.rightButtonDown, false, 'mousemove e.buttons=0 self-heals stuck rightButtonDown');
   controller.onWheel({ deltaY: 100, deltaMode: 0, preventDefault() {}, stopPropagation() {} });
   assert.deepEqual(navCmds, ['doArrowDown'], 'Self-healed wheel event executes normal arrow action instead of page action');
+});
+
+test('TermView applyTermSizeMode fixed-font-size keeps font size fixed and adjusts terminal size like a standard terminal', () => {
+  const termViewSrc = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  const applyMatch = termViewSrc.match(/applyTermSizeMode\(values, \{ isMobile = false, onResizeTerm \} = \{\}\) \{[\s\S]*?\n  \}/);
+  const calcTermMatch = termViewSrc.match(/calcTermSizeFromFont\(fontSizePx\) \{[\s\S]*?\n  \}/);
+
+  assert.ok(applyMatch, 'applyTermSizeMode must exist');
+  assert.ok(calcTermMatch, 'calcTermSizeFromFont must exist');
+  assert.ok(!termViewSrc.includes('calcFontSizeFromTerm'), 'calcFontSizeFromTerm should be removed');
+
+  const createMockView = (width, height) => {
+    const view = {
+      innerBounds: { width, height },
+      termWidth: 0,
+      termHeight: 0,
+      lineHeight: 1.0,
+      fontFitWindowWidth: false,
+      lastFixedFontSize: null,
+      lastTermSize: null,
+      buf: {
+        cols: 80,
+        rows: 24,
+        site: {
+          clampTermSize(cols, rows) {
+            return { cols, rows };
+          },
+        },
+      },
+      getWindowInnerBounds() {
+        return this.innerBounds;
+      },
+      fixedResize(fontSizePx) {
+        this.lastFixedFontSize = fontSizePx;
+      },
+      fontResize() {},
+      redraw() {},
+      setTransFix() {},
+    };
+    view.calcTermSizeFromFont = new Function(
+      'fontSizePx',
+      calcTermMatch[0].replace(/^calcTermSizeFromFont\(fontSizePx\)\s*\{/, '').replace(/\}$/, '')
+    ).bind(view);
+    view.applyTermSizeMode = new Function(
+      'DEFAULT_PREFS',
+      `return function ${applyMatch[0]}`
+    )(DEFAULT_PREFS).bind(view);
+    return view;
+  };
+
+  // 1. Desktop large window (1200x800): keeps 24px font size and expands cols/rows
+  const desktopLarge = createMockView(1200, 800);
+  desktopLarge.applyTermSizeMode(
+    { termSizeMode: 'fixed-font-size', fontSize: 24 },
+    {
+      isMobile: false,
+      onResizeTerm(cols, rows) {
+        desktopLarge.lastTermSize = { cols, rows };
+      },
+    }
+  );
+  assert.equal(desktopLarge.lastFixedFontSize, 24);
+  assert.ok(desktopLarge.lastTermSize.cols > 80, 'Cols should expand beyond 80 on large window');
+  assert.ok(desktopLarge.lastTermSize.rows > 24, 'Rows should expand beyond 24 on large window');
+
+  // 2. Desktop small window (700x400): keeps exact 24px font size without shrinking
+  const desktopSmall = createMockView(700, 400);
+  desktopSmall.applyTermSizeMode(
+    { termSizeMode: 'fixed-font-size', fontSize: 24 },
+    {
+      isMobile: false,
+      onResizeTerm(cols, rows) {
+        desktopSmall.lastTermSize = { cols, rows };
+      },
+    }
+  );
+  assert.equal(desktopSmall.lastFixedFontSize, 24, 'Font size must remain fixed at 24px');
+
+  // 3. Mobile small window (390x700): keeps exact 24px font size
+  const mobileView = createMockView(390, 700);
+  mobileView.applyTermSizeMode(
+    { termSizeMode: 'fixed-font-size', fontSize: 24 },
+    {
+      isMobile: true,
+      onResizeTerm(cols, rows) {
+        mobileView.lastTermSize = { cols, rows };
+      },
+    }
+  );
+  assert.equal(mobileView.lastFixedFontSize, 24, 'Mobile mode keeps exact fixed font size');
 });

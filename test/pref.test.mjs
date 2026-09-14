@@ -111,38 +111,43 @@ test('readValuesWithDefault preserves partial termSize configuration', () => {
 });
 
 
-test('readValuesWithDefault migrates legacy maxFontSize and resets invalid fontSize 999', () => {
+test('readValuesWithDefault migrates legacy max-font-size to fixed-term-size and resets invalid fontSize 999', () => {
   const originalWindow = globalThis.window;
   try {
     const mockStorage = new MockLocalStorage();
     globalThis.window = { localStorage: mockStorage };
 
-    // Case 1: fontSize 999 reset to default
+    // Case 1: max-font-size with 999 resets to fixed-term-size and default fontSize
     mockStorage.setItem(
       PREF_STORAGE_KEY,
       JSON.stringify({
         values: {
           fontSize: 999,
+          maxFontSize: 999,
           termSizeMode: 'max-font-size',
         },
       })
     );
     let prefs = readValuesWithDefault();
+    assert.equal(prefs.termSizeMode, 'fixed-term-size');
     assert.equal(prefs.fontSize, 24);
+    assert.equal(prefs.maxFontSize, undefined);
 
-    // Case 2: max-font-size inherits custom fontSize when maxFontSize is undefined
+    // Case 2: max-font-size always migrates to fixed-term-size cleanly
     mockStorage.setItem(
       PREF_STORAGE_KEY,
       JSON.stringify({
         values: {
           fontSize: 36,
+          maxFontSize: 36,
           termSizeMode: 'max-font-size',
         },
       })
     );
     prefs = readValuesWithDefault();
+    assert.equal(prefs.termSizeMode, 'fixed-term-size');
     assert.equal(prefs.fontSize, 36);
-    assert.equal(prefs.maxFontSize, 36);
+    assert.equal(prefs.maxFontSize, undefined);
   } finally {
     globalThis.window = originalWindow;
   }
@@ -324,22 +329,31 @@ test('getDefaultPrefs applies process.env.DEFAULT_PLUGINS overrides while preser
 test('parseDefaultPrefs and getDefaultPrefs apply site-specific DEFAULT_PREFS', () => {
   assert.deepEqual(parseDefaultPrefs(''), {});
   assert.deepEqual(parseDefaultPrefs('invalid-json'), {});
-  assert.deepEqual(parseDefaultPrefs('{"termSizeMode":"max-font-size","fontSize":28}'), {
-    termSizeMode: 'max-font-size',
+  assert.deepEqual(parseDefaultPrefs('{"termSizeMode":"fixed-font-size","fontSize":28}'), {
+    termSizeMode: 'fixed-font-size',
     fontSize: 28,
   });
 
   const originalEnv = process.env.DEFAULT_PREFS;
   try {
     process.env.DEFAULT_PREFS = JSON.stringify({
-      termSizeMode: 'max-font-size',
+      termSizeMode: 'fixed-font-size',
       fontSize: 30,
       termSize: { cols: 100 },
     });
     const defaults = getDefaultPrefs();
-    assert.equal(defaults.termSizeMode, 'max-font-size');
+    assert.equal(defaults.termSizeMode, 'fixed-font-size');
     assert.equal(defaults.fontSize, 30);
     assert.deepEqual(defaults.termSize, { cols: 100, rows: 24 });
+
+    // Legacy max-font-size in DEFAULT_PREFS migrates directly to fixed-term-size
+    process.env.DEFAULT_PREFS = JSON.stringify({
+      termSizeMode: 'max-font-size',
+      maxFontSize: 28,
+    });
+    const migrated = getDefaultPrefs();
+    assert.equal(migrated.termSizeMode, 'fixed-term-size');
+    assert.equal(migrated.maxFontSize, undefined);
   } finally {
     if (originalEnv === undefined) {
       delete process.env.DEFAULT_PREFS;

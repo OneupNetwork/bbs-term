@@ -384,17 +384,11 @@
   "options_fontSize": {
     "message": "Font size (px)"
   },
-  "options_fontSizeMax": {
-    "message": "Maximum font size (px)"
-  },
   "options_fixedTermSize": {
-    "message": "Fixed term size"
+    "message": "Fixed terminal size (Scale font to fit window, default 80×24)"
   },
   "options_fixedFontSize": {
-    "message": "Fixed font size"
-  },
-  "options_maxFontSize": {
-    "message": "Maximum-limited font size"
+    "message": "Fixed font size (Adjust rows and columns by window size)"
   },
   "options_touchFixedFontNote": {
     "message": "Touch interface uses fixed font size with touch panning"

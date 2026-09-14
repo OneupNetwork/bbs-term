@@ -1088,9 +1088,11 @@ export class TermView extends EventEmitter {
     if (!values) return;
     this.innerBounds = this.getWindowInnerBounds();
     this.resizer = null;
-    const effectiveMode = isMobile
-      ? 'fixed-font-size'
-      : values.termSizeMode || DEFAULT_PREFS.termSizeMode;
+    const rawMode =
+      values.termSizeMode === 'max-font-size'
+        ? DEFAULT_PREFS.termSizeMode
+        : values.termSizeMode || DEFAULT_PREFS.termSizeMode;
+    const effectiveMode = isMobile ? 'fixed-font-size' : rawMode;
     const resizeTerm =
       typeof onResizeTerm === 'function'
         ? onResizeTerm
@@ -1109,27 +1111,6 @@ export class TermView extends EventEmitter {
         this.fontFitWindowWidth = false;
         const fontSize = values.fontSize || DEFAULT_PREFS.fontSize;
         this.resizer = () => {
-          const size = this.calcTermSizeFromFont(fontSize);
-          resizeTerm(size.cols, size.rows);
-          this.fixedResize(fontSize);
-          this.redraw(true);
-        };
-        this.resizer();
-        break;
-      }
-      case 'max-font-size': {
-        this.fontFitWindowWidth = false;
-        const maxFontSize =
-          values.maxFontSize !== undefined
-            ? values.maxFontSize
-            : values.fontSize || DEFAULT_PREFS.maxFontSize;
-        const minSize = DEFAULT_PREFS.termSize;
-        this.resizer = () => {
-          const scaledFontSize = this.calcFontSizeFromTerm(
-            minSize.cols,
-            minSize.rows
-          );
-          const fontSize = Math.min(scaledFontSize, maxFontSize);
           const size = this.calcTermSizeFromFont(fontSize);
           resizeTerm(size.cols, size.rows);
           this.fixedResize(fontSize);
@@ -1184,16 +1165,6 @@ export class TermView extends EventEmitter {
     let rowHeight = Math.round(fontSizePx * (this.lineHeight || 1.0));
     let rows = Math.max(24, Math.min(100, Math.floor(height / rowHeight)));
     return this.buf.site.clampTermSize(cols, rows);
-  }
-
-  calcFontSizeFromTerm(termCols, termRows) {
-    termCols = Math.max(80, Math.min(200, termCols));
-    termRows = Math.max(24, Math.min(100, termRows));
-    let width = this.termWidth ? this.termWidth : this.innerBounds.width;
-    let height = this.termHeight ? this.termHeight : this.innerBounds.height;
-    let sizeX = Math.floor(2 * (width - 10) / termCols);
-    let sizeY = Math.floor(height / (termRows * (this.lineHeight || 1.0)));
-    return Math.min(sizeX, sizeY);
   }
 
   getRowLineElement(node) {

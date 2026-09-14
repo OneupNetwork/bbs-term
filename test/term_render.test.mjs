@@ -1238,7 +1238,7 @@ test('App isMobileLayout detects mobile touch viewports and applies fixed-font-s
 
   // 6. Test that applyTermSizeMode resolves fixed-font-size on mobile without mutating input object
   const testPrefs = {
-    termSizeMode: 'max-font-size',
+    termSizeMode: 'fixed-term-size',
     fontSize: 22
   };
   let effectiveMode = null;
@@ -1249,7 +1249,7 @@ test('App isMobileLayout detects mobile touch viewports and applies fixed-font-s
   assert.equal(effectiveMode, 'fixed-font-size');
   assert.equal(
     testPrefs.termSizeMode,
-    'max-font-size',
+    'fixed-term-size',
     'Original prefs must not be mutated'
   );
 });
@@ -1628,16 +1628,19 @@ test('PrefModal locks termSizeMode to fixed-font-size and disables select on tou
     )
   );
 
-  // PrefModal hides fixed-term-size and max-font-size on touch
+  // PrefModal hides fixed-term-size on touch and removes max-font-size option
   assert.ok(
     prefModalSource.includes(
       '{!isTouch && values.termSizeMode === "fixed-term-size" && ('
     )
   );
   assert.ok(
-    prefModalSource.includes(
-      '{!isTouch && values.termSizeMode === "max-font-size" && ('
-    )
+    !prefModalSource.includes('value="max-font-size"'),
+    'PrefModal should no longer render max-font-size option'
+  );
+  assert.ok(
+    !prefModalSource.includes('name="maxFontSize"'),
+    'PrefModal should no longer render maxFontSize input field'
   );
 
   // ContextMenu passes isTouchDevice to PrefModal
