@@ -5,7 +5,7 @@ import { isBrowser } from "../../js/util.js";
 
 let _LoginModal = null;
 
-class AutoLoginOverlay extends React.Component {
+class LoginAssistOverlay extends React.Component {
   constructor(props) {
     super(props);
     this.state = { Component: _LoginModal };
@@ -36,22 +36,23 @@ class AutoLoginOverlay extends React.Component {
   }
 }
 
-export class AutoLogin extends PluginBase {
-  static id = "auto_login";
-  static name = "auto_login";
-  static prefKey = "enableAutoLogin";
+export class LoginAssist extends PluginBase {
+  static id = "login_assist";
+  static name = "login_assist";
+  static prefKey = "enableLoginAssist";
+  static legacyPrefKey = "enableAutoLogin";
   static group = "bbs";
   static icon = "key";
   static defaultPrefs = {
-    enableAutoLogin: true,
+    enableLoginAssist: true,
   };
 
   static get title() {
-    return _("plugin_auto_login_title");
+    return _("plugin_login_assist_title") || _("plugin_auto_login_title");
   }
 
   static get description() {
-    return _("plugin_auto_login_desc");
+    return _("plugin_login_assist_desc") || _("plugin_auto_login_desc");
   }
 
   constructor(app, options = {}) {
@@ -64,9 +65,9 @@ export class AutoLogin extends PluginBase {
   getContextMenuItems() {
     return [
       {
-        id: "auto_login",
+        id: "login_assist",
         order: 5,
-        label: () => _("cmenu_auto_login"),
+        label: () => _("cmenu_login_assist") || _("cmenu_auto_login"),
         visible: (app, { normalEnabled } = {}) =>
           Boolean(normalEnabled !== false && this.enabled),
         onClick: () => {
@@ -169,7 +170,7 @@ export class AutoLogin extends PluginBase {
     // Send username followed by CR
     app.send?.(`${id}\r`);
 
-    // Send password with a short 80ms delay for BBS typeahead / prompt processing
+    // Send password with a short 80ms delay for typeahead / prompt processing
     this.setTimeout(() => {
       app.send?.(`${pw}\r`);
     }, 80);
@@ -185,7 +186,7 @@ export class AutoLogin extends PluginBase {
   renderOverlay({ app } = {}) {
     if (!this.enabled || !this.showsModal) return null;
     const targetApp = app || this.app;
-    return React.createElement(AutoLoginOverlay, {
+    return React.createElement(LoginAssistOverlay, {
       show: this.showsModal,
       app: targetApp,
       onHide: () => this.hide(),
@@ -195,5 +196,7 @@ export class AutoLogin extends PluginBase {
   }
 }
 
-export const AutoLoginPlugin = AutoLogin;
-export default AutoLogin;
+export const LoginAssistPlugin = LoginAssist;
+export const AutoLogin = LoginAssist;
+export const AutoLoginPlugin = LoginAssist;
+export default LoginAssist;

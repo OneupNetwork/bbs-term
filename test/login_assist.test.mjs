@@ -2,38 +2,48 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { AutoLogin, AutoLoginPlugin } from '../src/plugins/auto_login/index.js';
+import { LoginAssist, LoginAssistPlugin, AutoLogin, AutoLoginPlugin } from '../src/plugins/login_assist/index.js';
 import { BUILTIN_PLUGINS, PLUGIN_GROUP_MAP, getAvailablePlugins } from '../src/plugins/index.js';
-import { DEFAULT_PREFS } from '../src/js/pref.js';
+import { DEFAULT_PREFS, readValuesWithDefault, PREF_STORAGE_KEY } from '../src/js/pref.js';
 import { EventEmitter } from '../src/js/event.js';
 
-test('AutoLogin plugin exports, metadata, and registration', () => {
-  // 1. Exports
-  assert.strictEqual(typeof AutoLogin, 'function');
-  assert.strictEqual(AutoLogin, AutoLoginPlugin);
+test('LoginAssist plugin exports, metadata, registration, and backward compatibility', () => {
+  // 1. Exports and backward-compatible aliases
+  assert.strictEqual(typeof LoginAssist, 'function');
+  assert.strictEqual(LoginAssist, LoginAssistPlugin);
+  assert.strictEqual(AutoLogin, LoginAssist);
+  assert.strictEqual(AutoLoginPlugin, LoginAssist);
 
   // 2. Static properties
-  assert.strictEqual(AutoLogin.id, 'auto_login');
-  assert.strictEqual(AutoLogin.name, 'auto_login');
-  assert.strictEqual(AutoLogin.prefKey, 'enableAutoLogin');
-  assert.strictEqual(AutoLogin.group, 'bbs');
+  assert.strictEqual(LoginAssist.id, 'login_assist');
+  assert.strictEqual(LoginAssist.name, 'login_assist');
+  assert.strictEqual(LoginAssist.prefKey, 'enableLoginAssist');
+  assert.strictEqual(LoginAssist.legacyPrefKey, 'enableAutoLogin');
+  assert.strictEqual(LoginAssist.group, 'bbs');
 
   // 3. Metadata
-  const meta = AutoLogin.getMetadata();
-  assert.strictEqual(meta.id, 'auto_login');
-  assert.strictEqual(meta.prefKey, 'enableAutoLogin');
+  const meta = LoginAssist.getMetadata();
+  assert.strictEqual(meta.id, 'login_assist');
+  assert.strictEqual(meta.prefKey, 'enableLoginAssist');
   assert.strictEqual(meta.group, 'bbs');
   assert.strictEqual(meta.icon, 'key');
 
-  // 4. Registration in BUILTIN_PLUGINS and PLUGIN_GROUP_MAP
-  assert.ok(BUILTIN_PLUGINS.includes(AutoLogin), 'BUILTIN_PLUGINS must include AutoLogin');
-  assert.strictEqual(PLUGIN_GROUP_MAP.auto_login, 'bbs', 'PLUGIN_GROUP_MAP must map auto_login to bbs');
+  // 4. Registration in BUILTIN_PLUGINS and PLUGIN_GROUP_MAP (with backward-compatible auto_login key)
+  assert.ok(BUILTIN_PLUGINS.includes(LoginAssist), 'BUILTIN_PLUGINS must include LoginAssist');
+  assert.strictEqual(PLUGIN_GROUP_MAP.login_assist, 'bbs', 'PLUGIN_GROUP_MAP must map login_assist to bbs');
+  assert.strictEqual(PLUGIN_GROUP_MAP.auto_login, 'bbs', 'PLUGIN_GROUP_MAP must map legacy auto_login to bbs');
 
-  // 5. DEFAULT_PREFS includes enableAutoLogin: true
-  assert.strictEqual(DEFAULT_PREFS.enableAutoLogin, true, 'DEFAULT_PREFS must default enableAutoLogin to true');
+  // 5. DEFAULT_PREFS includes enableLoginAssist: true
+  assert.strictEqual(DEFAULT_PREFS.enableLoginAssist, true, 'DEFAULT_PREFS must default enableLoginAssist to true');
+
+  // 6. Legacy prefKey (enableAutoLogin) backward compatibility in PluginBase
+  const mockAppWithLegacyPref = new EventEmitter();
+  mockAppWithLegacyPref.prefValues = { enableAutoLogin: false };
+  const pluginFromLegacy = new LoginAssist(mockAppWithLegacyPref);
+  assert.strictEqual(pluginFromLegacy.enabled, false, 'LoginAssist must respect legacy enableAutoLogin in prefValues when enableLoginAssist is undefined');
 });
 
-test('AutoLogin lifecycle, context menu, and modal toggle', () => {
+test('LoginAssist lifecycle, context menu, and modal toggle', () => {
   const dispatchedEvents = [];
   const registeredMenuItems = [];
   const unregisteredMenuItemIds = [];
@@ -46,14 +56,14 @@ test('AutoLogin lifecycle, context menu, and modal toggle', () => {
   mockApp.unregisterContextMenuItem = (id) => { unregisteredMenuItemIds.push(id); };
   mockApp.setInputAreaFocus = () => { mockApp.inputAreaFocused = true; };
 
-  const plugin = new AutoLogin(mockApp);
+  const plugin = new LoginAssist(mockApp);
   assert.strictEqual(plugin.enabled, true);
   assert.strictEqual(plugin.showsModal, false);
 
   // Init registers menu item
   plugin.init({ app: mockApp });
   assert.strictEqual(registeredMenuItems.length, 1);
-  assert.strictEqual(registeredMenuItems[0].id, 'auto_login');
+  assert.strictEqual(registeredMenuItems[0].id, 'login_assist');
   assert.strictEqual(registeredMenuItems[0].order, 5);
 
   // Show modal
@@ -84,10 +94,10 @@ test('AutoLogin lifecycle, context menu, and modal toggle', () => {
 
   // Destroy cleans up
   plugin.destroy();
-  assert.ok(unregisteredMenuItemIds.includes('auto_login'));
+  assert.ok(unregisteredMenuItemIds.includes('login_assist'));
 });
 
-test('AutoLogin handleLogin sends ID and password with CR and short typeahead interval', async () => {
+test('LoginAssist handleLogin sends ID and password with CR and short typeahead interval', async () => {
   const sentData = [];
   const mockApp = new EventEmitter();
   mockApp.modalShown = true;
@@ -96,7 +106,7 @@ test('AutoLogin handleLogin sends ID and password with CR and short typeahead in
   };
   mockApp.setInputAreaFocus = () => {};
 
-  const plugin = new AutoLogin(mockApp, { submitCooldownMs: 150 });
+  const plugin = new LoginAssist(mockApp, { submitCooldownMs: 150 });
   plugin.showsModal = true;
 
   plugin.handleLogin({ username: 'testuser', password: 'secretpassword' });
@@ -118,11 +128,11 @@ test('AutoLogin handleLogin sends ID and password with CR and short typeahead in
 
 test('LoginModal structure adheres to browser password manager conventions', () => {
   const modalSource = fs.readFileSync(
-    path.resolve('src/plugins/auto_login/LoginModal.js'),
+    path.resolve('src/plugins/login_assist/LoginModal.js'),
     'utf-8'
   );
   const modalCss = fs.readFileSync(
-    path.resolve('src/plugins/auto_login/LoginModal.css'),
+    path.resolve('src/plugins/login_assist/LoginModal.css'),
     'utf-8'
   );
 
@@ -182,12 +192,12 @@ test('ContextMenu and DropdownMenu integration passes pluginItems', () => {
   );
 });
 
-test('AutoLogin triggers modal on login prompt events', async () => {
+test('LoginAssist triggers modal on login prompt events', async () => {
   const mockApp = new EventEmitter();
   mockApp.modalShown = false;
   mockApp.registerContextMenuItem = () => {};
 
-  const plugin = new AutoLogin(mockApp);
+  const plugin = new LoginAssist(mockApp);
   plugin.init({ app: mockApp });
   assert.strictEqual(plugin.showsModal, false);
 
@@ -205,7 +215,7 @@ test('AutoLogin triggers modal on login prompt events', async () => {
   assert.strictEqual(plugin.showsModal, false);
 });
 
-test('Site onData with PTT and Maple login strings triggers AutoLogin plugin modal', async () => {
+test('Site onData with PTT and Maple login strings triggers LoginAssist plugin modal', async () => {
   const { PttSite } = await import('../src/js/sites/ptt.js');
   const { Maple3Site } = await import('../src/js/sites/maple3.js');
   const { u2b } = await import('../src/js/string_util.js');
@@ -221,9 +231,9 @@ test('Site onData with PTT and Maple login strings triggers AutoLogin plugin mod
     return { app, buf };
   };
 
-  // 1. PTT site onData triggers AutoLogin
+  // 1. PTT site onData triggers LoginAssist
   const env1 = createMockEnvironment();
-  const plugin1 = new AutoLogin(env1.app);
+  const plugin1 = new LoginAssist(env1.app);
   plugin1.init({ app: env1.app, buf: env1.buf });
 
   const pttSite = new PttSite();
@@ -232,11 +242,11 @@ test('Site onData with PTT and Maple login strings triggers AutoLogin plugin mod
     c => c.charCodeAt(0)
   );
   pttSite.onData(pttData, env1.buf);
-  assert.strictEqual(plugin1.showsModal, true, 'PTT onData must trigger AutoLogin modal');
+  assert.strictEqual(plugin1.showsModal, true, 'PTT onData must trigger LoginAssist modal');
 
-  // 2. Maple site onData triggers AutoLogin
+  // 2. Maple site onData triggers LoginAssist
   const env2 = createMockEnvironment();
-  const plugin2 = new AutoLogin(env2.app);
+  const plugin2 = new LoginAssist(env2.app);
   plugin2.init({ app: env2.app, buf: env2.buf });
 
   const mapleSite = new Maple3Site();
@@ -245,11 +255,11 @@ test('Site onData with PTT and Maple login strings triggers AutoLogin plugin mod
     c => c.charCodeAt(0)
   );
   mapleSite.onData(mapleData, env2.buf);
-  assert.strictEqual(plugin2.showsModal, true, 'Maple onData must trigger AutoLogin modal');
+  assert.strictEqual(plugin2.showsModal, true, 'Maple onData must trigger LoginAssist modal');
 
   // 3. Split chunk buffering across TCP packets
   const env3 = createMockEnvironment();
-  const plugin3 = new AutoLogin(env3.app);
+  const plugin3 = new LoginAssist(env3.app);
   plugin3.init({ app: env3.app, buf: env3.buf });
 
   const pttSiteSplit = new PttSite();
@@ -268,7 +278,7 @@ test('Site onData with PTT and Maple login strings triggers AutoLogin plugin mod
   assert.strictEqual(plugin3.showsModal, true, 'Modal should trigger when split chunks assemble prompt');
 });
 
-test('Approach A: Site onData detects login prompt, fires login event, AutoLogin sets flag and ignores subsequent prompts until reconnect', async () => {
+test('Approach A: Site onData detects login prompt, fires login event, LoginAssist sets flag and ignores subsequent prompts until reconnect', async () => {
   const { BaseSite } = await import('../src/js/sites/base.js');
   const { u2b } = await import('../src/js/string_util.js');
 
@@ -283,7 +293,7 @@ test('Approach A: Site onData detects login prompt, fires login event, AutoLogin
   mockBuf.getRowText = () => '';
 
   const site = new BaseSite();
-  const plugin = new AutoLogin(mockApp);
+  const plugin = new LoginAssist(mockApp);
   plugin.init({ app: mockApp, buf: mockBuf });
 
   assert.strictEqual(plugin.loginPromptDetected, false);
@@ -297,8 +307,8 @@ test('Approach A: Site onData detects login prompt, fires login event, AutoLogin
 
   site.onData(loginBytes, mockBuf);
   assert.strictEqual(site._loginPromptFired, true, 'BaseSite must mark login prompt fired');
-  assert.strictEqual(plugin.loginPromptDetected, true, 'AutoLogin must set loginPromptDetected to true');
-  assert.strictEqual(plugin.showsModal, true, 'AutoLogin modal must be shown');
+  assert.strictEqual(plugin.loginPromptDetected, true, 'LoginAssist must set loginPromptDetected to true');
+  assert.strictEqual(plugin.showsModal, true, 'LoginAssist modal must be shown');
 
   // User logs in and closes modal
   plugin.hide();
@@ -317,13 +327,13 @@ test('Approach A: Site onData detects login prompt, fires login event, AutoLogin
   site.resetLoginPrompt();
   mockApp.emit('term:disconnect');
   assert.strictEqual(site._loginPromptFired, false, 'BaseSite _loginPromptFired must reset on disconnect');
-  assert.strictEqual(plugin.loginPromptDetected, false, 'AutoLogin loginPromptDetected must reset on disconnect');
+  assert.strictEqual(plugin.loginPromptDetected, false, 'LoginAssist loginPromptDetected must reset on disconnect');
 
   mockApp.emit('term:connect');
-  assert.strictEqual(plugin.loginPromptDetected, false, 'AutoLogin loginPromptDetected ready for next session');
+  assert.strictEqual(plugin.loginPromptDetected, false, 'LoginAssist loginPromptDetected ready for next session');
 });
 
-test('AutoLogin and LoginModal handle Credential Management API auto-retrieval flow', async () => {
+test('LoginAssist and LoginModal handle Credential Management API auto-retrieval flow', async () => {
   const calls = [];
   const fakeCred = { id: 'testuser', password: 'secretpassword' };
 
@@ -362,7 +372,7 @@ test('AutoLogin and LoginModal handle Credential Management API auto-retrieval f
 
 test('Plugins use safe typeof process checks and do not reference undeclared process', () => {
   const pluginFiles = [
-    'src/plugins/auto_login/AutoLogin.js',
+    'src/plugins/login_assist/LoginAssist.js',
     'src/plugins/input_helper/InputHelper.js',
     'src/plugins/live_update/LiveUpdate.js',
     'src/plugins/pwa_prompt/PwaPrompt.js',

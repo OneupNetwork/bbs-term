@@ -781,7 +781,7 @@ export class BaseSite extends EventEmitter {
   }
 
   /**
-   * Dispatch login prompt event to notify subscribers (e.g. auto_login plugin).
+   * Dispatch login prompt event to notify subscribers (e.g. login_assist plugin).
    * @param {TermBuf} [termBuf]
    */
   fireLoginPrompt(termBuf) {

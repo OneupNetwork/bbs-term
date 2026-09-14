@@ -292,7 +292,7 @@ test('getDefaultPrefs applies process.env.DEFAULT_PLUGINS overrides while preser
     assert.equal(defaults.enableMediaPreviewer, false);
     assert.equal(defaults.enableVirtualKeyboard, true);
     // Unmentioned plugins retain built-in default
-    assert.equal(defaults.enableAutoLogin, DEFAULT_PREFS.enableAutoLogin);
+    assert.equal(defaults.enableLoginAssist, DEFAULT_PREFS.enableLoginAssist);
 
     // User's localStorage preferences still override site DEFAULT_PLUGINS
     const mockStorage = new MockLocalStorage();
@@ -367,6 +367,39 @@ test('readValuesWithDefault migrates legacy useMouseBrowsing preference key', ()
     const prefs = readValuesWithDefault();
     assert.equal(prefs.enableMouseBrowsing, true);
   } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('readValuesWithDefault and DEFAULT_PLUGINS migrate legacy enableAutoLogin and auto_login keys', () => {
+  const originalWindow = globalThis.window;
+  const originalEnv = process.env.DEFAULT_PLUGINS;
+  try {
+    const mockStorage = new MockLocalStorage();
+    globalThis.window = { localStorage: mockStorage };
+    mockStorage.setItem(
+      PREF_STORAGE_KEY,
+      JSON.stringify({
+        values: {
+          enableAutoLogin: false,
+        },
+      })
+    );
+
+    const prefs = readValuesWithDefault();
+    assert.equal(prefs.enableLoginAssist, false, 'readValuesWithDefault must migrate legacy enableAutoLogin to enableLoginAssist');
+
+    // Also test DEFAULT_PLUGINS with legacy "auto_login" ID
+    mockStorage.clear();
+    process.env.DEFAULT_PLUGINS = '-auto_login';
+    const defaults = getDefaultPrefs();
+    assert.equal(defaults.enableLoginAssist, false, 'DEFAULT_PLUGINS "-auto_login" must disable enableLoginAssist');
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.DEFAULT_PLUGINS;
+    } else {
+      process.env.DEFAULT_PLUGINS = originalEnv;
+    }
     globalThis.window = originalWindow;
   }
 });

@@ -645,10 +645,10 @@ test('PluginBase registerContextMenuItem defaults visible to requiring plugin.en
   assert.equal(customItem.visible(), true);
 });
 
-test('AutoLogin defines standard onClick and visible in getContextMenuItems, and handles term:screen-update safely', async () => {
-  const { AutoLogin } = await import('../src/plugins/auto_login/AutoLogin.js');
+test('LoginAssist defines standard onClick and visible in getContextMenuItems, and handles term:screen-update safely', async () => {
+  const { LoginAssist } = await import('../src/plugins/login_assist/LoginAssist.js');
   const app = new MockApp();
-  const plugin = new AutoLogin(app, { enabled: true });
+  const plugin = new LoginAssist(app, { enabled: true });
   plugin.init({ app });
 
   const items = plugin.getContextMenuItems();
@@ -722,23 +722,23 @@ test('PluginBase deduplicates listen() calls and strips internal whenEnabled opt
   assert.equal(mockDomTarget.listeners.length, 0, 'All listeners must be removed on destroy');
 });
 
-test('AutoLogin disable/hide does not clobber app.modalShown when modal was not open', async () => {
-  const { AutoLogin } = await import('../src/plugins/auto_login/AutoLogin.js');
+test('LoginAssist disable/hide does not clobber app.modalShown when modal was not open', async () => {
+  const { LoginAssist } = await import('../src/plugins/login_assist/LoginAssist.js');
   const app = new MockApp();
   app.modalShown = true; // e.g., PrefModal is open
-  const plugin = new AutoLogin(app, { enabled: true });
+  const plugin = new LoginAssist(app, { enabled: true });
   plugin.init({ app });
 
   assert.equal(plugin.showsModal, false);
   plugin.disable();
-  assert.equal(app.modalShown, true, 'Disabling AutoLogin when its modal is closed must not clobber app.modalShown');
+  assert.equal(app.modalShown, true, 'Disabling LoginAssist when its modal is closed must not clobber app.modalShown');
 
   plugin.enable();
   plugin.show();
   assert.equal(plugin.showsModal, true);
   assert.equal(app.modalShown, true);
   plugin.hide();
-  assert.equal(app.modalShown, false, 'Hiding open AutoLogin modal resets app.modalShown');
+  assert.equal(app.modalShown, false, 'Hiding open LoginAssist modal resets app.modalShown');
 });
 
 test('PwaPrompt dismissModal cleans up timer from PluginBase._timers', async () => {
@@ -1312,13 +1312,13 @@ test('App dispatches mouse click reports to active locator even when MouseBrowsi
 });
 
 test('PluginBase.getMetadata() only returns renderOptions when defined on subclass', async () => {
-  const { AutoLogin } = await import('../src/plugins/auto_login/AutoLogin.js');
+  const { LoginAssist } = await import('../src/plugins/login_assist/LoginAssist.js');
   const { AntiIdle } = await import('../src/plugins/anti_idle/AntiIdle.js');
   const app = new MockApp();
 
-  const autoLogin = new AutoLogin(app);
-  const autoLoginMeta = autoLogin.getMetadata();
-  assert.equal(autoLoginMeta.renderOptions, undefined, 'AutoLogin without custom renderOptions should return undefined');
+  const loginAssist = new LoginAssist(app);
+  const loginAssistMeta = loginAssist.getMetadata();
+  assert.equal(loginAssistMeta.renderOptions, undefined, 'LoginAssist without custom renderOptions should return undefined');
 
   const antiIdle = new AntiIdle(app);
   const antiIdleMeta = antiIdle.getMetadata();

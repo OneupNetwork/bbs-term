@@ -36,8 +36,11 @@
   "cmenu_showLiveArticleHelper": {
     "message": "Live article helper ..."
   },
+  "cmenu_login_assist": {
+    "message": "Login Assist ..."
+  },
   "cmenu_auto_login": {
-    "message": "BBS Login ..."
+    "message": "Login Assist ..."
   },
   "cmenu_settings": {
     "message": "Settings"
@@ -138,14 +141,20 @@
   "plugin_input_helper_desc": {
     "message": "Visual input palette for ANSI color codes, special symbols, fullwidth punctuation, and emoticons."
   },
+  "plugin_login_assist_title": {
+    "message": "Login Assist"
+  },
+  "plugin_login_assist_desc": {
+    "message": "Prompt login modal to autofill and remember credentials with browser password manager and typeahead into terminal."
+  },
   "plugin_auto_login_title": {
-    "message": "Auto Login"
+    "message": "Login Assist"
   },
   "plugin_auto_login_desc": {
     "message": "Prompt login modal to autofill and remember credentials with browser password manager and typeahead into terminal."
   },
   "login_modal_title": {
-    "message": "BBS Login"
+    "message": "Login"
   },
   "login_modal_desc": {
     "message": "Use browser password manager to autofill or save credentials. Passwords are not saved by the app. Press Cancel to register a new account."
@@ -157,7 +166,7 @@
     "message": "Password"
   },
   "login_modal_username_placeholder": {
-    "message": "Enter BBS username"
+    "message": "Enter username"
   },
   "login_modal_password_placeholder": {
     "message": "Enter password"
@@ -527,7 +536,7 @@
     "message": [
       "Dual Rendering Engines (Canvas / DOM)",
       "Mobile Virtual Keyboard & Gestures",
-      "Account Login"
+      "Login Assist"
     ]
   },
   "alert_developerModeHeader": {

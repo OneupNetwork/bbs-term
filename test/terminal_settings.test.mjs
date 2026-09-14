@@ -542,7 +542,7 @@ test('Extension list supports groups with colored Bands for categories (User Int
   assert.equal(bbsGroup.title, 'Taiwan BBS');
   assert.equal(bbsGroup.titleKey, 'plugin_group_bbs');
   const bbsPluginIds = bbsGroup.plugins.map((p) => p.id);
-  assert.deepEqual(bbsPluginIds, ['easy_reading', 'auto_login', 'auto_wrap', 'anti_idle', 'mouse_browsing', 'live_update']);
+  assert.deepEqual(bbsPluginIds, ['easy_reading', 'login_assist', 'auto_wrap', 'anti_idle', 'mouse_browsing', 'live_update']);
 
   // Group 3: Debug & Development (fps meter, debug hud, packet logger)
   const debugGroup = groups.find((g) => g.id === 'debug');
