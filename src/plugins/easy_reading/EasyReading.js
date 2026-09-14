@@ -821,6 +821,13 @@ export class EasyReading extends PluginBase {
   }
 
   _onChanged(e) {
+    const liveUpdate = this.app?.getPlugin?.('live_update');
+    if (liveUpdate?.active) {
+      if (!this._temporarilyHidden) {
+        this.leaveToTerminal();
+      }
+      return;
+    }
     const site = this.site;
     if (this._reenteringArticle && site?.pageState === PAGE_STATE.READING) {
       this._reenteringArticle = false;
@@ -1191,6 +1198,15 @@ export class EasyReading extends PluginBase {
         case 'End':
         case '$':
         case 'G':
+          if (e.key === 'End' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+            const liveUpdate = this.app?.getPlugin?.('live_update');
+            if (liveUpdate?.enabled && liveUpdate?.endTurnsOn) {
+              liveUpdate.toggle();
+              liveUpdate.showModal(true);
+              e.preventDefault();
+              return;
+            }
+          }
           this._scrollEnd();
           stop = true;
           break;

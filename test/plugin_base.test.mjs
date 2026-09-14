@@ -1723,4 +1723,74 @@ test('LiveHelperModal clearly distinguishes enabled and disabled UI states', asy
   );
 });
 
+test('LiveUpdate and EasyReading cooperate on End key, leaveToTerminal, and DOM click filtering', async () => {
+  const { BUILTIN_PLUGINS, LiveUpdate, EasyReading } = await import('../src/plugins/index.js');
+  const { EventEmitter } = await import('../src/js/event.js');
+
+  // 1. LiveUpdate is registered before EasyReading in BUILTIN_PLUGINS
+  assert.ok(
+    BUILTIN_PLUGINS.indexOf(LiveUpdate) < BUILTIN_PLUGINS.indexOf(EasyReading),
+    'LiveUpdate must precede EasyReading in BUILTIN_PLUGINS so End key is intercepted first'
+  );
+
+  // 2. Starting LiveUpdate calls leaveToTerminal() on EasyReading and ignores non-navigation clicks
+  let leftToTerminalCount = 0;
+  const mockEasyReading = {
+    started: true,
+    isActive: () => true,
+    leaveToTerminal: () => {
+      leftToTerminalCount++;
+    },
+  };
+  const mockMouseBrowsing = {
+    enabled: false,
+    mouseCursor: 0,
+  };
+
+  const mockApp = new EventEmitter();
+  mockApp.prefValues = {
+    enableLiveUpdate: true,
+    endTurnsOnLiveUpdate: true,
+    liveUpdateInterval: 1,
+  };
+  mockApp.site = {
+    pageState: 3, // PAGE_STATE.READING
+    getRefreshLiveThreadCommand: () => '\x1b[D\x1b[C\x1b[4~',
+  };
+  mockApp.send = () => {};
+  mockApp.getPlugin = (name) => {
+    if (name === 'easy_reading') return mockEasyReading;
+    if (name === 'mouse_browsing') return mockMouseBrowsing;
+    return null;
+  };
+
+  const liveUpdate = new LiveUpdate(mockApp);
+  liveUpdate.init({ app: mockApp, enabled: true });
+
+  // Press End key -> toggles LiveUpdate active and calls easyReading.leaveToTerminal()
+  const endEvent = { key: 'End', keyCode: 35, ctrlKey: false, altKey: false };
+  const handled = liveUpdate.handleKeyDown(endEvent);
+  assert.equal(handled, true, 'End key must be handled by LiveUpdate');
+  assert.equal(liveUpdate.active, true, 'LiveUpdate must become active on End key');
+  assert.equal(leftToTerminalCount, 1, 'LiveUpdate.start() must call easyReading.leaveToTerminal()');
+
+  // Clicking DOM when MouseBrowsing is disabled should NOT stop LiveUpdate
+  mockApp.emit('term:click', { event: { target: null }, force: false });
+  assert.equal(liveUpdate.active, true, 'Clicking DOM without MouseBrowsing must NOT stop LiveUpdate');
+
+  // Clicking End zone (cursor 5) even with MouseBrowsing enabled should NOT stop LiveUpdate
+  mockMouseBrowsing.enabled = true;
+  mockMouseBrowsing.mouseCursor = 5;
+  mockApp.emit('term:click', { event: { target: null }, force: false });
+  assert.equal(liveUpdate.active, true, 'Clicking End zone (cursor 5) must NOT stop LiveUpdate');
+
+  // Clicking Left zone (cursor 1) with MouseBrowsing enabled DOES stop LiveUpdate
+  mockMouseBrowsing.mouseCursor = 1;
+  mockApp.emit('term:click', { event: { target: null }, force: false });
+  assert.equal(liveUpdate.active, false, 'Clicking Left navigation zone must stop LiveUpdate');
+
+  liveUpdate.destroy();
+});
+
+
 
