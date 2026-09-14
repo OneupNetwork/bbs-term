@@ -874,12 +874,15 @@ export class TermView extends EventEmitter {
   }
 
   updateCursorPos() {
-    if (!this.cursor) return;
+    if (!this.cursor) {
+      this.updateInputBufferPos();
+      return;
+    }
     const customCursor = this.app?.inputInterceptors?.getCursorPos?.(
       this.buf.cur_x,
       this.buf.cur_y
     );
-    if (customCursor === 'hide') {
+    if (customCursor === 'hide' || this.isComposition || this.input?.getAttribute('bshow') === '1') {
       this.cursor.style.display = 'none';
       this.updateInputBufferPos();
       return;
@@ -889,8 +892,10 @@ export class TermView extends EventEmitter {
       ? customCursor
       : this.convertMN2XYEx(this.buf.cur_x, this.buf.cur_y);
     // if you want to set cursor color by now background, use this.
-    if (this.buf.cur_y >= this.buf.rows || this.buf.cur_x >= this.buf.cols)
+    if (this.buf.cur_y >= this.buf.rows || this.buf.cur_x >= this.buf.cols) {
+      this.updateInputBufferPos();
       return; //sometimes, the value of this.buf.cur_x is 80 :(
+    }
 
     const lines = this.buf.lines;
     const line = lines[this.buf.cur_y];
@@ -973,6 +978,8 @@ export class TermView extends EventEmitter {
       fgHex = getContrastColor(fgHex, bgHex, minContrast);
 
       const borderSize = 3;
+      this.input.style.zIndex = '13';
+      this.input.style.forcedColorAdjust = 'none';
       this.input.style.opacity = '1';
       this.input.style.border = `${borderSize}px double ${fgHex}`;
       this.input.style.outline = 'none';
@@ -983,6 +990,7 @@ export class TermView extends EventEmitter {
       // Visible text, background, and caret colors derived from cursor cell attributes are required during IME composition.
       this.input.style.color = fgHex;
       this.input.style.background = bgHex;
+      this.input.style.backgroundColor = bgHex;
       this.input.style.caretColor = fgHex;
       this.input.style.fontSize = (this.chh - 2) + 'px';
       this.input.style.lineHeight = this.chh + 'px';
@@ -1051,8 +1059,8 @@ export class TermView extends EventEmitter {
         this._composingSafeTimer = null;
       }
     }
-    this.updateInputBufferPos();
     this.isComposition = true;
+    this.updateCursorPos();
   }
 
   onCompositionEnd(e) {
@@ -1066,9 +1074,9 @@ export class TermView extends EventEmitter {
     this.input.style.pointerEvents = 'none';
     this.input.style.color = 'transparent';
     this.input.style.background = 'transparent';
+    this.input.style.backgroundColor = 'transparent';
     this.input.style.caretColor = 'transparent';
     this.input.style.minWidth = '';
-    this.updateInputBufferPos();
     // Workaround for WebKit IME: activate Lock Delay for trailing keydown
     if (this.hasWebKitImeQuirk) {
       this._lastCompositionEndTime = Date.now();
@@ -1082,6 +1090,7 @@ export class TermView extends EventEmitter {
       }, 0);
     }
     this.isComposition = false;
+    this.updateCursorPos();
   }
 
   applyTermSizeMode(values, { isMobile = false, onResizeTerm } = {}) {
