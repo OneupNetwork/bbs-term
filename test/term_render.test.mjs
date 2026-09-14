@@ -3923,3 +3923,96 @@ test('TouchKeyboard zoom buttons only trigger zoom on pointerdown and swallow sy
     'renderFontZoomOut must fire handleTermFontZoom only on onPointerDown and prevent default on onClick'
   );
 });
+
+test('Canvas mode fontFitWindowWidth renders natively at scaled dimensions without CSS transform blur', async () => {
+  const termViewSource = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  const appSource = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
+  const canvasScreenSource = fs.readFileSync(path.resolve('src/components/Canvas/CanvasScreen.js'), 'utf-8');
+  const { CanvasRenderer } = await import('../src/components/Canvas/CanvasRenderer.js');
+
+  // 1. TermView must not apply CSS transform: scale(...) to mainDisplay when useCanvasEngine is true
+  assert.ok(
+    termViewSource.includes('if (!this.useCanvasEngine && (this.scaleX != 1 || this.scaleY != 1))'),
+    'setTermFontSize must only apply CSS scale transform to mainDisplay when not using Canvas engine'
+  );
+  assert.ok(
+    termViewSource.includes("this.mainDisplay.style.transform = this.useCanvasEngine ? 'none' : scaleCss"),
+    'updateCursorPos must keep mainDisplay transform as none when using Canvas engine'
+  );
+
+  // 2. App.onWindowResize must trigger view.redraw(true) after view.fontResize()
+  const onWindowResizeBlock = appSource.slice(
+    appSource.indexOf('onWindowResize() {'),
+    appSource.indexOf('setTermSize(cols, rows)')
+  );
+  assert.ok(
+    onWindowResizeBlock.includes('this.view.fontResize();\n          this.view.redraw(true);') &&
+      onWindowResizeBlock.includes('this.view.fontResize();\n      this.view.redraw(true);'),
+    'onWindowResize must call this.view.redraw(true) after this.view.fontResize() in both sync and debounced paths'
+  );
+
+  // 3. CanvasScreen must scale canvas CSS width/height and link overlays by scaleX and scaleY
+  assert.ok(
+    canvasScreenSource.includes('const width = cols * chw * scaleX;') &&
+      canvasScreenSource.includes('const height = rows * chh * scaleY;'),
+    'CanvasScreen render must apply scaleX and scaleY to container and canvas CSS dimensions'
+  );
+  assert.ok(
+    canvasScreenSource.includes('const chw = this.getChw() * this.getScaleX();') &&
+      canvasScreenSource.includes('const chh = this.getChh() * this.getScaleY();'),
+    'CanvasScreen renderLinkOverlays must scale link overlay coordinates by scaleX and scaleY'
+  );
+
+  // 4. CanvasRenderer.draw must size canvas backing buffer by scaleX * dpr and scaleY * dpr and set CTM accordingly
+  const renderer = new CanvasRenderer();
+  const transforms = [];
+  const mockCanvas = {
+    width: 0,
+    height: 0,
+    getContext() {
+      return {
+        font: '',
+        textAlign: '',
+        textBaseline: '',
+        fillStyle: '',
+        setTransform(a, b, c, d, e, f) {
+          transforms.push([a, b, c, d, e, f]);
+        },
+        fillRect() {},
+        fillText() {},
+        drawImage() {},
+        measureText() {
+          return { width: 10 };
+        },
+      };
+    },
+  };
+
+  try {
+    globalThis.window = { devicePixelRatio: 2 };
+    renderer.draw(mockCanvas, {
+      cols: 80,
+      rows: 24,
+      chw: 19,
+      chh: 38,
+      scaleX: 1.25,
+      scaleY: 1.04,
+      lines: [],
+    });
+
+    // Target width = Math.round(80 * 19 * 1.25 * 2) = 3800
+    // Target height = Math.round(24 * 38 * 1.04 * 2) = 1897
+    assert.equal(mockCanvas.width, 3800, 'Canvas width must incorporate scaleX * dpr');
+    assert.equal(mockCanvas.height, 1897, 'Canvas height must incorporate scaleY * dpr');
+
+    const effScaleX = 3800 / (80 * 19);
+    const effScaleY = 1897 / (24 * 38);
+    const hasScaledTransform = transforms.some(
+      ([a, , , d]) => Math.abs(a - effScaleX) < 1e-6 && Math.abs(d - effScaleY) < 1e-6
+    );
+    assert.ok(hasScaledTransform, 'CanvasRenderer must apply CTM with effScaleX and effScaleY');
+  } finally {
+    delete globalThis.window;
+  }
+});
+
