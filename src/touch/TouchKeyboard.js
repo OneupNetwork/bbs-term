@@ -66,6 +66,21 @@ export function getLayoutDimensions(colsMode, isCompactLandscape = false) {
   };
 }
 
+export function getPadDefaultBaseHeight(
+  mode,
+  colsMode = 4,
+  isCompactLandscape = false
+) {
+  const dims = getLayoutDimensions(colsMode, isCompactLandscape);
+  if (mode === "ctrl") {
+    return 5 * dims.baseBtnHeight + 4 * dims.btnGap + dims.padY;
+  }
+  if (mode === "alpha") {
+    return 6 * dims.baseBtnHeight + 5 * dims.btnGap + dims.padY;
+  }
+  return dims.baseHeight;
+}
+
 export function readStorageFloat(key) {
   if (typeof window === "undefined" || !window.localStorage) return null;
   try {
@@ -1088,8 +1103,17 @@ export class TouchKeyboard extends React.Component {
 
     // Corner resizing: scales current layout uniformly
     const dims = getLayoutDimensions(startCols, isCompactLandscape);
-    const baseWidth = dims.baseWidth;
-    const baseHeight = dims.baseHeight;
+    const padMode = this.state.isCtrlMode
+      ? "ctrl"
+      : this.state.isAlphaMode
+        ? "alpha"
+        : "normal";
+    const baseWidth = padMode !== "normal" ? 540 : dims.baseWidth;
+    const baseHeight = getPadDefaultBaseHeight(
+      padMode,
+      startCols,
+      isCompactLandscape
+    );
 
     let deltaW = 0;
     let deltaH = 0;
@@ -1134,10 +1158,10 @@ export class TouchKeyboard extends React.Component {
     let effectiveHeight = startHeight * (nextScale / startScale);
 
     if (!isCollapsed) {
-      nextStackedWidth = Math.round(baseWidth * nextScale);
-      nextStackedHeight = Math.round(baseHeight * nextScale);
-      effectiveWidth = nextStackedWidth;
-      effectiveHeight = nextStackedHeight;
+      nextStackedWidth = Math.round(dims.baseWidth * nextScale);
+      nextStackedHeight = Math.round(dims.baseHeight * nextScale);
+      effectiveWidth = Math.round(baseWidth * nextScale);
+      effectiveHeight = Math.round(baseHeight * nextScale);
     }
 
     let nextRight = startRight;
@@ -2935,30 +2959,39 @@ export class TouchKeyboard extends React.Component {
           ? layoutToolbarScale
           : toolbarScale || 1.0;
 
-    const isExpandedKeypad = isCtrlMode || isAlphaMode;
-    const activeStackedWidth =
-      isStackedMode && stackedWidth
-        ? isExpandedKeypad
-          ? this.state.customScale != null
-            ? Math.min(
-                Math.round(540 * effectiveToolbarScale),
-                viewportWidth > 0 ? viewportWidth - 12 : 380
-              )
-            : Math.min(540, viewportWidth > 0 ? viewportWidth - 12 : 380)
-          : stackedWidth
-        : null;
-    const activeStackedHeight =
-      isStackedMode && stackedHeight
-        ? Math.min(
-            viewportHeight > 0 ? viewportHeight - 16 : Infinity,
-            stackedHeight
-          )
-        : null;
     const isCompactLandscape =
       (window.matchMedia &&
         window.matchMedia("(orientation: landscape) and (max-height: 500px)")
           .matches) ||
       (viewportWidth > viewportHeight && viewportHeight <= 500);
+
+    const isExpandedKeypad = isCtrlMode || isAlphaMode;
+    const padMode = isCtrlMode ? "ctrl" : isAlphaMode ? "alpha" : "normal";
+    const padBaseHeight = getPadDefaultBaseHeight(
+      padMode,
+      this.state.stackedColsMode || 4,
+      isCompactLandscape
+    );
+    const targetStackedHeight = isExpandedKeypad
+      ? Math.round(padBaseHeight * effectiveToolbarScale)
+      : stackedHeight;
+
+    const activeStackedWidth =
+      isStackedMode && stackedWidth
+        ? isExpandedKeypad
+          ? Math.min(
+              Math.round(540 * effectiveToolbarScale),
+              viewportWidth > 0 ? viewportWidth - 12 : 380
+            )
+          : stackedWidth
+        : null;
+    const activeStackedHeight =
+      isStackedMode && targetStackedHeight
+        ? Math.min(
+            viewportHeight > 0 ? viewportHeight - 16 : Infinity,
+            targetStackedHeight
+          )
+        : null;
 
     const baseBtnWidth = isCompactLandscape ? 44 : 52;
     const baseBtnHeight = isCompactLandscape ? 42 : 52;
@@ -3001,7 +3034,13 @@ export class TouchKeyboard extends React.Component {
           )
         : initialBottom;
 
-    const dockGroupWidth = Math.max(160, (stackedWidth || 234) - 12);
+    const default4Dims = getLayoutDimensions(4, isCompactLandscape);
+    const dockGroupWidth = Math.max(
+      Math.round(160 * effectiveToolbarScale),
+      Math.round(
+        (default4Dims.baseWidth - default4Dims.padX) * effectiveToolbarScale
+      )
+    );
     const toolbarStyle = {
       "--toolbar-scale": String(effectiveToolbarScale),
       "--dock-group-width": `${dockGroupWidth}px`,

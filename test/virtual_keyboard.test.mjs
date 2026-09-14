@@ -638,3 +638,36 @@ test('TouchKeyboard supports edge resizing and 2x10, 3x7, 4x5 layout switching w
     'TouchKeyboard must save selected column layout to STORAGE_KEY_TOUCHUI_COLS'
   );
 });
+
+test('TouchKeyboard ctrl-pad and a-pad use their default heights regardless of arrow-pad MxN layout', async () => {
+  const touchKbSource = fs.readFileSync(
+    path.resolve('src/touch/TouchKeyboard.js'),
+    'utf-8'
+  );
+
+  const fnRegex = /(?:export\s+)?function getLayoutDimensions[\s\S]*?\n\}/;
+  const padFnRegex = /(?:export\s+)?function getPadDefaultBaseHeight[\s\S]*?\n\}/;
+  const match = touchKbSource.match(fnRegex);
+  const padMatch = touchKbSource.match(padFnRegex);
+  assert.ok(match && padMatch, 'Must contain getLayoutDimensions and getPadDefaultBaseHeight functions');
+
+  const getPadDefaultBaseHeight = new Function(
+    `${match[0].replace(/export\s+/g, '')}\n${padMatch[0].replace(/export\s+/g, '')}\nreturn getPadDefaultBaseHeight;`
+  )();
+
+  for (const colsMode of [2, 3, 4, 5, 6, 7]) {
+    // ctrl-pad: same height as arrow-pad original 5 rows (288px portrait, 230px compact landscape)
+    assert.strictEqual(getPadDefaultBaseHeight('ctrl', colsMode, false), 288);
+    assert.strictEqual(getPadDefaultBaseHeight('ctrl', colsMode, true), 230);
+    // a-pad: 1 row taller than ctrl-pad (6 rows = 344px portrait, 275px compact landscape)
+    assert.strictEqual(getPadDefaultBaseHeight('alpha', colsMode, false), 344);
+    assert.strictEqual(getPadDefaultBaseHeight('alpha', colsMode, true), 275);
+  }
+
+  // arrow-pad ('normal') respects colsMode MxN height
+  assert.strictEqual(getPadDefaultBaseHeight('normal', 2, false), 512);
+  assert.strictEqual(getPadDefaultBaseHeight('normal', 4, false), 288);
+  assert.strictEqual(getPadDefaultBaseHeight('normal', 7, false), 120);
+});
+
+
