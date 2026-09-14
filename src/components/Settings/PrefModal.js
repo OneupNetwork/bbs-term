@@ -640,11 +640,18 @@ export class PrefModal extends React.Component {
   componentDidMount() {
     this._onI18nChange = () => this.forceUpdate();
     this.props.app?.addEventListener?.("term:i18n:change", this._onI18nChange);
+    if (typeof window !== "undefined") {
+      this._onWindowResize = () => this.forceUpdate();
+      window.addEventListener("resize", this._onWindowResize);
+    }
   }
 
   componentWillUnmount() {
     if (this._onI18nChange) {
       this.props.app?.removeEventListener?.("term:i18n:change", this._onI18nChange);
+    }
+    if (typeof window !== "undefined" && this._onWindowResize) {
+      window.removeEventListener("resize", this._onWindowResize);
     }
   }
 
@@ -1446,20 +1453,31 @@ export class PrefModal extends React.Component {
                     </div>
                   </div>
                 )}
-                {(isTouch || values.termSizeMode === "fixed-font-size") && (
-                  <div className="form-group" id="fontSize">
-                    <label className="control-label">
-                      {_("options_fontSize")}
-                    </label>
-                    <input
-                      className="form-control"
-                      name="fontSize"
-                      type="number"
-                      value={values.fontSize}
-                      onChange={this.handleNumberInputChange}
-                    />
-                  </div>
-                )}
+                {(isTouch || values.termSizeMode === "fixed-font-size") && (() => {
+                  const isPortrait =
+                    typeof window !== "undefined" &&
+                    window.innerWidth > 0 &&
+                    window.innerHeight > 0 &&
+                    window.innerWidth < window.innerHeight;
+                  const fontFieldName = isPortrait ? "fontSizePortrait" : "fontSize";
+                  const currentFontVal = isPortrait
+                    ? (values.fontSizePortrait ?? values.fontSize)
+                    : values.fontSize;
+                  return (
+                    <div className="form-group" id="fontSize">
+                      <label className="control-label">
+                        {_("options_fontSize")}
+                      </label>
+                      <input
+                        className="form-control"
+                        name={fontFieldName}
+                        type="number"
+                        value={currentFontVal}
+                        onChange={this.handleNumberInputChange}
+                      />
+                    </div>
+                  );
+                })()}
                 </div>
               </fieldset>
             )}

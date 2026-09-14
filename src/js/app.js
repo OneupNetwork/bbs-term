@@ -12,7 +12,7 @@ import { setupI18n } from './i18n';
 import { setTimer, parseConnectUrl } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
 import { setTerminalBellEnabled, setWindowFocused, isWindowFocused, playTerminalBell } from './bell.js';
-import { DEFAULT_PREFS, readValuesWithDefault, writeValues } from './pref.js';
+import { DEFAULT_PREFS, getDefaultFontSize, readValuesWithDefault, writeValues } from './pref.js';
 import { applyColorScheme } from './color_schemes.js';
 import AppOverlay from '../components/AppOverlay';
 import { getSite } from './sites';
@@ -750,6 +750,30 @@ export class App extends EventEmitter {
 
   onWindowResize() {
     this.view.innerBounds = this.getWindowInnerBounds();
+    const isPortrait =
+      this.view.innerBounds.width > 0 &&
+      this.view.innerBounds.height > 0 &&
+      this.view.innerBounds.width < this.view.innerBounds.height;
+    const orientationChanged =
+      this._lastIsPortrait !== undefined && this._lastIsPortrait !== isPortrait;
+    this._lastIsPortrait = isPortrait;
+
+    if (orientationChanged) {
+      if (this.resizeTimeout) {
+        clearTimeout(this.resizeTimeout);
+        this.resizeTimeout = null;
+      }
+      this.view.resetPan?.();
+      if (this.prefValues) {
+        this.applyTermSizeMode(this.prefValues);
+      } else if (this.resizer) {
+        this.resizer();
+      } else {
+        this.view.fontResize();
+        this.view.redraw(true);
+      }
+      return;
+    }
 
     if (this.resizeTimeout) {
       clearTimeout(this.resizeTimeout);
@@ -1159,14 +1183,20 @@ export class App extends EventEmitter {
 
   zoomFont(delta) {
     if (!this.view) return;
-    const currentSize = this.view.chh || DEFAULT_PREFS.fontSize;
-    const newSize = Math.max(12, Math.min(60, currentSize + delta * 2));
+    const bounds = this.getWindowInnerBounds();
+    const isPortrait = bounds.width > 0 && bounds.height > 0 && bounds.width < bounds.height;
+    const currentPrefs = readValuesWithDefault();
+    const currentSize =
+      this.view.fontSizePx ||
+      this.view.chh ||
+      (isPortrait ? currentPrefs.fontSizePortrait : currentPrefs.fontSize) ||
+      getDefaultFontSize(isPortrait);
+    const newSize = Math.max(8, Math.min(60, currentSize + delta * 2));
     if (newSize === currentSize) return;
 
-    const currentPrefs = readValuesWithDefault();
     const nextPrefs = {
       ...currentPrefs,
-      fontSize: newSize,
+      ...(isPortrait ? { fontSizePortrait: newSize } : { fontSize: newSize }),
     };
     writeValues(nextPrefs);
     this.onValuesPrefChange(nextPrefs);

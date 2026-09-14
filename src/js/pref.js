@@ -70,6 +70,7 @@ export const DEFAULT_PREFS = {
   fontFitWindowWidth: false,
   fontFace: "MingLiu,SymMingLiu,'Noto Sans Mono CJK TC','PingFang TC',monospace",
   fontSize: 24,
+  fontSizePortrait: 16,
   termSize: { cols: 80, rows: 24 },
   termSizeMode: "fixed-term-size",
   termMargin: 0,
@@ -236,6 +237,39 @@ export const parseDefaultPrefs = (
   return {};
 };
 
+export const calcFittingFontSize = (width, height) => {
+  if (!width || !height || width <= 0 || height <= 0) {
+    return DEFAULT_PREFS.fontSize;
+  }
+  const margin = width <= 768 ? 0 : 10;
+  const availWidth = Math.max(0, width - margin);
+  const fitWidth = Math.floor(availWidth / 40);
+  const fitHeight = Math.floor(height / 24);
+  const fitted = Math.min(fitWidth, fitHeight);
+  return Math.max(8, Math.min(24, fitted));
+};
+
+export const getDefaultFontSize = (isPortrait = undefined) => {
+  if (typeof window === "undefined") {
+    return isPortrait === true ? DEFAULT_PREFS.fontSizePortrait : DEFAULT_PREFS.fontSize;
+  }
+  const width = window.innerWidth || window.screen?.width || 0;
+  const height = window.innerHeight || window.screen?.height || 0;
+  if (width <= 0 || height <= 0) {
+    if (isPortrait === true) {
+      return isMobileEnvironment() ? 9 : DEFAULT_PREFS.fontSizePortrait;
+    }
+    return isMobileEnvironment() ? 16 : DEFAULT_PREFS.fontSize;
+  }
+  if (isPortrait === true) {
+    return calcFittingFontSize(Math.min(width, height), Math.max(width, height));
+  }
+  if (isPortrait === false) {
+    return calcFittingFontSize(Math.max(width, height), Math.min(width, height));
+  }
+  return calcFittingFontSize(width, height);
+};
+
 export const getDefaultPwaPrompt = () => {
   if (isStandaloneMode()) return false;
   return isMobileEnvironment();
@@ -259,6 +293,8 @@ export const getDefaultPrefs = () => {
   delete customDefaults.maxFontSize;
   return {
     ...DEFAULT_PREFS,
+    fontSize: getDefaultFontSize(false),
+    fontSizePortrait: getDefaultFontSize(true),
     enablePwaPrompt: getDefaultPwaPrompt(),
     enableVirtualKeyboard: getDefaultVirtualKeyboard(),
     ...parseDefaultPlugins(),
@@ -357,7 +393,14 @@ export const readValuesWithDefault = () => {
         prefs.termSizeMode = DEFAULT_PREFS.termSizeMode;
       }
       if (prefs.fontSize === 999 || prefs.fontSize === undefined) {
-        prefs.fontSize = DEFAULT_PREFS.fontSize;
+        prefs.fontSize = getDefaultFontSize(false);
+      }
+      if (prefs.fontSizePortrait === 999 || saved.fontSizePortrait === undefined) {
+        prefs.fontSizePortrait = getDefaultFontSize(true);
+        const defaultLandscape = getDefaultFontSize(false);
+        if (saved.fontSize === 24 && defaultLandscape < 24) {
+          prefs.fontSize = defaultLandscape;
+        }
       }
       delete prefs.maxFontSize;
       if (saved.lineHeight !== undefined) {
