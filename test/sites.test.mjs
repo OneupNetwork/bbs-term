@@ -1214,10 +1214,18 @@ test('EasyReading and App input interceptor pipeline decouples navigation, wheel
   // Selection col/row is null during easy reading (grid coordinates suppressed)
   assert.equal(mockCore.inputInterceptors.getSelectionColRow(), null);
 
-  // Wheel suppression upon exit
+  // Wheel suppression upon exit: disabled by default when mouseWheelTrackpadMode is false
   easyReading.hide();
   assert.equal(easyReading.isActive(), false);
-  // Recently scrolled in EasyReading: dispatchWheel returns 'suppress'
+  const defaultWheel = mockCore.inputInterceptors.dispatchWheel({ deltaY: 50 });
+  assert.equal(defaultWheel, false);
+
+  // When mouseWheelTrackpadMode is enabled, post-exit inertial trackpad wheel is suppressed
+  mockCore.mouseWheelTrackpadMode = true;
+  easyReading.started = true;
+  easyReading._overlay.style.display = 'block';
+  mockCore.inputInterceptors.dispatchWheel({ deltaY: 50 });
+  easyReading.hide();
   const suppressedWheel = mockCore.inputInterceptors.dispatchWheel({ deltaY: 50 });
   assert.equal(suppressedWheel, 'suppress');
 

@@ -2869,10 +2869,11 @@ test('DropdownMenu and ContextMenu guard against ghost clicks and position clear
 
 test('App setNavCmd dispatches navigation commands and replaces legacy setBBSCmd', () => {
   const currentAppSource = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
+  const mcSource = fs.readFileSync(path.resolve('src/js/mouse_controller.js'), 'utf-8');
   const mbSource = fs.readFileSync(path.resolve('src/plugins/mouse_browsing/MouseBrowsing.js'), 'utf-8');
   assert.ok(!currentAppSource.includes('setBBSCmd'), 'App must not contain legacy setBBSCmd');
   assert.ok(currentAppSource.includes('setNavCmd(cmd)'), 'App should declare setNavCmd(cmd)');
-  assert.ok(mbSource.includes('this.app.setNavCmd(action)'), 'MouseBrowsing wheel handler should call setNavCmd');
+  assert.ok(mcSource.includes('app.setNavCmd('), 'MouseController wheel handler should call setNavCmd');
   assert.ok(mbSource.includes('app.setNavCmd("doEnter")'), 'MouseBrowsing left click handler should call setNavCmd');
 });
 test('DropdownMenu hides and positions before showing to prevent top-left popup flicker', () => {

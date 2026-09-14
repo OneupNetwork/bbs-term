@@ -411,6 +411,39 @@
   "options_rightClickAction_paste": {
     "message": "Paste from clipboard directly (Shift + Right-click opens menu)"
   },
+  "options_mouseWheelAction": {
+    "message": "Mouse wheel"
+  },
+  "options_mouseWheelRightAction": {
+    "message": "Right click + mouse wheel"
+  },
+  "options_mouseWheelLeftAction": {
+    "message": "Left click + mouse wheel"
+  },
+  "options_mouseWheelTrackpadMode": {
+    "message": "Detect trackpad scroll momentum"
+  },
+  "options_mouseWheelTrackpadMode_desc": {
+    "message": "Smooth out trackpad scrolling and absorb momentum to prevent over-scrolling. Leave unchecked for standard mouse wheels."
+  },
+  "options_mouseWheelAction_arrow1": {
+    "message": "Arrow Up / Down - 1 line (Simulate 1 Up / Down key press)"
+  },
+  "options_mouseWheelAction_arrow2": {
+    "message": "Arrow Up / Down - 2 lines (Simulate 2 Up / Down key presses)"
+  },
+  "options_mouseWheelAction_arrow3": {
+    "message": "Arrow Up / Down - 3 lines (Simulate 3 Up / Down key presses)"
+  },
+  "options_mouseWheelAction_arrow5": {
+    "message": "Arrow Up / Down - 5 lines (Simulate 5 Up / Down key presses)"
+  },
+  "options_mouseWheelAction_page": {
+    "message": "Page Up / Page Down (Simulate PageUp / PageDown key press)"
+  },
+  "options_mouseWheelAction_none": {
+    "message": "None (Disable mouse wheel action)"
+  },
   "options_mouseBrowsingHighlight": {
     "message": "Mouse browsing highlight effect"
   },
@@ -428,15 +461,6 @@
   },
   "options_mouseMiddleFunction": {
     "message": "Mouse middle button"
-  },
-  "options_mouseWheelFunction1": {
-    "message": "Mouse wheel"
-  },
-  "options_mouseWheelFunction2": {
-    "message": "Right mouse key + mouse wheel"
-  },
-  "options_mouseWheelFunction3": {
-    "message": "Left mouse key + mouse wheel"
   },
   "options_none": {
     "message": "No action"

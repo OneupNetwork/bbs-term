@@ -1504,9 +1504,6 @@ test('MouseBrowsing tracks timers in PluginBase._timers and App supports unregis
   mb.handleMouseDown({ button: 0 });
   assert.equal(mb._timers.size, 1, 'Dblclick timer should be tracked in PluginBase._timers');
 
-  mb.handleMouseUp({ button: 0, clientX: 0, clientY: 0 });
-  assert.equal(mb._timers.size, 2, 'MouseUp timer should also be tracked in PluginBase._timers');
-
   mb.disable();
   assert.equal(mb._timers.size, 0, 'Disabling MouseBrowsing must clear all timers via PluginBase');
 

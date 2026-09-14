@@ -6,6 +6,7 @@ import { COLOR_SCHEMES, applyColorScheme, getContrastColor } from '../src/js/col
 import { termColors } from '../src/js/color_schemes.js';
 import { DEFAULT_PREFS, readValuesWithDefault, parseOptionText } from '../src/js/pref.js';
 import { TermKeyboard } from '../src/js/term_keyboard.js';
+import { MouseController } from '../src/js/mouse_controller.js';
 import { getAvailablePlugins, groupPlugins, PLUGIN_GROUPS } from '../src/plugins/index.js';
 import {
   detectSite,
@@ -201,6 +202,10 @@ test('DEFAULT_PREFS includes new terminal settings with sensible defaults', () =
   assert.equal(DEFAULT_PREFS.customColors.length, 16);
   assert.equal(DEFAULT_PREFS.trimTrailingSpaces, true);
   assert.equal(DEFAULT_PREFS.rightClickAction, 'menu');
+  assert.equal(DEFAULT_PREFS.mouseWheelAction, 'arrow-1');
+  assert.equal(DEFAULT_PREFS.mouseWheelRightAction, 'page');
+  assert.equal(DEFAULT_PREFS.mouseWheelLeftAction, 'none');
+  assert.equal(DEFAULT_PREFS.mouseWheelTrackpadMode, false);
   assert.equal(DEFAULT_PREFS.enableVisualBell, false);
   assert.equal(DEFAULT_PREFS.backspaceKey, 'control-h');
   assert.equal(DEFAULT_PREFS.deleteKey, 'escape-sequence');
@@ -256,7 +261,7 @@ test('PrefModal source code includes Mouse tab, colorScheme, visualBell, lineHei
     'PrefModal nav must include mouse tab'
   );
 
-  // 2. Mouse tab fieldset renders rightClickAction, copyOnSelect, trimTrailingSpaces, supportMouseReporting
+  // 2. Mouse tab fieldset renders rightClickAction, mouseWheelAction, mouseWheelRightAction, mouseWheelLeftAction, copyOnSelect, trimTrailingSpaces, supportMouseReporting
   assert.ok(
     prefModalSrc.includes('navActiveKey === "mouse"'),
     'PrefModal must contain mouse tab panel'
@@ -264,6 +269,18 @@ test('PrefModal source code includes Mouse tab, colorScheme, visualBell, lineHei
   assert.ok(
     prefModalSrc.includes('name="rightClickAction"'),
     'Mouse tab must contain rightClickAction selector'
+  );
+  assert.ok(
+    prefModalSrc.includes('name="mouseWheelAction"'),
+    'Mouse tab must contain mouseWheelAction selector'
+  );
+  assert.ok(
+    prefModalSrc.includes('name="mouseWheelRightAction"'),
+    'Mouse tab must contain mouseWheelRightAction selector'
+  );
+  assert.ok(
+    prefModalSrc.includes('name="mouseWheelLeftAction"'),
+    'Mouse tab must contain mouseWheelLeftAction selector'
   );
   assert.ok(
     prefModalSrc.includes('name="trimTrailingSpaces"'),
@@ -1220,4 +1237,198 @@ test('Bug Report button is placed in Settings sidebar footer and About tab with 
   );
 });
 
+test('MouseController onWheel handles mouseWheelAction, mouseWheelRightAction, and mouseWheelLeftAction', () => {
+  const navCmds = [];
+  const sentData = [];
+  let locatorActive = false;
+  let interceptorHandled = false;
 
+  const mockApp = {
+    modalShown: false,
+    mouseWheelAction: 'arrow-1',
+    mouseWheelRightAction: 'page',
+    mouseWheelLeftAction: 'none',
+    preventContextMenuOnMouseUp: false,
+    skipMouseClick: false,
+    view: { chh: 30 },
+    isDialogOrExcludedTarget: () => false,
+    isSelectionCollapsed: () => true,
+    clientToPos: () => ({ col: 10, row: 5 }),
+    send: (data) => sentData.push(data),
+    setNavCmd: (cmd) => navCmds.push(cmd),
+    setInputAreaFocus: () => {},
+    buf: {
+      locator: {
+        isActive: () => locatorActive,
+        handleWheel: () => '\x1b[<64;10;5M',
+      },
+    },
+    inputInterceptors: {
+      dispatchWheel: () => interceptorHandled,
+      dispatchMouseDown: () => false,
+      dispatchMouseUp: () => false,
+    },
+  };
+
+  const controller = new MouseController(mockApp, { attachDOM: false });
+
+  const createWheelEvent = (deltaY, buttons = 0) => ({
+    deltaY,
+    deltaMode: 0,
+    buttons,
+    clientX: 100,
+    clientY: 100,
+    preventDefault() {},
+    stopPropagation() {},
+  });
+
+  // 1. Default arrow-1: scroll up (-100) -> doArrowUp once; scroll down (+100) -> doArrowDown once
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(-100));
+  assert.deepEqual(navCmds, ['doArrowUp']);
+  navCmds.length = 0;
+
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(100));
+  assert.deepEqual(navCmds, ['doArrowDown']);
+  navCmds.length = 0;
+
+  // 2. arrow-3: scroll up -> 3x doArrowUp
+  mockApp.mouseWheelAction = 'arrow-3';
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(-100));
+  assert.deepEqual(navCmds, ['doArrowUp', 'doArrowUp', 'doArrowUp']);
+  navCmds.length = 0;
+
+  // 3. page: scroll down -> doPageDown
+  mockApp.mouseWheelAction = 'page';
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(100));
+  assert.deepEqual(navCmds, ['doPageDown']);
+  navCmds.length = 0;
+
+  // 4. Right button + wheel uses mouseWheelRightAction (default 'page') and sets preventContextMenuOnMouseUp
+  controller.onMouseDown({ button: 2 });
+  assert.equal(controller.rightButtonDown, true);
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(-100));
+  assert.deepEqual(navCmds, ['doPageUp']);
+  assert.equal(mockApp.preventContextMenuOnMouseUp, true);
+  controller.onMouseUp({ button: 2 });
+  assert.equal(controller.rightButtonDown, false);
+  navCmds.length = 0;
+
+  // 5. Left button + wheel uses mouseWheelLeftAction and sets skipMouseClick
+  mockApp.mouseWheelLeftAction = 'arrow-2';
+  controller.onMouseDown({ button: 0 });
+  assert.equal(controller.leftButtonDown, true);
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(100));
+  assert.deepEqual(navCmds, ['doArrowDown', 'doArrowDown']);
+  assert.equal(mockApp.skipMouseClick, true);
+  controller.onMouseUp({ button: 0, preventDefault() {} });
+  assert.equal(controller.leftButtonDown, false);
+  navCmds.length = 0;
+
+  // 6. none: does nothing
+  mockApp.mouseWheelAction = 'none';
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(-100));
+  assert.deepEqual(navCmds, []);
+
+  // 7. When interceptor (e.g. EasyReading active) returns true, core wheel action is skipped AND native scroll is NOT prevented
+  mockApp.mouseWheelAction = 'arrow-1';
+  interceptorHandled = true;
+  controller.lastWheelCmdTime = 0;
+  let prevented = false;
+  let stopped = false;
+  controller.onWheel({
+    deltaY: -100,
+    deltaMode: 0,
+    preventDefault() { prevented = true; },
+    stopPropagation() { stopped = true; },
+  });
+  assert.deepEqual(navCmds, []);
+  assert.equal(prevented, false, 'EasyReading active wheel must not prevent native DOM scroll');
+  assert.equal(stopped, false, 'EasyReading active wheel must not stop propagation to overlay');
+
+  // 8. When interceptor returns 'suppress' (e.g. inertial tail after exit), preventDefault and stopPropagation are called
+  interceptorHandled = 'suppress';
+  controller.onWheel({
+    deltaY: -100,
+    deltaMode: 0,
+    preventDefault() { prevented = true; },
+    stopPropagation() { stopped = true; },
+  });
+  assert.equal(prevented, true);
+  assert.equal(stopped, true);
+  interceptorHandled = false;
+
+  // 9. Rapid consecutive discrete wheel notches (arrow mode) do not drop events
+  mockApp.mouseWheelAction = 'arrow-1';
+  controller.onWheel(createWheelEvent(100));
+  controller.onWheel(createWheelEvent(100));
+  assert.deepEqual(navCmds, ['doArrowDown', 'doArrowDown']);
+  navCmds.length = 0;
+
+  // 10. When Mouse Reporting (locator) is active on server, sends locator report and skips core wheel action
+  locatorActive = true;
+  controller.lastWheelCmdTime = 0;
+  controller.onWheel(createWheelEvent(-100));
+  assert.deepEqual(navCmds, []);
+  assert.equal(sentData.length, 1);
+  locatorActive = false;
+
+  // 11. Linux Chrome discrete mouse wheel (deltaY = 53.333, wheelDeltaY = -120) triggers exactly 1 line per notch consistently
+  mockApp.mouseWheelAction = 'arrow-1';
+  for (let i = 0; i < 4; i++) {
+    controller.onWheel({
+      deltaY: 53.333333333333336,
+      deltaX: 0,
+      deltaMode: 0,
+      wheelDeltaY: -120,
+      preventDefault() {},
+      stopPropagation() {},
+    });
+  }
+  assert.deepEqual(navCmds, ['doArrowDown', 'doArrowDown', 'doArrowDown', 'doArrowDown']);
+  navCmds.length = 0;
+
+  // 12. Default mouseWheelTrackpadMode is false: small deltas trigger 1 immediate step without accumulation
+  mockApp.mouseWheelTrackpadMode = false;
+  controller.onWheel({ deltaY: 15, deltaX: 0, deltaMode: 0, wheelDeltaY: -45, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(navCmds, ['doArrowDown'], 'Default off trackpad mode triggers immediate step');
+  navCmds.length = 0;
+
+  // 13. When mouseWheelTrackpadMode is enabled (true), small deltas accumulate smoothly
+  mockApp.mouseWheelTrackpadMode = true;
+  controller._lastWheelInputTime = 0;
+  controller._isTrackpadStream = false;
+  controller.onWheel({ deltaY: 15, deltaX: 0, deltaMode: 0, wheelDeltaY: -45, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(navCmds, [], 'First 15px trackpad delta below 35px threshold waits when trackpad mode is enabled');
+  controller.onWheel({ deltaY: 22, deltaX: 0, deltaMode: 0, wheelDeltaY: -66, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(navCmds, ['doArrowDown'], 'Accumulated 37px triggers 1 line step');
+  mockApp.mouseWheelTrackpadMode = false;
+  navCmds.length = 0;
+
+  // 14. Right-click opening context menu (contextMenuShown=true) must still reset rightButtonDown on mouseup
+  mockApp.mouseWheelAction = 'arrow-1';
+  mockApp.mouseWheelRightAction = 'page';
+  controller.onMouseDown({ button: 2 });
+  assert.equal(controller.rightButtonDown, true);
+  mockApp.contextMenuShown = true;
+  controller.onMouseUp({ button: 2 });
+  assert.equal(controller.rightButtonDown, false, 'rightButtonDown must reset even when contextMenuShown is true');
+  mockApp.contextMenuShown = false;
+  controller.onWheel({ deltaY: 100, deltaMode: 0, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(navCmds, ['doArrowDown'], 'Normal scroll after closing context menu must use normal wheel action, not page jump');
+  navCmds.length = 0;
+
+  // 15. onMouseMove with buttons=0 self-heals any stuck rightButtonDown/leftButtonDown (e.g. released outside window or during native OS menu)
+  mockApp.onMouse_move = () => {};
+  controller.rightButtonDown = true;
+  controller.onMouseMove({ clientX: 50, clientY: 50, buttons: 0 });
+  assert.equal(controller.rightButtonDown, false, 'mousemove e.buttons=0 self-heals stuck rightButtonDown');
+  controller.onWheel({ deltaY: 100, deltaMode: 0, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(navCmds, ['doArrowDown'], 'Self-healed wheel event executes normal arrow action instead of page action');
+});

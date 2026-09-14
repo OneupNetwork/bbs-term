@@ -1,6 +1,7 @@
 import { PluginBase } from '../PluginBase.js';
 import { _ } from '../../js/i18n.js';
 import { PAGE_STATE } from '../../js/sites/index.js';
+import { isDiscreteMouseWheelEvent } from '../../js/mouse_controller.js';
 
 export const INFLIGHT_WATCHDOG_MS = 1500;
 export const MAX_INFLIGHT_RETRIES = 2;
@@ -1008,42 +1009,60 @@ export class EasyReading extends PluginBase {
 
   handleWheel(e) {
     const now = Date.now();
-    if (this.isActive()) {
-      this.lastWheelTime = now;
-      return true;
-    }
-    const isOverlayTarget = !!(
-      this.overlay &&
-      e?.target &&
-      (e.target === this.overlay || this.overlay.contains(e.target))
-    );
-    const recentlyScrolled =
-      this.lastWheelTime && now - this.lastWheelTime < 1000;
-    const recentlyExited = this.lastHideTime && now - this.lastHideTime < 600;
-    const isSuppressed =
-      isOverlayTarget ||
-      recentlyScrolled ||
-      recentlyExited ||
-      (this.suppressWheelUntil && now < this.suppressWheelUntil);
+    const trackpadMode = Boolean(this.app?.mouseWheelTrackpadMode);
+    const isTrackpad =
+      trackpadMode &&
+      (this.app?.mouse?.isTrackpadEvent
+        ? this.app.mouse.isTrackpadEvent(e)
+        : !isDiscreteMouseWheelEvent(e));
 
-    if (isSuppressed) {
-      if (this.lastWheelEventTime && now - this.lastWheelEventTime < 200) {
-        if (!this.suppressWheelStartedAt) {
-          this.suppressWheelStartedAt = now;
-        }
-        if (now - this.suppressWheelStartedAt < 2500) {
-          this.suppressWheelUntil = Math.max(
-            this.suppressWheelUntil || 0,
-            now + 350
-          );
+    if (this.app?.contextMenuShown && this.app?.mouse) {
+      this.app.mouse.rightButtonDown = false;
+    }
+
+    if (this.isActive()) {
+      const isRightButton =
+        this.app?.mouse?.rightButtonDown || Boolean(e?.buttons & 2);
+      const isLeftButton =
+        !isRightButton &&
+        (this.app?.mouse?.leftButtonDown || Boolean(e?.buttons & 1));
+      if (isRightButton || isLeftButton) {
+        const actionPref = isRightButton
+          ? this.app?.mouseWheelRightAction || 'page'
+          : this.app?.mouseWheelLeftAction || 'none';
+        if (actionPref !== 'none') {
+          return false;
         }
       }
+      this.lastWheelTime = now;
+      this.lastWheelEventTime = now;
+      this._wasTrackpadInActive = isTrackpad;
+      return true;
+    }
+
+    // When trackpad mode is off or event is from a physical mouse wheel, never suppress
+    if (!trackpadMode || (!isTrackpad && !this._wasTrackpadInActive)) {
+      return false;
+    }
+
+    const wasScrollingAtExit =
+      this.lastWheelTime &&
+      this.lastHideTime &&
+      this.lastHideTime - this.lastWheelTime <= 120;
+    const isContinuousInertialStream =
+      wasScrollingAtExit &&
+      now - this.lastHideTime < 350 &&
+      this.lastWheelEventTime &&
+      now - this.lastWheelEventTime < 80;
+
+    if (isContinuousInertialStream) {
       this.lastWheelEventTime = now;
       e?.stopPropagation?.();
       e?.preventDefault?.();
       return 'suppress';
     }
 
+    this._wasTrackpadInActive = false;
     this.suppressWheelUntil = 0;
     this.suppressWheelStartedAt = 0;
     return false;
