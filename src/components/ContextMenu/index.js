@@ -455,7 +455,8 @@ export class ContextMenu extends React.Component {
     app.lastSelection = selColRow || null;
 
     const aElement = targetEl && typeof targetEl.closest === "function" ? targetEl.closest("a") : null;
-    const contextOnUrl = aElement ? aElement.getAttribute("href") || "" : "";
+    const rawHref = aElement ? aElement.getAttribute("href") || "" : "";
+    const contextOnUrl = rawHref.startsWith("#") ? "" : rawHref;
 
     let selectedText = app.view.getSelectedText();
     if (!selectedText && typeof window !== "undefined" && window.getSelection && !window.getSelection().isCollapsed) {
@@ -466,7 +467,7 @@ export class ContextMenu extends React.Component {
     }
     const urlEnabled = !!contextOnUrl;
     const normalEnabled = !urlEnabled && !selectedText;
-    const selEnabled = !normalEnabled;
+    const selEnabled = Boolean(selectedText);
 
     this._menuOpenedAt = Date.now();
     this.setState({
