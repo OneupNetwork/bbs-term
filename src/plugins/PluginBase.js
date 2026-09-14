@@ -195,7 +195,8 @@ export class PluginBase {
         this._prefChangeListener = (e) => {
           const key = e?.key ?? e?.detail?.key;
           const value = e?.value !== undefined ? e.value : e?.detail?.value;
-          if (key === this.prefKey && Boolean(value) !== this.enabled) {
+          const legacyKey = this.constructor.legacyPrefKey;
+          if ((key === this.prefKey || (legacyKey && key === legacyKey)) && Boolean(value) !== this.enabled) {
             this.setEnabled(Boolean(value), false);
           }
         };
@@ -242,14 +243,25 @@ export class PluginBase {
       return;
     }
     if (!this.prefKey) return;
-    if (this.app?.prefValues && this.app.prefValues[this.prefKey] !== undefined) {
-      this.enabled = Boolean(this.app.prefValues[this.prefKey]);
-      return;
+    const legacyKey = this.constructor.legacyPrefKey;
+    if (this.app?.prefValues) {
+      if (this.app.prefValues[this.prefKey] !== undefined) {
+        this.enabled = Boolean(this.app.prefValues[this.prefKey]);
+        return;
+      }
+      if (legacyKey && this.app.prefValues[legacyKey] !== undefined) {
+        this.enabled = Boolean(this.app.prefValues[legacyKey]);
+        return;
+      }
     }
     try {
       const prefs = readValuesWithDefault();
-      if (prefs && prefs[this.prefKey] !== undefined) {
-        this.enabled = Boolean(prefs[this.prefKey]);
+      if (prefs) {
+        if (prefs[this.prefKey] !== undefined) {
+          this.enabled = Boolean(prefs[this.prefKey]);
+        } else if (legacyKey && prefs[legacyKey] !== undefined) {
+          this.enabled = Boolean(prefs[legacyKey]);
+        }
       }
     } catch {
       // Ignore preference read errors in non-browser or mock environments
@@ -272,6 +284,10 @@ export class PluginBase {
     }
     if (this.app?.prefValues && this.prefKey) {
       this.app.prefValues[this.prefKey] = this.enabled;
+      const legacyKey = this.constructor.legacyPrefKey;
+      if (legacyKey && legacyKey in this.app.prefValues) {
+        this.app.prefValues[legacyKey] = this.enabled;
+      }
     }
     if (persist && this.prefKey) {
       try {

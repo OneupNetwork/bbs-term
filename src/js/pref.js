@@ -28,7 +28,7 @@ export const DEFAULT_PREFS = {
   enablePacketDump: false,
   enableInputHelper: true,
   enableTouchDebugHUD: false,
-  enableAutoLogin: true,
+  enableLoginAssist: true,
   enablePwaPrompt: false,
   enableVirtualKeyboard: false,
 
@@ -94,7 +94,8 @@ export const isStandaloneMode = () => {
 
 export const PLUGIN_PREF_KEY_MAP = {
   anti_idle: "enableAntiIdle",
-  auto_login: "enableAutoLogin",
+  login_assist: "enableLoginAssist",
+  auto_login: "enableLoginAssist",
   auto_wrap: "enableAutoWrap",
   easy_reading: "enableEasyReading",
   fps_meter: "enableFpsMeter",
@@ -132,6 +133,9 @@ const resolvePluginPrefKey = (key) => {
   const trimmed = String(key).trim();
   if (Object.prototype.hasOwnProperty.call(PLUGIN_PREF_KEY_MAP, trimmed)) {
     return PLUGIN_PREF_KEY_MAP[trimmed];
+  }
+  if (trimmed === "enableAutoLogin") {
+    return "enableLoginAssist";
   }
   if (Object.values(PLUGIN_PREF_KEY_MAP).includes(trimmed)) {
     return trimmed;
@@ -236,6 +240,12 @@ export const getDefaultVirtualKeyboard = () => {
 
 export const getDefaultPrefs = () => {
   const customDefaults = parseDefaultPrefs();
+  if (
+    customDefaults.enableLoginAssist === undefined &&
+    customDefaults.enableAutoLogin !== undefined
+  ) {
+    customDefaults.enableLoginAssist = Boolean(customDefaults.enableAutoLogin);
+  }
   return {
     ...DEFAULT_PREFS,
     enablePwaPrompt: getDefaultPwaPrompt(),
@@ -308,6 +318,9 @@ export const readValuesWithDefault = () => {
       }
       if (saved.enableMediaPreviewer === undefined && saved.enablePicPreview !== undefined) {
         prefs.enableMediaPreviewer = Boolean(saved.enablePicPreview);
+      }
+      if (saved.enableLoginAssist === undefined && saved.enableAutoLogin !== undefined) {
+        prefs.enableLoginAssist = Boolean(saved.enableAutoLogin);
       }
       if (saved.liveUpdateInterval !== undefined) {
         const parsedInterval = parseInt(saved.liveUpdateInterval, 10);
@@ -383,7 +396,14 @@ export const updatePrefs = (patch) => {
       if (!obj.values) {
         obj.values = {};
       }
-      Object.assign(obj.values, patch);
+      const nextPatch = { ...patch };
+      if (nextPatch.enableAutoLogin !== undefined && nextPatch.enableLoginAssist === undefined) {
+        nextPatch.enableLoginAssist = Boolean(nextPatch.enableAutoLogin);
+      }
+      Object.assign(obj.values, nextPatch);
+      if (nextPatch.enableLoginAssist !== undefined && "enableAutoLogin" in obj.values) {
+        delete obj.values.enableAutoLogin;
+      }
       window.localStorage.setItem(PREF_STORAGE_KEY, JSON.stringify(obj));
       return obj.values;
     }

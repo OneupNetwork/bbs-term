@@ -19,7 +19,7 @@ This repository powers the official web client running at
   Solarized Dark, Nord, Monokai, Dracula, Amber/Green CRT) plus a customizable
   16-color ANSI palette.
 - **Extensible Plugin System**: Modular plugins for mouse browsing, image
-  preview, easy reading mode, and auto-login.
+  preview, easy reading mode, and login assist.
 - **PWA Ready**: Installable Progressive Web App with standalone display
   support and responsive layout.
 - **Modern Toolchain**: Built with Preact, Vite, and an automated Node.js test

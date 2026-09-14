@@ -3856,13 +3856,13 @@ test('IME composition styling applies across all browsers and initial focus succ
   assert.ok(canvasScreenSource.includes('this.props.setInputAreaFocus(true)'), 'CanvasScreen handleGlobalMouseUp must call setInputAreaFocus(true)');
 
   // 5. LoginModal must use about:blank for target iframe src and action="#" on form so Firefox LoginManager gets a valid formActionOrigin
-  const loginModalSource = fs.readFileSync(path.resolve('src/plugins/auto_login/LoginModal.js'), 'utf-8');
+  const loginModalSource = fs.readFileSync(path.resolve('src/plugins/login_assist/LoginModal.js'), 'utf-8');
   assert.ok(loginModalSource.includes('action="#"'), 'LoginModal form action must be "#" (same-origin) so Firefox LoginManager can save and autofill');
   assert.ok(!loginModalSource.includes('action="about:blank"'), 'LoginModal form action must not be about:blank which breaks Firefox formActionOrigin');
   assert.ok(loginModalSource.includes('src="about:blank"'), 'LoginModal iframe src must be about:blank');
   assert.ok(mainSource.includes("window.name === 'site_auth_target_frame'"), 'main.js must guard startApp against running inside site_auth_target_frame');
 
-  // 6. NativeDialog and AutoLogin must schedule focus restoration after dialog.close()
+  // 6. NativeDialog and LoginAssist must schedule focus restoration after dialog.close()
   const nativeDialogSource = fs.readFileSync(path.resolve('src/components/NativeDialog.js'), 'utf-8');
   assert.ok(nativeDialogSource.includes('window.app.setInputAreaFocus?.(true)'), 'NativeDialog must restore focus after dialog.close()');
 });
