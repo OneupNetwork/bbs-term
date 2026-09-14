@@ -20,6 +20,17 @@ dialog.LiveHelperModal__Dialog {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     "PingFang TC", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+dialog.LiveHelperModal__Dialog.LiveHelperModal__Dialog--active {
+  border-color: rgba(52, 199, 89, 0.55);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(52, 199, 89, 0.25),
+    0 4px 16px rgba(52, 199, 89, 0.18);
 }
 
 .LiveHelperModal__Body {
@@ -33,8 +44,95 @@ dialog.LiveHelperModal__Dialog {
   font-weight: 500;
 }
 
+.LiveHelperModal__Body__ToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 78px;
+  padding: 5px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #48484a;
+  background-color: rgba(118, 118, 128, 0.14);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.LiveHelperModal__Body__ToggleBtn:hover,
+.LiveHelperModal__Body__ToggleBtn:focus {
+  color: #1d1d1f;
+  background-color: rgba(118, 118, 128, 0.22);
+  border-color: rgba(0, 0, 0, 0.16);
+}
+
+.LiveHelperModal__Body__ToggleBtn:active {
+  transform: scale(0.97);
+}
+
+.LiveHelperModal__Body__ToggleBtn--active,
+.LiveHelperModal__Body__ToggleBtn.active {
+  color: #ffffff;
+  background-color: #34c759;
+  border-color: #28a745;
+  font-weight: 600;
+  box-shadow:
+    0 2px 8px rgba(52, 199, 89, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.LiveHelperModal__Body__ToggleBtn--active:hover,
+.LiveHelperModal__Body__ToggleBtn--active:focus,
+.LiveHelperModal__Body__ToggleBtn.active:hover,
+.LiveHelperModal__Body__ToggleBtn.active:focus {
+  color: #ffffff;
+  background-color: #2db84d;
+  border-color: #249e3f;
+  box-shadow:
+    0 3px 10px rgba(52, 199, 89, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.LiveHelperModal__Body__StatusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #8e8e93;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.LiveHelperModal__Body__ToggleBtn--active .LiveHelperModal__Body__StatusDot,
+.LiveHelperModal__Body__ToggleBtn.active .LiveHelperModal__Body__StatusDot {
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+  animation: liveHelperDotPulse 1.6s infinite ease-in-out;
+}
+
+@keyframes liveHelperDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.15);
+  }
+}
+
 .LiveHelperModal__Body__Text {
   margin: 0 6px;
+  transition: color 0.2s ease;
+}
+
+.LiveHelperModal__Body--inactive .LiveHelperModal__Body__Text {
+  color: #6e6e73;
+}
+
+.LiveHelperModal__Body--active .LiveHelperModal__Body__Text {
+  color: #1d1d1f;
 }
 
 .LiveHelperModal__Body__Input {
@@ -73,4 +171,3 @@ dialog.LiveHelperModal__Dialog {
   background: #d2d2d7;
   color: #1d1d1f;
 }
-

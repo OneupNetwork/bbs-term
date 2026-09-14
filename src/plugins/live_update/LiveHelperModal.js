@@ -89,19 +89,28 @@ export class LiveHelperModal extends Component {
 
     return (
       <NativeDialog
-        className="LiveHelperModal__Dialog"
+        className={cx('LiveHelperModal__Dialog', {
+          'LiveHelperModal__Dialog--active': active,
+        })}
         open={show}
         modal={false}
         style={style}
       >
         <div
-          className="LiveHelperModal__Body"
+          className={cx('LiveHelperModal__Body', {
+            'LiveHelperModal__Body--active': active,
+            'LiveHelperModal__Body--inactive': !active,
+          })}
           style={{ cursor: 'move' }}
           onMouseDown={this.handleMouseDown}
         >
           <button
             type="button"
-            className={cx('btn btn-default nomouse_command', { active })}
+            className={cx('btn btn-default nomouse_command LiveHelperModal__Body__ToggleBtn', {
+              active,
+              'LiveHelperModal__Body__ToggleBtn--active': active,
+            })}
+            aria-pressed={Boolean(active)}
             title="Alt + r"
             style={{ cursor: 'pointer' }}
             onClick={(e) => {
@@ -109,7 +118,10 @@ export class LiveHelperModal extends Component {
               onToggle?.();
             }}
           >
-            {_('liveHelperEnable')}
+            <span className="LiveHelperModal__Body__StatusDot" aria-hidden="true" />
+            <span className="LiveHelperModal__Body__ToggleText">
+              {active ? _('liveHelperStateEnabled') || _('liveHelperEnable') : _('liveHelperEnable')}
+            </span>
           </button>
           <span className="LiveHelperModal__Body__Text nomouse_command">
             {_('liveHelperSpan')}

@@ -68,7 +68,8 @@
   text-decoration: none;
 }
 
-.btn-default:active {
+.btn-default:active,
+.btn-default.active {
   background-color: #e5e5ea;
   border-color: #b0b0b5;
 }
