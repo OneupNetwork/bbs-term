@@ -426,6 +426,12 @@
   "options_mouseWheelTrackpadMode_desc": {
     "message": "平滑化觸控板捲動並吸收滑動慣性，避免一次捲動過多行數或誤觸。一般滑鼠使用者無須開啟。"
   },
+  "options_enableBackNavigation": {
+    "message": "支援瀏覽器「上一頁」與觸控板左滑返回"
+  },
+  "options_enableBackNavigation_desc": {
+    "message": "將觸控板雙指左滑手勢、滑鼠側鍵與瀏覽器返回鍵轉為左方向鍵（←），避免誤觸離開網站。"
+  },
   "options_mouseWheelAction_arrow1": {
     "message": "發送上下方向鍵 - 每次 1 行 (模擬按 1 次上 / 下鍵)"
   },

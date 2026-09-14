@@ -1,7 +1,10 @@
 import { PluginBase } from '../PluginBase.js';
 import { _ } from '../../js/i18n.js';
 import { PAGE_STATE } from '../../js/sites/index.js';
-import { isDiscreteMouseWheelEvent } from '../../js/mouse_controller.js';
+import {
+  isDiscreteMouseWheelEvent,
+  isHorizontalWheelEvent,
+} from '../../js/mouse_controller.js';
 
 export const INFLIGHT_WATCHDOG_MS = 1500;
 export const MAX_INFLIGHT_RETRIES = 2;
@@ -317,7 +320,46 @@ export class EasyReading extends PluginBase {
     return !!(this.overlay && this.overlay.style.display !== 'none');
   }
 
+  _cancelPendingHide() {
+    if (this._deferredHideRaf) {
+      if (
+        typeof window !== 'undefined' &&
+        typeof window.cancelAnimationFrame === 'function'
+      ) {
+        window.cancelAnimationFrame(this._deferredHideRaf);
+      } else {
+        this.clearTimeout(this._deferredHideRaf);
+      }
+      this._deferredHideRaf = null;
+    }
+    if (this._exitFallbackTimer) {
+      this.clearTimeout(this._exitFallbackTimer);
+      this._exitFallbackTimer = null;
+    }
+  }
+
+  scheduleHide() {
+    if (!this.isActive()) return;
+    if (
+      typeof window === 'undefined' ||
+      typeof window.requestAnimationFrame !== 'function'
+    ) {
+      this.hide();
+      return;
+    }
+    if (this._deferredHideRaf) return;
+    this._deferredHideRaf = window.requestAnimationFrame(() => {
+      this._deferredHideRaf = window.requestAnimationFrame(() => {
+        this._deferredHideRaf = null;
+        if (this.site?.pageState !== PAGE_STATE.READING) {
+          this.hide();
+        }
+      });
+    });
+  }
+
   show() {
+    this._cancelPendingHide();
     if (!this._overlay && typeof document !== 'undefined') {
       const container = this.view?.termWin || document.getElementById('TermWindow');
       if (container) {
@@ -336,6 +378,7 @@ export class EasyReading extends PluginBase {
   }
 
   hide() {
+    this._cancelPendingHide();
     this._resetInFlight();
     this._temporarilyHidden = false;
     if (this.overlay) {
@@ -575,7 +618,7 @@ export class EasyReading extends PluginBase {
         // deep clone lines for selection (getRowText and get ansi color)
         this.pageLines = JSON.parse(JSON.stringify(this.buf.lines.slice(0, lastRowNum)));
       } else {
-        this.hide();
+        this.scheduleHide();
       }
       site.prevPageState = site.pageState;
     }
@@ -794,6 +837,20 @@ export class EasyReading extends PluginBase {
     if (this.site) {
       this.site.prevPageState = PAGE_STATE.NORMAL;
     }
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.requestAnimationFrame === 'function'
+    ) {
+      if (this._exitFallbackTimer) {
+        this.clearTimeout(this._exitFallbackTimer);
+      }
+      this._exitFallbackTimer = this.setTimeout(() => {
+        this._exitFallbackTimer = null;
+        if (this.site?.pageState !== PAGE_STATE.READING) {
+          this.hide();
+        }
+      }, 300);
+    }
   }
 
   stopEasyReading() {
@@ -923,7 +980,7 @@ export class EasyReading extends PluginBase {
           break;
         case 'ArrowLeft':
           this.stopEasyReading();
-          this.hide();
+          this.leaveCurrentPost();
           break;
         case 'ArrowUp':
           stop = this._scrollBy(-1);
@@ -998,7 +1055,7 @@ export class EasyReading extends PluginBase {
     switch (mouseCursor) {
       case 1: // Arrow Left
         this.stopEasyReading();
-        this.hide();
+        this.leaveCurrentPost();
         this._send('\x1b[D');
         stop = true;
         break;
@@ -1038,7 +1095,7 @@ export class EasyReading extends PluginBase {
     switch (cmd) {
       case "doLeft":
         this.stopEasyReading();
-        this.hide();
+        this.leaveCurrentPost();
         this._send('\x1b[D');
         return true;
       case "doHome":
@@ -1110,6 +1167,9 @@ export class EasyReading extends PluginBase {
   }
 
   handleWheel(e) {
+    if (isHorizontalWheelEvent(e)) {
+      return false;
+    }
     const now = Date.now();
     const trackpadMode = Boolean(this.app?.mouseWheelTrackpadMode);
     const isTrackpad =

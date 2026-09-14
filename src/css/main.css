@@ -175,7 +175,8 @@ span[data-type="termline"],
   padding-left: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
   padding-right: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
   box-sizing: border-box;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
+  overscroll-behavior-x: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.25) rgba(0, 0, 0, 0.2);
 }
@@ -301,7 +302,8 @@ body {
   margin: 0px;
   padding: 0px;
   overflow: hidden;
-  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: auto;
   touch-action: none;
 }
 

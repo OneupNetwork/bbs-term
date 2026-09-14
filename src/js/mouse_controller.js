@@ -17,6 +17,21 @@ export function isDiscreteMouseWheelEvent(e) {
   return absY >= 100;
 }
 
+export function isHorizontalWheelEvent(e, dominance = 1.5) {
+  if (!e) return false;
+  let dx = Math.abs(Number(e.deltaX) || 0);
+  let dy = Math.abs(Number(e.deltaY) || 0);
+  const mode = Number(e.deltaMode) || 0;
+  if (mode === 1) {
+    dx *= 16;
+    dy *= 16;
+  } else if (mode === 2) {
+    dx *= 800;
+    dy *= 800;
+  }
+  return dx > 0 && dx > dominance * dy;
+}
+
 export class MouseController {
   constructor(app, options = {}) {
     this.app = app;
@@ -336,6 +351,10 @@ export class MouseController {
       }
     }
 
+    if (isHorizontalWheelEvent(e)) {
+      return;
+    }
+
     const interceptorHandled = app.inputInterceptors?.dispatchWheel(e);
     if (interceptorHandled) {
       if (interceptorHandled === 'suppress') {
@@ -372,6 +391,7 @@ export class MouseController {
   handleWheelAction(e) {
     const app = this.app;
     if (!app || !e) return false;
+    if (isHorizontalWheelEvent(e)) return false;
 
     if (app.contextMenuShown) {
       this.rightButtonDown = false;
