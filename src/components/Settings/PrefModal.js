@@ -571,7 +571,10 @@ export class PrefModal extends React.Component {
 
   replacements = {
     link_github_iamchucky: link("Chuck Yang", "https://github.com/iamchucky"),
-    link_github_robertabcd: link("robertabcd", "https://github.com/robertabcd"),
+    link_github_robertabcd: link(
+      "Robert Wang",
+      "https://github.com/robertabcd",
+    ),
     link_github_iid: link(
       "Wei-Cheng Yeh (IID)",
       "https://github.com/IepIweidieng",
