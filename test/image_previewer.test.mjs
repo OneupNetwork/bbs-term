@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   TRUSTED_IMAGE_DOMAINS,
+  mergeTrustedDomainsWithNewDefaults,
   isTrustedImageDomain,
   resolveImageUrl,
   getImageRenderedSize,
@@ -332,3 +333,185 @@ test("getSharedImageObserver manages shared singleton with rootMargin", () => {
     resetSharedImageObserverForTest();
   }
 });
+
+test("normalizeDomain and parseTrustedDomains clean and deduplicate domain inputs", async () => {
+  const { normalizeDomain, parseTrustedDomains } = await import(
+    "../src/plugins/media_previewer/image_preview_util.js"
+  );
+
+  assert.equal(normalizeDomain("  IMGUR.COM  "), "imgur.com");
+  assert.equal(normalizeDomain("https://i.imgur.com/abc.jpg"), "i.imgur.com");
+  assert.equal(normalizeDomain("http://example.com:8080/path"), "example.com");
+  assert.equal(normalizeDomain(".sub.domain.org."), "sub.domain.org");
+  assert.equal(normalizeDomain(""), "");
+  assert.equal(normalizeDomain(null), "");
+
+  assert.deepEqual(
+    parseTrustedDomains(["imgur.com", "https://meee.com.tw/pic.png", "IMGUR.COM"]),
+    ["imgur.com", "meee.com.tw"],
+  );
+  assert.deepEqual(
+    parseTrustedDomains("foo.com, bar.org  baz.net"),
+    ["foo.com", "bar.org", "baz.net"],
+  );
+  assert.deepEqual(parseTrustedDomains(undefined), TRUSTED_IMAGE_DOMAINS);
+  assert.deepEqual(parseTrustedDomains([]), []);
+});
+
+test("isTrustedImageDomain and resolveImageUrl support custom trustedDomains list", () => {
+  const customList = ["my-custom-host.org", "cdn.another-host.net"];
+
+  assert.equal(isTrustedImageDomain("my-custom-host.org", customList), true);
+  assert.equal(isTrustedImageDomain("img.my-custom-host.org", customList), true);
+  assert.equal(isTrustedImageDomain("imgur.com", customList), false);
+
+  assert.equal(
+    resolveImageUrl("https://img.my-custom-host.org/pic.png", true, customList),
+    "https://img.my-custom-host.org/pic.png",
+  );
+  assert.equal(
+    resolveImageUrl("https://i.imgur.com/pic.png", true, customList),
+    null,
+  );
+});
+
+test("TrustedDomainManager allows adding, removing, and restoring default domains, and integrates with MediaPreviewer.renderOptions", async () => {
+  const { MediaPreviewer, TrustedDomainManager } = await import(
+    "../src/plugins/media_previewer/MediaPreviewer.js"
+  );
+  const { EventEmitter } = await import("../src/js/event.js");
+
+  let currentDomains = ["imgur.com", "meee.com.tw"];
+  const manager = new TrustedDomainManager({
+    value: currentDomains,
+    onChange: (next) => {
+      currentDomains = next;
+    },
+  });
+
+  assert.deepEqual(manager.getDomainList(), ["imgur.com", "meee.com.tw"]);
+
+  // 1. Add a new domain (including URL normalization)
+  manager.state.customInput = "https://custom-pic.tw/test.jpg, imgur.com";
+  manager.handleAdd();
+  assert.deepEqual(currentDomains, ["imgur.com", "meee.com.tw", "custom-pic.tw"]);
+
+  // 2. Remove a domain by index
+  manager.props.value = currentDomains;
+  manager.handleRemove(1); // remove meee.com.tw
+  assert.deepEqual(currentDomains, ["imgur.com", "custom-pic.tw"]);
+
+  // 3. Restore default domains
+  manager.props.value = currentDomains;
+  manager.handleRestoreDefault();
+  assert.deepEqual(currentDomains, TRUSTED_IMAGE_DOMAINS);
+
+  // 4. Verify MediaPreviewer.renderOptions renders TrustedDomainManager and updates picPreviewTrustedDomains
+  let changedKey = null;
+  let changedVal = null;
+  const rendered = MediaPreviewer.renderOptions({
+    values: {
+      picPreviewWhitelistOnly: true,
+      picPreviewTrustedDomains: ["custom1.com"],
+    },
+    handleCheckboxChange: () => {},
+    handleValueChange: (key, val) => {
+      changedKey = key;
+      changedVal = val;
+    },
+  });
+  const children = Array.isArray(rendered.props.children)
+    ? rendered.props.children
+    : [rendered.props.children];
+  const domainManagerEl = children.find(
+    (c) => c && c.type === TrustedDomainManager,
+  );
+  assert(domainManagerEl, "MediaPreviewer.renderOptions should render TrustedDomainManager");
+  assert.deepEqual(domainManagerEl.props.value, ["custom1.com"]);
+
+  domainManagerEl.props.onChange(["custom1.com", "custom2.org"]);
+  assert.equal(changedKey, "picPreviewTrustedDomains");
+  assert.deepEqual(changedVal, ["custom1.com", "custom2.org"]);
+
+  // 5. Verify MediaPreviewer runtime responds to term:pref-change for picPreviewTrustedDomains
+  const mockApp = new EventEmitter();
+  mockApp.prefValues = {
+    enableMediaPreviewer: true,
+    picPreviewWhitelistOnly: true,
+    picPreviewTrustedDomains: ["only-this-host.com"],
+  };
+  const plugin = new MediaPreviewer(mockApp, { enabled: true });
+  plugin.init({ app: mockApp });
+  assert.equal(
+    plugin.resolveImageUrl("https://only-this-host.com/a.jpg"),
+    "https://only-this-host.com/a.jpg",
+  );
+  assert.equal(
+    plugin.resolveImageUrl("https://i.imgur.com/a.jpg"),
+    null,
+  );
+
+  mockApp.emit("term:pref-change", {
+    key: "picPreviewTrustedDomains",
+    value: ["i.imgur.com"],
+  });
+  assert.equal(
+    plugin.resolveImageUrl("https://i.imgur.com/a.jpg"),
+    "https://i.imgur.com/a.jpg",
+  );
+  assert.equal(
+    plugin.resolveImageUrl("https://only-this-host.com/a.jpg"),
+    null,
+  );
+});
+
+test("mergeTrustedDomainsWithNewDefaults auto-adds newly introduced default domains while preserving user edits", async () => {
+  // Simulate user who deleted 'imgtok.com' and 'meee.com.tw' from original defaults, and added 'my-custom.site'
+  const userSavedDomains = [
+    "imgur.com",
+    "duk.tw",
+    "upload.cc",
+    "ibb.co",
+    "imgbb.com",
+    "postimg.cc",
+    "twimg.com",
+    "gyazo.com",
+    "my-custom.site",
+  ];
+  const savedKnownDefaults = [...TRUSTED_IMAGE_DOMAINS];
+
+  // Future version adds two new default sites: 'new-host-1.com' and 'new-host-2.org'
+  const futureDefaults = [
+    ...TRUSTED_IMAGE_DOMAINS,
+    "new-host-1.com",
+    "new-host-2.org",
+  ];
+
+  const merged = mergeTrustedDomainsWithNewDefaults(
+    userSavedDomains,
+    savedKnownDefaults,
+    futureDefaults,
+  );
+
+  // 1. User's custom site is preserved
+  assert(merged.includes("my-custom.site"), "Custom domain should be preserved");
+  // 2. Deleted default sites remain deleted
+  assert(!merged.includes("imgtok.com"), "Deleted default imgtok.com should stay deleted");
+  assert(!merged.includes("meee.com.tw"), "Deleted default meee.com.tw should stay deleted");
+  // 3. Newly added default sites are automatically appended
+  assert(merged.includes("new-host-1.com"), "New default new-host-1.com should be added");
+  assert(merged.includes("new-host-2.org"), "New default new-host-2.org should be added");
+
+  // Legacy save fallback (when savedKnownDefaults is undefined)
+  const mergedLegacy = mergeTrustedDomainsWithNewDefaults(
+    userSavedDomains,
+    undefined,
+    futureDefaults,
+  );
+  assert(!mergedLegacy.includes("imgtok.com"), "Legacy save deleted default should stay deleted");
+  assert(mergedLegacy.includes("my-custom.site"), "Legacy save custom domain should be preserved");
+  assert(mergedLegacy.includes("new-host-1.com"), "Legacy save should receive newly added default domain");
+});
+
+
+

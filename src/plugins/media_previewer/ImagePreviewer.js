@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "preact/compat";
 import {
   TRUSTED_IMAGE_DOMAINS,
+  normalizeDomain,
+  parseTrustedDomains,
   isTrustedImageDomain,
   resolveImageUrl,
   getImageRenderedSize,
@@ -20,6 +22,8 @@ const h = React.createElement;
 
 export {
   TRUSTED_IMAGE_DOMAINS,
+  normalizeDomain,
+  parseTrustedDomains,
   isTrustedImageDomain,
   resolveImageUrl,
   getImageRenderedSize,
@@ -36,8 +40,12 @@ export {
 
 export const of = async (src) => ({ src });
 
-export const resolveSrcToImageUrl = async ({ src }, whitelistOnly = true) => {
-  const directSrc = resolveImageUrl(src, whitelistOnly);
+export const resolveSrcToImageUrl = async (
+  { src },
+  whitelistOnly = true,
+  trustedDomains = TRUSTED_IMAGE_DOMAINS,
+) => {
+  const directSrc = resolveImageUrl(src, whitelistOnly, trustedDomains);
   if (!directSrc) throw new Error("Unsupported image URL");
   return { src: directSrc };
 };
@@ -376,8 +384,12 @@ ImagePreviewer.HoverPreview = ({ request, href, left, top }) => {
   });
 };
 
-export const createImagePreviewRequest = (href, whitelistOnly = true) => {
-  const directSrc = resolveImageUrl(href, whitelistOnly);
+export const createImagePreviewRequest = (
+  href,
+  whitelistOnly = true,
+  trustedDomains = TRUSTED_IMAGE_DOMAINS,
+) => {
+  const directSrc = resolveImageUrl(href, whitelistOnly, trustedDomains);
   if (!directSrc) return null;
   return getCachedImageRequest(directSrc);
 };

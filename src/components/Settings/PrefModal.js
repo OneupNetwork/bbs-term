@@ -1823,6 +1823,11 @@ export class PrefModal extends React.Component {
                                 handleCheckboxChange: this.handleCheckboxChange,
                                 handleNumberInputChange: this.handleNumberInputChange,
                                 handleSelectChange: this.handleSelectChange,
+                                handleTextInputChange: this.handleTextInputChange,
+                                handleValueChange: (name, value) =>
+                                  this.handleTextInputChange({
+                                    target: { name, value },
+                                  }),
                               })
                             ) : null}
                           </div>

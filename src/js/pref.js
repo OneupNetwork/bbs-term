@@ -1,6 +1,14 @@
+import {
+  TRUSTED_IMAGE_DOMAINS,
+  parseTrustedDomains,
+  mergeTrustedDomainsWithNewDefaults,
+} from "../plugins/media_previewer/image_preview_util.js";
+
 export const DEFAULT_PREFS = {
   enableMediaPreviewer: true,
   picPreviewWhitelistOnly: true,
+  picPreviewTrustedDomains: [...TRUSTED_IMAGE_DOMAINS],
+  picPreviewKnownDefaults: [...TRUSTED_IMAGE_DOMAINS],
   enableBell: "always",
   enableVisualBell: false,
   warnBeforeClose: true,
@@ -276,6 +284,11 @@ export const getDefaultPrefs = () => {
       customDefaults.customForcePlainText ?? DEFAULT_PREFS.customForcePlainText,
     minimumContrast:
       customDefaults.minimumContrast ?? DEFAULT_PREFS.minimumContrast,
+    picPreviewTrustedDomains:
+      customDefaults.picPreviewTrustedDomains !== undefined
+        ? parseTrustedDomains(customDefaults.picPreviewTrustedDomains)
+        : [...DEFAULT_PREFS.picPreviewTrustedDomains],
+    picPreviewKnownDefaults: [...DEFAULT_PREFS.picPreviewKnownDefaults],
   };
 };
 
@@ -294,6 +307,14 @@ export const readValuesWithDefault = () => {
         ...(saved && saved.termSize),
       },
     };
+    if (saved && saved.picPreviewTrustedDomains !== undefined) {
+      prefs.picPreviewTrustedDomains = mergeTrustedDomainsWithNewDefaults(
+        saved.picPreviewTrustedDomains,
+        saved.picPreviewKnownDefaults,
+        TRUSTED_IMAGE_DOMAINS
+      );
+      prefs.picPreviewKnownDefaults = [...TRUSTED_IMAGE_DOMAINS];
+    }
     if (saved && Array.isArray(saved.customColors) && saved.customColors.length === 16) {
       prefs.customColors = [...saved.customColors];
     }
@@ -376,6 +397,9 @@ export const readValuesWithDefault = () => {
 };
 
 export const writeValues = (values) => {
+  if (values && values.picPreviewTrustedDomains !== undefined) {
+    values.picPreviewKnownDefaults = [...TRUSTED_IMAGE_DOMAINS];
+  }
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.setItem(
@@ -400,6 +424,9 @@ export const updatePrefs = (patch) => {
       const nextPatch = { ...patch };
       if (nextPatch.enableAutoLogin !== undefined && nextPatch.enableLoginAssist === undefined) {
         nextPatch.enableLoginAssist = Boolean(nextPatch.enableAutoLogin);
+      }
+      if (nextPatch.picPreviewTrustedDomains !== undefined) {
+        nextPatch.picPreviewKnownDefaults = [...TRUSTED_IMAGE_DOMAINS];
       }
       Object.assign(obj.values, nextPatch);
       if (nextPatch.enableLoginAssist !== undefined && "enableAutoLogin" in obj.values) {

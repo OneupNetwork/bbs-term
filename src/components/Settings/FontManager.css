@@ -238,3 +238,21 @@
   color: #ff3b30;
 }
 
+.FontManager--compact {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.FontManager--compact .FontManager__List {
+  height: auto;
+  max-height: 168px;
+}
+
+.FontManager--compact .FontManager__Item {
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  padding: 4px 10px;
+}
+
+
