@@ -100,13 +100,22 @@ a:hover {
 .main > span,
 #mainContainer > span,
 #easyReadingContent > span,
+span[type="termrow"],
+#easyReadingLastRow > span,
+#easyReadingReplyRow > span {
+  display: block;
+  min-height: var(--term-chh, auto);
+  line-height: var(--term-chh, 100%);
+  color: #c0c0c0;
+  white-space: pre;
+}
+
+span[data-type="termline"],
 #easyReadingLastRow > span,
 #easyReadingReplyRow > span {
   display: block;
   height: var(--term-chh, auto);
   line-height: var(--term-chh, 100%);
-  color: #c0c0c0;
-  white-space: pre;
 }
 
 #screenContainer,

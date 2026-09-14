@@ -1,5 +1,18 @@
 import { EventEmitter } from './event.js';
 
+function markEventHandled(e) {
+  if (!e) return;
+  e.handled = true;
+  e.preventDefault?.();
+  if (!e.defaultPrevented) {
+    try {
+      e.defaultPrevented = true;
+    } catch (_) {
+      // Native DOM Event has only a getter for defaultPrevented
+    }
+  }
+}
+
 export class InputInterceptors extends EventEmitter {
   constructor(app) {
     super();
@@ -149,9 +162,7 @@ export class InputInterceptors extends EventEmitter {
     if (typeof interceptor.handleMouseClick === 'function') {
       const fn = (e) => {
         if (interceptor.handleMouseClick(e) && e) {
-          e.defaultPrevented = true;
-          e.handled = true;
-          e.preventDefault?.();
+          markEventHandled(e);
         }
       };
       this.on('mouseClick', fn);
@@ -161,9 +172,7 @@ export class InputInterceptors extends EventEmitter {
     if (typeof interceptor.handleMouseDown === 'function') {
       const fn = (e) => {
         if (interceptor.handleMouseDown(e) && e) {
-          e.defaultPrevented = true;
-          e.handled = true;
-          e.preventDefault?.();
+          markEventHandled(e);
         }
       };
       this.on('mouseDown', fn);
@@ -173,9 +182,7 @@ export class InputInterceptors extends EventEmitter {
     if (typeof interceptor.handleMouseUp === 'function') {
       const fn = (e) => {
         if (interceptor.handleMouseUp(e) && e) {
-          e.defaultPrevented = true;
-          e.handled = true;
-          e.preventDefault?.();
+          markEventHandled(e);
         }
       };
       this.on('mouseUp', fn);
@@ -185,9 +192,7 @@ export class InputInterceptors extends EventEmitter {
     if (typeof interceptor.handleKeyDown === 'function') {
       const fn = (e) => {
         if (interceptor.handleKeyDown(e) && e) {
-          e.defaultPrevented = true;
-          e.handled = true;
-          e.preventDefault?.();
+          markEventHandled(e);
         }
       };
       this.on('keyDown', fn);
@@ -197,9 +202,7 @@ export class InputInterceptors extends EventEmitter {
     if (typeof interceptor.handleTextInput === 'function') {
       const fn = (e) => {
         if (interceptor.handleTextInput(e) && e) {
-          e.defaultPrevented = true;
-          e.handled = true;
-          e.preventDefault?.();
+          markEventHandled(e);
         }
       };
       this.on('textInput', fn);

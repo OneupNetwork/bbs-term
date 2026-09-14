@@ -225,6 +225,9 @@ export class EasyReading extends PluginBase {
     if (this._content && this._onContentScroll) {
       this.unlisten(this._content, 'scroll', this._onContentScroll);
     }
+    if (this._content && this._onContentLoad) {
+      this.unlisten(this._content, 'load', this._onContentLoad);
+    }
 
     const existing =
       container.querySelector?.('#easyReadingOverlay') ||
@@ -260,6 +263,12 @@ export class EasyReading extends PluginBase {
       this.updateProgress();
     };
     this.listenWhileEnabled(easyReadingContent, 'scroll', this._onContentScroll);
+    this._onContentLoad = (e) => {
+      if (e?.target?.tagName === 'IMG') {
+        this.updateProgress();
+      }
+    };
+    this.listenWhileEnabled(easyReadingContent, 'load', this._onContentLoad, { capture: true });
 
     const easyReadingFooter = document.createElement('div');
     easyReadingFooter.setAttribute('id', 'easyReadingFooter');
@@ -426,6 +435,9 @@ export class EasyReading extends PluginBase {
       ? (href, key) => {
           if (typeof this.view.renderInlineHyperlinkPreview === 'function') {
             return this.view.renderInlineHyperlinkPreview(href, key);
+          }
+          if (typeof this.view.resolveInlineHyperlinkPreview === 'function') {
+            return this.view.resolveInlineHyperlinkPreview(href, key);
           }
           return this.view.resolveHyperlinkPreview(href);
         }

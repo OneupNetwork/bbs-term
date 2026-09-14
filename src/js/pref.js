@@ -304,6 +304,9 @@ export const readValuesWithDefault = () => {
       if (saved.enableMouseBrowsing === undefined && saved.useMouseBrowsing !== undefined) {
         prefs.enableMouseBrowsing = Boolean(saved.useMouseBrowsing);
       }
+      if (saved.enableMediaPreviewer === undefined && saved.enablePicPreview !== undefined) {
+        prefs.enableMediaPreviewer = Boolean(saved.enablePicPreview);
+      }
       if (saved.liveUpdateInterval !== undefined) {
         const parsedInterval = parseInt(saved.liveUpdateInterval, 10);
         prefs.liveUpdateInterval = parsedInterval > 0 ? parsedInterval : 1;

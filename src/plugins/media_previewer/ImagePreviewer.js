@@ -51,8 +51,8 @@ export const resolveWithImageDOM = ({ src }, timeoutMs = 10000) =>
       if (timer) clearTimeout(timer);
       resolve({
         src,
-        height: img.height,
-        width: img.width,
+        height: img.naturalHeight || img.height,
+        width: img.naturalWidth || img.width,
       });
     };
     img.onerror = () => {
@@ -270,8 +270,9 @@ ImagePreviewer.OnHover = ({ left, top, value, error, href }) => {
         loading: "lazy",
         style: {
           display: "block",
-          width: renderedSize.width,
-          height: renderedSize.height,
+          ...(renderedSize.width > 0 && renderedSize.height > 0
+            ? { width: renderedSize.width, height: renderedSize.height }
+            : {}),
           maxHeight: "80vh",
           maxWidth: "90vw",
           pointerEvents: "none",
