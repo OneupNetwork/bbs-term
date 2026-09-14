@@ -758,6 +758,10 @@ export class TermView extends EventEmitter {
   }
 
   clientToPos(cX, cY) {
+    const customPos = this.app?.inputInterceptors?.getClientToPos?.(cX, cY);
+    if (customPos) {
+      return customPos;
+    }
     const origin = this._getGridOrigin();
     const x = cX - origin[0];
     const y = cY - origin[1];
@@ -859,7 +863,19 @@ export class TermView extends EventEmitter {
 
   updateCursorPos() {
     if (!this.cursor) return;
-    const pos = this.convertMN2XYEx(this.buf.cur_x, this.buf.cur_y);
+    const customCursor = this.app?.inputInterceptors?.getCursorPos?.(
+      this.buf.cur_x,
+      this.buf.cur_y
+    );
+    if (customCursor === 'hide') {
+      this.cursor.style.display = 'none';
+      this.updateInputBufferPos();
+      return;
+    }
+    this.cursor.style.display = '';
+    const pos = Array.isArray(customCursor)
+      ? customCursor
+      : this.convertMN2XYEx(this.buf.cur_x, this.buf.cur_y);
     // if you want to set cursor color by now background, use this.
     if (this.buf.cur_y >= this.buf.rows || this.buf.cur_x >= this.buf.cols)
       return; //sometimes, the value of this.buf.cur_x is 80 :(
@@ -920,7 +936,13 @@ export class TermView extends EventEmitter {
 
   updateInputBufferPos() {
     if (!this.input) return;
-    const pos = this.convertMN2XYEx(this.buf.cur_x, this.buf.cur_y);
+    const customCursor = this.app?.inputInterceptors?.getCursorPos?.(
+      this.buf.cur_x,
+      this.buf.cur_y
+    );
+    const pos = Array.isArray(customCursor)
+      ? customCursor
+      : this.convertMN2XYEx(this.buf.cur_x, this.buf.cur_y);
     if (this.input.getAttribute('bshow') == '1') {
       const lines = this.buf.lines;
       const line = lines ? lines[this.buf.cur_y] : null;
@@ -1357,6 +1379,7 @@ export class TermView extends EventEmitter {
     el.setAttribute('type', 'termrow');
     el.setAttribute('srow', '0');
     target.appendChild(el);
-    return renderRowHtml(row, 0, this.chh, false, el);
+    const forceWidth = this.fontSizePx || (this.chw ? this.chw * 2 : this.chh);
+    return renderRowHtml(row, 0, forceWidth, false, el);
   }
 }

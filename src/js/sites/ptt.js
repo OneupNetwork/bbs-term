@@ -156,9 +156,35 @@ export class PttSite extends BaseSite {
     conn.sendNop();
   }
 
-  getPagingSlice(termBuf, statusResult, actualRowIndex, pageLines = termBuf?.pageLines || []) {
+  getPagingSlice(
+    termBuf,
+    statusResult,
+    actualRowIndex,
+    pageLines = termBuf?.pageLines || [],
+    pageWrappedLines = 0
+  ) {
     let lastRowNum = this.getLastRowNum(termBuf);
+    if (
+      statusResult &&
+      typeof statusResult.rowIndexStart === 'number' &&
+      statusResult.rowIndexStart === actualRowIndex &&
+      pageLines.length > 0
+    ) {
+      return {
+        beginIndex: 1,
+        atLastPage: false,
+      };
+    }
     let beginIndex = this.findContentOverlap(termBuf, lastRowNum, pageLines);
+    if (
+      beginIndex === 0 &&
+      statusResult &&
+      typeof statusResult.rowIndexEnd === 'number'
+    ) {
+      let numRows =
+        statusResult.rowIndexEnd - actualRowIndex + 1 + pageWrappedLines;
+      beginIndex = Math.max(0, Math.min(lastRowNum, lastRowNum - numRows));
+    }
     return {
       beginIndex,
       atLastPage: true,
@@ -233,7 +259,7 @@ export class PttSite extends BaseSite {
         case 'q':
         case 'Q':
           easyReading.stopEasyReading();
-          easyReading.hide();
+          easyReading.leaveCurrentPost();
           easyReading.send('\x1b[D');
           return true;
       }

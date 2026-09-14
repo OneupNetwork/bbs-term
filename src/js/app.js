@@ -614,6 +614,7 @@ export class App extends EventEmitter {
     if (!this.lastSelection) return;
     const ansiText = this.buf.getSelectionText(this.lastSelection, {
       color: true,
+      lines: this.lastSelection.lines,
     });
     this.doCopy(ansiText);
   }
@@ -1023,22 +1024,35 @@ export class App extends EventEmitter {
       case 'doPageDown':
         this.send('\x1b[6~');
         break;
+      case 'doLeft':
+        this.send('\x1b[D');
+        break;
+      case 'doRight':
+        this.send('\x1b[C');
+        break;
+      case 'doEnter':
+        this.send('\r');
+        break;
+      case 'doHome':
+        this.send('\x1b[1~');
+        break;
+      case 'doEnd':
+        this.send('\x1b[4~');
+        break;
       case 'previousThread':
-      case 'nextThread': {
-        const threadKey =
-          cmd === 'previousThread' ? 'prevThread' : 'nextThread';
+      case 'nextThread':
+      case 'firstThread':
+      case 'lastThreadList':
+      case 'lastThreadReading':
+      case 'refreshPost': {
+        let threadKey = cmd;
+        if (cmd === 'previousThread') threadKey = 'prevThread';
         const threadCmd = this.site?.getThreadCommand(threadKey);
         if (threadCmd) {
           this.send(threadCmd);
         }
         break;
       }
-      case 'doEnter':
-        this.send('\r');
-        break;
-      case 'doRight':
-        this.send('\x1b[C');
-        break;
       default:
         break;
     }
