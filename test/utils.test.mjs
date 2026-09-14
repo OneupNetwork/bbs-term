@@ -356,3 +356,15 @@ test('multi-line copy uses LF (\\n) instead of bare CR (\\r) in ClipboardManager
   assert.equal(canvasSelText, 'Row0Text\nRow1Text');
 });
 
+test('ContextMenu showMenuAt sets selEnabled to false when right-clicking URL without text selected', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const src = fs.readFileSync(path.resolve('src/components/ContextMenu/index.js'), 'utf-8');
+
+  assert.ok(
+    src.includes('const selEnabled = Boolean(selectedText);'),
+    'ContextMenu showMenuAt must set selEnabled = Boolean(selectedText) instead of !normalEnabled'
+  );
+});
+
+
