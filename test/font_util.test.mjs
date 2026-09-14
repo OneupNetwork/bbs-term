@@ -184,4 +184,61 @@ test("FontManager filters preset fonts by availability and validates custom font
   assert(enMessages.options_fontList_notFound?.message);
 });
 
+test("FontManager handleAdd places newly added font at top priority (index 0)", () => {
+  const fontManagerPath = path.resolve(
+    "src/components/Settings/FontManager.js",
+  );
+  const src = fs.readFileSync(fontManagerPath, "utf-8");
+  const handleAddMatch = src.match(/handleAdd = \(fontName\) => \{[\s\S]*?\n  \};/);
+  assert(handleAddMatch, "FontManager must define handleAdd method");
+
+  let updatedList = null;
+  const mockManager = {
+    state: {
+      isCustomInput: false,
+      selectedFont: "DFKai-SB",
+      customFontName: "",
+    },
+    getFontList: () => ["MingLiu", "monospace"],
+    updateFontList: (list) => {
+      updatedList = list;
+    },
+    setState: (s) => {
+      Object.assign(mockManager.state, s);
+    },
+  };
+
+  const fnBody = handleAddMatch[0]
+    .replace(/^handleAdd = \(fontName\) => \{/, "")
+    .replace(/\};$/, "");
+  const runHandleAdd = new Function(
+    "fontName",
+    "parseFontList",
+    "isFontAvailable",
+    "_",
+    fnBody,
+  ).bind(mockManager);
+
+  // 1. Add a new font -> placed at index 0
+  runHandleAdd(
+    undefined,
+    (s) => [s],
+    () => true,
+    (k) => k,
+  );
+  assert.deepEqual(updatedList, ["DFKai-SB", "MingLiu", "monospace"]);
+
+  // 2. Re-adding an existing lower-priority font moves it to index 0
+  mockManager.state.selectedFont = "monospace";
+  mockManager.getFontList = () => ["DFKai-SB", "MingLiu", "monospace"];
+  runHandleAdd(
+    undefined,
+    (s) => [s],
+    () => true,
+    (k) => k,
+  );
+  assert.deepEqual(updatedList, ["monospace", "DFKai-SB", "MingLiu"]);
+});
+
+
 
