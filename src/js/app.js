@@ -171,7 +171,12 @@ export class App extends EventEmitter {
     };
 
     window.addEventListener('beforeunload', (e) => {
-      if (this.warnBeforeClose && this.conn && this.conn.isConnected) {
+      if (
+        this.warnBeforeClose &&
+        this.conn &&
+        this.conn.isConnected &&
+        this.site?.isLoggedIn?.() !== false
+      ) {
         e.preventDefault();
         e.returnValue = 'You are currently connected. Are you sure?';
         return e.returnValue;

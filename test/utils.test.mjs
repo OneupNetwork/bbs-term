@@ -379,5 +379,22 @@ test('CanvasScreen prevents opening link overlays when drag-selecting text or di
   );
 });
 
+test('App beforeunload listener checks site.isLoggedIn() so login screen does not trigger close warning', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { BaseSite, PAGE_STATE } = await import('../src/js/sites/base.js');
+  const src = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
+
+  assert.ok(
+    src.includes('this.site?.isLoggedIn?.() !== false'),
+    'App beforeunload listener must check site.isLoggedIn()'
+  );
+  const site = new BaseSite();
+  assert.equal(site.isLoggedIn(), false, 'BaseSite should report not logged in on PAGE_STATE.NORMAL');
+  site.pageState = PAGE_STATE.MENU;
+  assert.equal(site.isLoggedIn(), true, 'BaseSite should report logged in on PAGE_STATE.MENU');
+});
+
+
 
 
