@@ -499,6 +499,38 @@ export function renderOptionDesc(rawText) {
   );
 }
 
+const getWheelActionDesc = (act) => {
+  if (act === "arrow-2") return _("options_mouseWheelAction_arrow2");
+  if (act === "arrow-3") return _("options_mouseWheelAction_arrow3");
+  if (act === "arrow-5") return _("options_mouseWheelAction_arrow5");
+  if (act === "page") return _("options_mouseWheelAction_page");
+  if (act === "none") return _("options_mouseWheelAction_none");
+  return _("options_mouseWheelAction_arrow1");
+};
+
+const renderWheelActionOptions = () => (
+  <>
+    <option value="arrow-1">
+      {parseOptionText(_("options_mouseWheelAction_arrow1")).label}
+    </option>
+    <option value="arrow-2">
+      {parseOptionText(_("options_mouseWheelAction_arrow2")).label}
+    </option>
+    <option value="arrow-3">
+      {parseOptionText(_("options_mouseWheelAction_arrow3")).label}
+    </option>
+    <option value="arrow-5">
+      {parseOptionText(_("options_mouseWheelAction_arrow5")).label}
+    </option>
+    <option value="page">
+      {parseOptionText(_("options_mouseWheelAction_page")).label}
+    </option>
+    <option value="none">
+      {parseOptionText(_("options_mouseWheelAction_none")).label}
+    </option>
+  </>
+);
+
 const SelectOptionGroup = ({
   controlId,
   label,
@@ -1499,6 +1531,78 @@ export class PrefModal extends React.Component {
                       : _("options_rightClickAction_menu")
                   )}
                 </div>
+                <div className="form-group" id="mouseWheelAction">
+                  <label className="control-label">
+                    {_("options_mouseWheelAction")}
+                  </label>
+                  <select
+                    className="form-control"
+                    name="mouseWheelAction"
+                    value={values.mouseWheelAction || "arrow-1"}
+                    onChange={this.handleTextInputChange}
+                  >
+                    {renderWheelActionOptions()}
+                  </select>
+                  {renderOptionDesc(
+                    getWheelActionDesc(values.mouseWheelAction || "arrow-1")
+                  )}
+                </div>
+                <div className="form-group" id="mouseWheelRightAction">
+                  <label className="control-label">
+                    {_("options_mouseWheelRightAction")}
+                  </label>
+                  <select
+                    className="form-control"
+                    name="mouseWheelRightAction"
+                    value={values.mouseWheelRightAction || "page"}
+                    onChange={this.handleTextInputChange}
+                  >
+                    {renderWheelActionOptions()}
+                  </select>
+                  {renderOptionDesc(
+                    getWheelActionDesc(values.mouseWheelRightAction || "page")
+                  )}
+                </div>
+                <div className="form-group" id="mouseWheelLeftAction">
+                  <label className="control-label">
+                    {_("options_mouseWheelLeftAction")}
+                  </label>
+                  <select
+                    className="form-control"
+                    name="mouseWheelLeftAction"
+                    value={values.mouseWheelLeftAction || "none"}
+                    onChange={this.handleTextInputChange}
+                  >
+                    {renderWheelActionOptions()}
+                  </select>
+                  {renderOptionDesc(
+                    getWheelActionDesc(values.mouseWheelLeftAction || "none")
+                  )}
+                </div>
+                <div className="checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="mouseWheelTrackpadMode"
+                      checked={Boolean(values.mouseWheelTrackpadMode)}
+                      onChange={this.handleCheckboxChange}
+                    />
+                    {_("options_mouseWheelTrackpadMode")}
+                  </label>
+                </div>
+                <span
+                  className="help-block"
+                  style={{
+                    fontSize: "12px",
+                    opacity: 0.7,
+                    marginTop: "-4px",
+                    marginLeft: "24px",
+                    marginBottom: "10px",
+                    display: "block",
+                  }}
+                >
+                  {_("options_mouseWheelTrackpadMode_desc")}
+                </span>
                 <div className="checkbox">
                   <label>
                     <input

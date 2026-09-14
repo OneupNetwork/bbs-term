@@ -1,8 +1,31 @@
 import { setTimer } from './util.js';
 
+export function isDiscreteMouseWheelEvent(e) {
+  if (!e) return false;
+  if (e.deltaMode === 1 || e.deltaMode === 2) {
+    return true;
+  }
+  const absY = Math.abs(e.deltaY || 0);
+  const absX = Math.abs(e.deltaX || 0);
+  if (absX > 0 && absY > 0) {
+    return false;
+  }
+  if (typeof e.wheelDeltaY === 'number' && e.wheelDeltaY !== 0) {
+    const absWheelDeltaY = Math.abs(e.wheelDeltaY);
+    return absWheelDeltaY >= 120 && absWheelDeltaY % 120 === 0;
+  }
+  return absY >= 100;
+}
+
 export class MouseController {
   constructor(app, options = {}) {
     this.app = app;
+    this.leftButtonDown = false;
+    this.rightButtonDown = false;
+    this._wheelClickResetTimer = null;
+    this.wheelDeltaYAccum = 0;
+    this.lastWheelEventTime = 0;
+    this.lastWheelCmdTime = 0;
     this._domListenersAttached = false;
     if (options.attachDOM !== false) {
       this.attachDOMListeners();
@@ -17,6 +40,14 @@ export class MouseController {
       window.addEventListener('mousedown', (e) => this.onMouseDown(e), false);
       window.addEventListener('mouseup', (e) => this.onMouseUp(e), false);
       window.addEventListener(
+        'contextmenu',
+        () => {
+          this.rightButtonDown = false;
+        },
+        true
+      );
+      window.addEventListener('blur', () => this.resetButtonState(), false);
+      window.addEventListener(
         'wheel',
         (e) => this.onWheel(e),
         { capture: true, passive: false }
@@ -24,6 +55,16 @@ export class MouseController {
     }
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('mousemove', (e) => this.onMouseMove(e), false);
+    }
+  }
+
+  resetButtonState() {
+    this.leftButtonDown = false;
+    this.rightButtonDown = false;
+    this.wheelDeltaYAccum = 0;
+    if (this._wheelClickResetTimer) {
+      this._wheelClickResetTimer.cancel();
+      this._wheelClickResetTimer = null;
     }
   }
 
@@ -159,6 +200,11 @@ export class MouseController {
       app.isDialogOrExcludedTarget(e)
     )
       return;
+    if (e.button === 0) {
+      this.leftButtonDown = true;
+    } else if (e.button === 2) {
+      this.rightButtonDown = true;
+    }
     if (app.inputInterceptors?.dispatchMouseDown(e)) {
       return;
     }
@@ -175,6 +221,22 @@ export class MouseController {
 
   onMouseUp(e) {
     const app = this.app;
+    if (e.button === 0) {
+      this.leftButtonDown = false;
+      if (this._wheelClickResetTimer) {
+        this._wheelClickResetTimer.cancel();
+      }
+      this._wheelClickResetTimer = setTimer(
+        false,
+        () => {
+          this._wheelClickResetTimer = null;
+          if (this.app) this.app.skipMouseClick = false;
+        },
+        100
+      );
+    } else if (e.button === 2) {
+      this.rightButtonDown = false;
+    }
     if (
       app.modalShown ||
       app.contextMenuShown ||
@@ -231,6 +293,10 @@ export class MouseController {
 
   onMouseMove(e) {
     const app = this.app;
+    if (typeof e.buttons === 'number') {
+      if ((e.buttons & 1) === 0) this.leftButtonDown = false;
+      if ((e.buttons & 2) === 0) this.rightButtonDown = false;
+    }
     if (
       app.modalShown ||
       app.contextMenuShown ||
@@ -272,8 +338,147 @@ export class MouseController {
 
     const interceptorHandled = app.inputInterceptors?.dispatchWheel(e);
     if (interceptorHandled) {
-      e.stopPropagation();
-      e.preventDefault();
+      if (interceptorHandled === 'suppress') {
+        e.stopPropagation?.();
+        e.preventDefault?.();
+      }
+      return;
     }
+
+    this.handleWheelAction(e);
+  }
+
+  handleFallbackWheel(e) {
+    return this.handleWheelAction(e);
+  }
+
+  isTrackpadEvent(e) {
+    if (!e) return false;
+    const now = Date.now();
+    if (this._lastWheelInputTime && now - this._lastWheelInputTime > 180) {
+      this._isTrackpadStream = false;
+    }
+    this._lastWheelInputTime = now;
+
+    if (!isDiscreteMouseWheelEvent(e)) {
+      this._isTrackpadStream = true;
+    } else if (e.deltaMode === 1 || e.deltaMode === 2) {
+      this._isTrackpadStream = false;
+    }
+
+    return Boolean(this._isTrackpadStream);
+  }
+
+  handleWheelAction(e) {
+    const app = this.app;
+    if (!app || !e) return false;
+
+    if (app.contextMenuShown) {
+      this.rightButtonDown = false;
+    }
+
+    const isRightButton = this.rightButtonDown || Boolean(e.buttons & 2);
+    const isLeftButton =
+      !isRightButton && (this.leftButtonDown || Boolean(e.buttons & 1));
+
+    const actionPref = isRightButton
+      ? app.mouseWheelRightAction || 'page'
+      : isLeftButton
+        ? app.mouseWheelLeftAction || 'none'
+        : app.mouseWheelAction || 'arrow-1';
+
+    if (actionPref === 'none') return false;
+
+    if (isRightButton) {
+      app.preventContextMenuOnMouseUp = true;
+    }
+    if (isLeftButton) {
+      app.skipMouseClick = true;
+    }
+
+    const isTrackpad =
+      Boolean(app.mouseWheelTrackpadMode) && this.isTrackpadEvent(e);
+    const now = Date.now();
+
+    // Physical Mouse Wheel: 1 wheel notch = 1 immediate action without pixel remainder accumulation
+    if (!isTrackpad) {
+      this.wheelDeltaYAccum = 0;
+      if (!e.deltaY) return false;
+      const isScrollUp = e.deltaY < 0;
+
+      if (actionPref === 'page') {
+        app.setNavCmd(isScrollUp ? 'doPageUp' : 'doPageDown');
+      } else if (actionPref.startsWith('arrow')) {
+        const lines = parseInt(actionPref.split('-')[1], 10) || 1;
+        const cmd = isScrollUp ? 'doArrowUp' : 'doArrowDown';
+        for (let i = 0; i < lines; i++) {
+          app.setNavCmd(cmd);
+        }
+      }
+      this.lastWheelCmdTime = now;
+      e.stopPropagation?.();
+      e.preventDefault?.();
+      return true;
+    }
+
+    // Trackpad / Smooth Continuous Scroll: accumulate pixel deltas proportionally
+    let deltaY = e.deltaY;
+    if (e.deltaMode === 1) {
+      deltaY *= 40;
+    } else if (e.deltaMode === 2) {
+      deltaY *= 400;
+    }
+
+    if (this.lastWheelEventTime && now - this.lastWheelEventTime > 250) {
+      this.wheelDeltaYAccum = 0;
+    }
+    if (
+      (this.wheelDeltaYAccum > 0 && deltaY < 0) ||
+      (this.wheelDeltaYAccum < 0 && deltaY > 0)
+    ) {
+      this.wheelDeltaYAccum = 0;
+    }
+
+    this.lastWheelEventTime = now;
+    this.wheelDeltaYAccum = (this.wheelDeltaYAccum || 0) + deltaY;
+
+    const STEP = 35;
+    if (Math.abs(this.wheelDeltaYAccum) < STEP) {
+      e.stopPropagation?.();
+      e.preventDefault?.();
+      return true;
+    }
+
+    const isScrollUp = this.wheelDeltaYAccum < 0;
+
+    if (actionPref === 'page') {
+      if (this.lastWheelCmdTime && now - this.lastWheelCmdTime < 120) {
+        this.wheelDeltaYAccum = 0;
+        e.stopPropagation?.();
+        e.preventDefault?.();
+        return true;
+      }
+      this.wheelDeltaYAccum = 0;
+      this.lastWheelCmdTime = now;
+      app.setNavCmd(isScrollUp ? 'doPageUp' : 'doPageDown');
+    } else if (actionPref.startsWith('arrow')) {
+      const lines = parseInt(actionPref.split('-')[1], 10) || 1;
+      const cmd = isScrollUp ? 'doArrowUp' : 'doArrowDown';
+      const steps = Math.max(
+        1,
+        Math.min(3, Math.floor(Math.abs(this.wheelDeltaYAccum) / STEP))
+      );
+      this.wheelDeltaYAccum -= isScrollUp ? -(steps * STEP) : steps * STEP;
+      this.lastWheelCmdTime = now;
+      for (let s = 0; s < steps; s++) {
+        for (let i = 0; i < lines; i++) {
+          app.setNavCmd(cmd);
+        }
+      }
+    }
+
+    e.stopPropagation?.();
+    e.preventDefault?.();
+    return true;
   }
 }

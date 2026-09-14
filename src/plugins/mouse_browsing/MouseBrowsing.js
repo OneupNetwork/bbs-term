@@ -45,27 +45,6 @@ const MOUSE_MIDDLE_OPTIONS = [
   "options_doPaste",
 ];
 
-const MOUSE_WHEEL_OPTIONS = [
-  "options_none",
-  "options_upDown",
-  "options_pageUpDown",
-  "options_threadLastNext",
-];
-
-const MOUSE_WHEEL_ACTIONS_UP = [
-  "none",
-  "doArrowUp",
-  "doPageUp",
-  "previousThread",
-];
-
-const MOUSE_WHEEL_ACTIONS_DOWN = [
-  "none",
-  "doArrowDown",
-  "doPageDown",
-  "nextThread",
-];
-
 function renderOptionDesc(rawText) {
   const { desc } = parseOptionText(rawText);
   if (!desc) return null;
@@ -130,9 +109,6 @@ export class MouseBrowsing extends PluginBase {
     mouseBrowsingHighlightColor: 2,
     mouseLeftFunction: 0,
     mouseMiddleFunction: 0,
-    mouseWheelFunction1: 1,
-    mouseWheelFunction2: 2,
-    mouseWheelFunction3: 3,
   };
 
   static get title() {
@@ -204,30 +180,6 @@ export class MouseBrowsing extends PluginBase {
         value: values.mouseMiddleFunction,
         options: MOUSE_MIDDLE_OPTIONS,
         onChange: handleNumberInputChange,
-      }),
-      renderSelectOptionGroup({
-        controlId: "mouseWheelFunction1",
-        label: _("options_mouseWheelFunction1"),
-        name: "mouseWheelFunction1",
-        value: values.mouseWheelFunction1,
-        options: MOUSE_WHEEL_OPTIONS,
-        onChange: handleNumberInputChange,
-      }),
-      renderSelectOptionGroup({
-        controlId: "mouseWheelFunction2",
-        label: _("options_mouseWheelFunction2"),
-        name: "mouseWheelFunction2",
-        value: values.mouseWheelFunction2,
-        options: MOUSE_WHEEL_OPTIONS,
-        onChange: handleNumberInputChange,
-      }),
-      renderSelectOptionGroup({
-        controlId: "mouseWheelFunction3",
-        label: _("options_mouseWheelFunction3"),
-        name: "mouseWheelFunction3",
-        value: values.mouseWheelFunction3,
-        options: MOUSE_WHEEL_OPTIONS,
-        onChange: handleNumberInputChange,
       })
     );
   }
@@ -240,17 +192,8 @@ export class MouseBrowsing extends PluginBase {
     this.nowHighlight = -1;
     this.highlightCursor = true;
     this._dblclickTimer = null;
-    this._mbTimer = null;
-    this.mouseLeftButtonDown = false;
-    this.mouseRightButtonDown = false;
-    this.wheelDeltaYAccum = 0;
-    this.lastWheelEventTime = 0;
-    this.lastWheelCmdTime = 0;
     this.mouseLeftFunction = 0;
     this.mouseMiddleFunction = 0;
-    this.mouseWheelFunction1 = 1;
-    this.mouseWheelFunction2 = 2;
-    this.mouseWheelFunction3 = 3;
   }
 
   getContextMenuItems() {
@@ -294,22 +237,11 @@ export class MouseBrowsing extends PluginBase {
     if (prefs.mouseMiddleFunction !== undefined) {
       this.mouseMiddleFunction = Number(prefs.mouseMiddleFunction) || 0;
     }
-    if (prefs.mouseWheelFunction1 !== undefined) {
-      this.mouseWheelFunction1 = Number(prefs.mouseWheelFunction1) ?? 1;
-    }
-    if (prefs.mouseWheelFunction2 !== undefined) {
-      this.mouseWheelFunction2 = Number(prefs.mouseWheelFunction2) ?? 2;
-    }
-    if (prefs.mouseWheelFunction3 !== undefined) {
-      this.mouseWheelFunction3 = Number(prefs.mouseWheelFunction3) ?? 3;
-    }
   }
 
   _clearTimers() {
     this.clearTimeout(this._dblclickTimer);
     this._dblclickTimer = null;
-    this.clearTimeout(this._mbTimer);
-    this._mbTimer = null;
   }
 
   onInit() {
@@ -359,9 +291,6 @@ export class MouseBrowsing extends PluginBase {
     });
     this.listenApp("term:disconnect", () => {
       this._clearTimers();
-      this.mouseLeftButtonDown = false;
-      this.mouseRightButtonDown = false;
-      this.wheelDeltaYAccum = 0;
     });
   }
 
@@ -375,9 +304,6 @@ export class MouseBrowsing extends PluginBase {
 
   onDisable() {
     this._clearTimers();
-    this.mouseLeftButtonDown = false;
-    this.mouseRightButtonDown = false;
-    this.wheelDeltaYAccum = 0;
     const buf = this.buf || this.app?.buf;
     const termWin = this.app?.termWin || buf?.termWin;
     if (termWin && termWin.style) termWin.style.cursor = "auto";
@@ -400,7 +326,6 @@ export class MouseBrowsing extends PluginBase {
   handleMouseDown(e) {
     if (!this.enabled || !e) return false;
     if (e.button === 0) {
-      this.mouseLeftButtonDown = true;
       if (this._dblclickTimer) {
         e.preventDefault?.();
         e.stopPropagation?.();
@@ -432,100 +357,19 @@ export class MouseBrowsing extends PluginBase {
       }
       return false;
     }
-    if (e.button === 2) {
-      this.mouseRightButtonDown = true;
-      return false;
-    }
     return false;
   }
 
   handleMouseUp(e) {
     if (!this.enabled || !e) return false;
     if (e.button === 0) {
-      this.clearTimeout(this._mbTimer);
-      this._mbTimer = this.setTimeout(() => {
-        this._mbTimer = null;
-        if (this.app) this.app.skipMouseClick = false;
-      }, 100);
-      this.mouseLeftButtonDown = false;
       if (this.app?.isSelectionCollapsed?.()) {
         const pos = this.app.clientToPos?.(e.clientX, e.clientY);
         if (pos) this.onMouseMove(pos.col, pos.row);
       }
       return false;
     }
-    if (e.button === 2) {
-      this.mouseRightButtonDown = false;
-      return false;
-    }
     return false;
-  }
-
-  handleWheel(e) {
-    if (!this.enabled || !this.app || !e) return false;
-    const now = Date.now();
-    let deltaY = e.deltaY;
-    if (e.deltaMode === 1) {
-      deltaY *= 30;
-    } else if (e.deltaMode === 2) {
-      deltaY *= 300;
-    }
-
-    if (this.lastWheelEventTime && now - this.lastWheelEventTime > 200) {
-      this.wheelDeltaYAccum = 0;
-    }
-    if (
-      (this.wheelDeltaYAccum > 0 && deltaY < 0) ||
-      (this.wheelDeltaYAccum < 0 && deltaY > 0)
-    ) {
-      this.wheelDeltaYAccum = 0;
-    }
-
-    this.lastWheelEventTime = now;
-    this.wheelDeltaYAccum = (this.wheelDeltaYAccum || 0) + deltaY;
-
-    const threshold = Math.max(35, this.app.view?.chh || 35);
-    if (Math.abs(this.wheelDeltaYAccum) < threshold) {
-      e.stopPropagation?.();
-      e.preventDefault?.();
-      return true;
-    }
-
-    if (this.lastWheelCmdTime && now - this.lastWheelCmdTime < 60) {
-      e.stopPropagation?.();
-      e.preventDefault?.();
-      return true;
-    }
-
-    const isScrollUp = this.wheelDeltaYAccum < 0;
-    if (Math.abs(deltaY) >= 100) {
-      this.wheelDeltaYAccum = 0;
-    } else {
-      this.wheelDeltaYAccum -= isScrollUp ? -threshold : threshold;
-    }
-    this.lastWheelCmdTime = now;
-
-    const actions = isScrollUp
-      ? MOUSE_WHEEL_ACTIONS_UP
-      : MOUSE_WHEEL_ACTIONS_DOWN;
-    const fnIdx = this.mouseRightButtonDown
-      ? this.mouseWheelFunction2
-      : this.mouseLeftButtonDown
-        ? this.mouseWheelFunction3
-        : this.mouseWheelFunction1;
-    const action = actions[fnIdx];
-    this.app.setNavCmd(action);
-
-    if (this.mouseRightButtonDown) {
-      this.app.preventContextMenuOnMouseUp = true;
-    }
-    if (this.mouseLeftButtonDown) {
-      this.app.skipMouseClick = true;
-    }
-
-    e.stopPropagation?.();
-    e.preventDefault?.();
-    return true;
   }
 
   _setDblclickTimer() {

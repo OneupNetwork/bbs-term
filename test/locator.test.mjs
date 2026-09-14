@@ -422,7 +422,6 @@ test('App, TermView, and TermBuf are completely decoupled from MouseBrowsing and
   let prevented2 = false;
   mb.handleMouseDown({ button: 0, preventDefault: () => { prevented1 = true; } });
   assert.equal(prevented1, false, 'First mousedown must not prevent default');
-  assert.equal(mb.mouseLeftButtonDown, true, 'Left mousedown sets mouseLeftButtonDown');
 
   mb.handleMouseDown({ button: 0, preventDefault: () => { prevented2 = true; } });
   assert.equal(prevented2, true, 'Rapid second mousedown within 350ms must prevent default');
@@ -435,25 +434,6 @@ test('App, TermView, and TermBuf are completely decoupled from MouseBrowsing and
   mb.mouseMiddleFunction = 2;
   mb.handleMouseDown({ button: 1, preventDefault: () => {} });
   assert.equal(sent[sent.length - 1], '\x1b[D');
-
-  // Wheel gesture handling with right/left button chords
-  mb.mouseRightButtonDown = true;
-  mb.lastWheelCmdTime = 0;
-  mb.handleWheel({ deltaY: -120, stopPropagation: () => {}, preventDefault: () => {} });
-  assert.equal(navCmds[navCmds.length - 1], 'doPageUp');
-  assert.equal(mockApp.preventContextMenuOnMouseUp, true);
-  mb.mouseRightButtonDown = false;
-
-  mb.mouseLeftButtonDown = true;
-  mb.lastWheelCmdTime = 0;
-  mb.handleWheel({ deltaY: 120, stopPropagation: () => {}, preventDefault: () => {} });
-  assert.equal(navCmds[navCmds.length - 1], 'nextThread');
-  assert.equal(mockApp.skipMouseClick, true);
-
-  // MouseUp sets _mbTimer and clears mouseLeftButtonDown
-  mb.handleMouseUp({ button: 0, clientX: 50, clientY: 50 });
-  assert.equal(mb.mouseLeftButtonDown, false);
-  assert.ok(mb._mbTimer !== null, 'MouseUp sets _mbTimer to reset skipMouseClick');
 
   // Selection check in onMouseMove resets cursor when selection is active
   selectionCollapsed = false;
@@ -476,7 +456,6 @@ test('App, TermView, and TermBuf are completely decoupled from MouseBrowsing and
   mb.disable();
   assert.equal(mb.enabled, false);
   assert.equal(mb._dblclickTimer, null, 'Disabling MouseBrowsing must cancel dblclickTimer');
-  assert.equal(mb._mbTimer, null, 'Disabling MouseBrowsing must cancel _mbTimer');
 
   mockApp.emit('term:mouse-move:force', { col: 1, row: 5, refresh: false, force: true });
   assert.equal(mb.mouseCursor, 1, 'Forced mouse move must calculate cursor even when disabled');

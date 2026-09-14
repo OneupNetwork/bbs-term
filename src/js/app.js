@@ -115,6 +115,10 @@ export class App extends EventEmitter {
     this.colorScheme = DEFAULT_PREFS.colorScheme;
     this.trimTrailingSpaces = DEFAULT_PREFS.trimTrailingSpaces;
     this.rightClickAction = DEFAULT_PREFS.rightClickAction;
+    this.mouseWheelAction = DEFAULT_PREFS.mouseWheelAction;
+    this.mouseWheelRightAction = DEFAULT_PREFS.mouseWheelRightAction;
+    this.mouseWheelLeftAction = DEFAULT_PREFS.mouseWheelLeftAction;
+    this.mouseWheelTrackpadMode = DEFAULT_PREFS.mouseWheelTrackpadMode;
 
     this.mouse = new MouseController(this);
 
@@ -467,6 +471,7 @@ export class App extends EventEmitter {
     this.site?.resetLoginPrompt?.();
 
     this.connectState = 2;
+    this.mouse?.resetButtonState?.();
     this.emit('term:disconnect');
     this.buf.emit('term:disconnect');
 
@@ -876,6 +881,18 @@ export class App extends EventEmitter {
           break;
         case 'rightClickAction':
           this.rightClickAction = value;
+          break;
+        case 'mouseWheelAction':
+          this.mouseWheelAction = value;
+          break;
+        case 'mouseWheelRightAction':
+          this.mouseWheelRightAction = value;
+          break;
+        case 'mouseWheelLeftAction':
+          this.mouseWheelLeftAction = value;
+          break;
+        case 'mouseWheelTrackpadMode':
+          this.mouseWheelTrackpadMode = !!value;
           break;
         case 'warnBeforeClose':
           this.warnBeforeClose = !!value;

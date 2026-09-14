@@ -12,6 +12,10 @@ export const DEFAULT_PREFS = {
   copyOnSelect: false,
   trimTrailingSpaces: true,
   rightClickAction: "menu",
+  mouseWheelAction: "arrow-1",
+  mouseWheelRightAction: "page",
+  mouseWheelLeftAction: "none",
+  mouseWheelTrackpadMode: false,
   supportMouseReporting: true,
   enableAntiIdle: false,
   antiIdleTime: 180,
@@ -40,9 +44,6 @@ export const DEFAULT_PREFS = {
   mouseBrowsingHighlightColor: 2,
   mouseLeftFunction: 0,
   mouseMiddleFunction: 0,
-  mouseWheelFunction1: 1,
-  mouseWheelFunction2: 2,
-  mouseWheelFunction3: 3,
 
   // displays
   colorScheme: 'default',
@@ -330,6 +331,28 @@ export const readValuesWithDefault = () => {
       if (saved.uiLocale !== undefined) {
         prefs.uiLocale = saved.uiLocale;
       }
+      const migrateLegacyWheel = (val) => {
+        if (val === 0 || val === "0") return "none";
+        if (val === 1 || val === "1") return "arrow-1";
+        if (val === 2 || val === "2") return "page";
+        if (val === 3 || val === "3") return "none";
+        return undefined;
+      };
+      if (saved.mouseWheelAction === undefined && saved.mouseWheelFunction1 !== undefined) {
+        const mapped = migrateLegacyWheel(saved.mouseWheelFunction1);
+        if (mapped) prefs.mouseWheelAction = mapped;
+      }
+      if (saved.mouseWheelRightAction === undefined && saved.mouseWheelFunction2 !== undefined) {
+        const mapped = migrateLegacyWheel(saved.mouseWheelFunction2);
+        if (mapped) prefs.mouseWheelRightAction = mapped;
+      }
+      if (saved.mouseWheelLeftAction === undefined && saved.mouseWheelFunction3 !== undefined) {
+        const mapped = migrateLegacyWheel(saved.mouseWheelFunction3);
+        if (mapped) prefs.mouseWheelLeftAction = mapped;
+      }
+      delete prefs.mouseWheelFunction1;
+      delete prefs.mouseWheelFunction2;
+      delete prefs.mouseWheelFunction3;
     }
     return prefs;
   } catch (e) {
