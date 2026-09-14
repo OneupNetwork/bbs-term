@@ -638,6 +638,18 @@
   "options_fontList_selectThenAdd": {
     "message": "Select a font then add"
   },
+  "options_fontList_customOption": {
+    "message": "Enter custom font name..."
+  },
+  "options_fontList_customPlaceholder": {
+    "message": "Enter font name (e.g. Cubic 11)"
+  },
+  "options_fontList_backToSelect": {
+    "message": "Back to list"
+  },
+  "options_fontList_notFound": {
+    "message": "Font not found: $1"
+  },
   "options_fontList_presetGroup": {
     "message": "Recommended Fonts"
   },
@@ -648,7 +660,7 @@
     "message": "+ Add"
   },
   "options_fontList_preview": {
-    "message": "123 Lazy fox jumps over the brown dog"
+    "message": "等寬排版預覽 1234567890\nThe quick brown fox jumps over the lazy dog"
   },
   "options_fontList_moveUp": {
     "message": "Move Up"

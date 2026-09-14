@@ -6,6 +6,8 @@ import {
   parseFontList,
   serializeFontList,
   PRESET_FONTS,
+  isFontAvailable,
+  filterAvailableFonts,
 } from "../../js/font_util";
 import "./FontManager.css";
 
@@ -27,8 +29,12 @@ const TrashIcon = () => (
 );
 
 export class FontManager extends React.Component {
+  customInputRef = React.createRef();
+
   state = {
     selectedFont: "",
+    isCustomInput: false,
+    customFontName: "",
     deviceFonts: [],
     isQuerying: false,
     hasQueried: false,
@@ -37,8 +43,26 @@ export class FontManager extends React.Component {
     dragOverIndex: null,
   };
 
+  componentDidMount() {
+    this.pruneUnavailableFonts();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.value !== this.props.value) {
+      this.pruneUnavailableFonts();
+    }
+  }
+
+  pruneUnavailableFonts() {
+    const raw = parseFontList(this.props.value);
+    const available = filterAvailableFonts(raw);
+    if (available.length !== raw.length) {
+      this.updateFontList(available);
+    }
+  }
+
   getFontList() {
-    return parseFontList(this.props.value);
+    return filterAvailableFonts(parseFontList(this.props.value));
   }
 
   updateFontList(newList) {
@@ -48,16 +72,47 @@ export class FontManager extends React.Component {
   }
 
   handleAdd = (fontName) => {
-    const target = (fontName || this.state.selectedFont || "").trim();
-    if (!target) return;
-    const current = this.getFontList();
-    const alreadyExists = current.some(
-      (f) => f.toLowerCase() === target.toLowerCase(),
-    );
-    if (!alreadyExists) {
-      this.updateFontList([...current, target]);
+    const rawTarget = (
+      fontName ||
+      (this.state.isCustomInput
+        ? this.state.customFontName
+        : this.state.selectedFont) ||
+      ""
+    ).trim();
+    if (!rawTarget) return;
+    const parsed = parseFontList(rawTarget);
+    const targets = parsed.length > 0 ? parsed : [rawTarget];
+
+    if (this.state.isCustomInput) {
+      for (const target of targets) {
+        if (!isFontAvailable(target)) {
+          this.setState({
+            queryError: _("options_fontList_notFound", [target]),
+          });
+          return;
+        }
+      }
     }
-    this.setState({ selectedFont: "" });
+
+    const current = this.getFontList();
+    const next = [...current];
+    for (const target of targets) {
+      const alreadyExists = next.some(
+        (f) => f.toLowerCase() === target.toLowerCase(),
+      );
+      if (!alreadyExists) {
+        next.push(target);
+      }
+    }
+    if (next.length !== current.length) {
+      this.updateFontList(next);
+    }
+    this.setState({
+      selectedFont: "",
+      customFontName: "",
+      isCustomInput: false,
+      queryError: null,
+    });
   };
 
   handleRemove = (index) => {
@@ -144,12 +199,55 @@ export class FontManager extends React.Component {
 
   handleRestoreDefault = () => {
     if (this.props.onChange) {
-      this.props.onChange(DEFAULT_PREFS.fontFace);
+      const availableDefaults = filterAvailableFonts(
+        parseFontList(DEFAULT_PREFS.fontFace),
+      );
+      this.props.onChange(serializeFontList(availableDefaults));
     }
   };
 
   handleSelectChange = (e) => {
-    this.setState({ selectedFont: e.target.value });
+    const val = e.target.value;
+    if (val === "__custom__") {
+      this.setState(
+        {
+          isCustomInput: true,
+          selectedFont: "",
+          customFontName: "",
+          queryError: null,
+        },
+        () => {
+          if (this.customInputRef.current) {
+            this.customInputRef.current.focus();
+          }
+        },
+      );
+    } else {
+      this.setState({ selectedFont: val, queryError: null });
+    }
+  };
+
+  handleCustomInputChange = (e) => {
+    this.setState({ customFontName: e.target.value, queryError: null });
+  };
+
+  handleCancelCustomInput = () => {
+    this.setState({
+      isCustomInput: false,
+      customFontName: "",
+      queryError: null,
+    });
+  };
+
+  handleCustomInputKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this.handleAdd();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      this.handleCancelCustomInput();
+    }
   };
 
   handleSelectKeyDown = (e) => {
@@ -162,6 +260,8 @@ export class FontManager extends React.Component {
   render() {
     const {
       selectedFont,
+      isCustomInput,
+      customFontName,
       deviceFonts,
       isQuerying,
       hasQueried,
@@ -211,12 +311,6 @@ export class FontManager extends React.Component {
           </div>
         </div>
 
-        {queryError && (
-          <div className="FontManager__Status FontManager__Status--error">
-            {queryError}
-          </div>
-        )}
-
         <div className="FontManager__List">
           {fontList.length === 0 ? (
             <div className="FontManager__Empty">
@@ -248,12 +342,21 @@ export class FontManager extends React.Component {
                   </span>
                   <div className="FontManager__Item__Info">
                     <span className="FontManager__Item__Name">{font}</span>
-                    <span
+                    <div
                       className="FontManager__Item__Preview"
                       style={{ fontFamily: `'${font}', monospace` }}
                     >
-                      {_("options_fontList_preview")} ({font})
-                    </span>
+                      {_("options_fontList_preview")
+                        .split("\n")
+                        .map((line, lineIdx) => (
+                          <div
+                            key={lineIdx}
+                            className="FontManager__Item__PreviewLine"
+                          >
+                            {line}
+                          </div>
+                        ))}
+                    </div>
                   </div>
                   <div className="FontManager__Item__Controls">
                     <button
@@ -290,44 +393,86 @@ export class FontManager extends React.Component {
         </div>
 
         <div className="FontManager__AddBox">
-          <select
-            className="form-control FontManager__AddBox__Select"
-            value={selectedFont}
-            onChange={this.handleSelectChange}
-            onKeyDown={this.handleSelectKeyDown}
-          >
-            <option value="" disabled>
-              {_("options_fontList_selectThenAdd")}
-            </option>
-            <optgroup label={_("options_fontList_presetGroup")}>
-              {PRESET_FONTS.map((f) => (
-                <option key={`preset-${f}`} value={f}>
-                  {f}
-                </option>
-              ))}
-            </optgroup>
-            {deviceFonts.length > 0 && (
-              <optgroup
-                label={`${_("options_fontList_deviceGroup")} (${deviceFonts.length})`}
+          {isCustomInput ? (
+            <>
+              <input
+                ref={this.customInputRef}
+                type="text"
+                className="form-control FontManager__AddBox__Input"
+                value={customFontName}
+                onChange={this.handleCustomInputChange}
+                onKeyDown={this.handleCustomInputKeyDown}
+                placeholder={_("options_fontList_customPlaceholder")}
+              />
+              <button
+                type="button"
+                className="btn btn-primary btn-sm FontManager__AddBox__Button"
+                disabled={!customFontName.trim()}
+                onClick={() => this.handleAdd()}
               >
-                {deviceFonts.map((f) => (
-                  <option key={`device-${f}`} value={f}>
-                    {f}
+                {_("options_fontList_add")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-default btn-sm FontManager__AddBox__Button"
+                onClick={this.handleCancelCustomInput}
+              >
+                {_("options_fontList_backToSelect")}
+              </button>
+            </>
+          ) : (
+            <>
+              <select
+                className="form-control FontManager__AddBox__Select"
+                value={selectedFont}
+                onChange={this.handleSelectChange}
+                onKeyDown={this.handleSelectKeyDown}
+              >
+                <option value="" disabled>
+                  {_("options_fontList_selectThenAdd")}
+                </option>
+                {!canQueryLocalFonts && (
+                  <option value="__custom__">
+                    {_("options_fontList_customOption")}
                   </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+                )}
+                <optgroup label={_("options_fontList_presetGroup")}>
+                  {filterAvailableFonts(PRESET_FONTS).map((f) => (
+                    <option key={`preset-${f}`} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </optgroup>
+                {deviceFonts.length > 0 && (
+                  <optgroup
+                    label={`${_("options_fontList_deviceGroup")} (${deviceFonts.length})`}
+                  >
+                    {deviceFonts.map((f) => (
+                      <option key={`device-${f}`} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
 
-          <button
-            type="button"
-            className="btn btn-primary btn-sm FontManager__AddBox__Button"
-            disabled={!selectedFont}
-            onClick={() => this.handleAdd()}
-          >
-            {_("options_fontList_add")}
-          </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm FontManager__AddBox__Button"
+                disabled={!selectedFont}
+                onClick={() => this.handleAdd()}
+              >
+                {_("options_fontList_add")}
+              </button>
+            </>
+          )}
         </div>
+
+        {queryError && (
+          <div className="FontManager__Status FontManager__Status--error">
+            {queryError}
+          </div>
+        )}
       </div>
     );
   }
