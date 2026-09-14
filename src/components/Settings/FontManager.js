@@ -94,17 +94,22 @@ export class FontManager extends React.Component {
       }
     }
 
-    const current = this.getFontList();
-    const next = [...current];
+    const uniqueTargets = [];
     for (const target of targets) {
-      const alreadyExists = next.some(
-        (f) => f.toLowerCase() === target.toLowerCase(),
-      );
-      if (!alreadyExists) {
-        next.push(target);
+      if (!uniqueTargets.some((f) => f.toLowerCase() === target.toLowerCase())) {
+        uniqueTargets.push(target);
       }
     }
-    if (next.length !== current.length) {
+
+    const current = this.getFontList();
+    const remaining = current.filter(
+      (f) => !uniqueTargets.some((t) => t.toLowerCase() === f.toLowerCase()),
+    );
+    const next = [...uniqueTargets, ...remaining];
+    if (
+      next.length !== current.length ||
+      next.some((f, idx) => f !== current[idx])
+    ) {
       this.updateFontList(next);
     }
     this.setState({
