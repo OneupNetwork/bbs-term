@@ -41,6 +41,9 @@ export class MouseController {
     this.wheelDeltaYAccum = 0;
     this.lastWheelEventTime = 0;
     this.lastWheelCmdTime = 0;
+    this._lastWheelGestureEventTime = 0;
+    this._lastWheelDirection = null;
+    this._gestureHasDispatchedCmd = false;
     this._domListenersAttached = false;
     if (options.attachDOM !== false) {
       this.attachDOMListeners();
@@ -77,6 +80,9 @@ export class MouseController {
     this.leftButtonDown = false;
     this.rightButtonDown = false;
     this.wheelDeltaYAccum = 0;
+    this._lastWheelGestureEventTime = 0;
+    this._lastWheelDirection = null;
+    this._gestureHasDispatchedCmd = false;
     if (this._wheelClickResetTimer) {
       this._wheelClickResetTimer.cancel();
       this._wheelClickResetTimer = null;
@@ -419,21 +425,37 @@ export class MouseController {
     const isTrackpad =
       Boolean(app.mouseWheelTrackpadMode) && this.isTrackpadEvent(e);
     const now = Date.now();
+    const rawDirection = e.deltaY < 0 ? 'up' : e.deltaY > 0 ? 'down' : null;
+    if (rawDirection) {
+      const isNewGesture =
+        !this._lastWheelGestureEventTime ||
+        now - this._lastWheelGestureEventTime >= 350 ||
+        this._lastWheelDirection !== rawDirection;
+      if (isNewGesture) {
+        this._gestureHasDispatchedCmd = false;
+      }
+      this._lastWheelGestureEventTime = now;
+      this._lastWheelDirection = rawDirection;
+    }
 
     // Physical Mouse Wheel: 1 wheel notch = 1 immediate action without pixel remainder accumulation
     if (!isTrackpad) {
       this.wheelDeltaYAccum = 0;
       if (!e.deltaY) return false;
       const isScrollUp = e.deltaY < 0;
+      const direction = isScrollUp ? 'up' : 'down';
 
       if (actionPref === 'page') {
-        app.setNavCmd(isScrollUp ? 'doPageUp' : 'doPageDown');
+        this._dispatchWheelNav(
+          isScrollUp ? 'doPageUp' : 'doPageDown',
+          1,
+          direction,
+          now
+        );
       } else if (actionPref.startsWith('arrow')) {
         const lines = parseInt(actionPref.split('-')[1], 10) || 1;
         const cmd = isScrollUp ? 'doArrowUp' : 'doArrowDown';
-        for (let i = 0; i < lines; i++) {
-          app.setNavCmd(cmd);
-        }
+        this._dispatchWheelNav(cmd, lines, direction, now);
       }
       this.lastWheelCmdTime = now;
       e.stopPropagation?.();
@@ -470,6 +492,7 @@ export class MouseController {
     }
 
     const isScrollUp = this.wheelDeltaYAccum < 0;
+    const direction = isScrollUp ? 'up' : 'down';
 
     if (actionPref === 'page') {
       if (this.lastWheelCmdTime && now - this.lastWheelCmdTime < 120) {
@@ -480,7 +503,12 @@ export class MouseController {
       }
       this.wheelDeltaYAccum = 0;
       this.lastWheelCmdTime = now;
-      app.setNavCmd(isScrollUp ? 'doPageUp' : 'doPageDown');
+      this._dispatchWheelNav(
+        isScrollUp ? 'doPageUp' : 'doPageDown',
+        1,
+        direction,
+        now
+      );
     } else if (actionPref.startsWith('arrow')) {
       const lines = parseInt(actionPref.split('-')[1], 10) || 1;
       const cmd = isScrollUp ? 'doArrowUp' : 'doArrowDown';
@@ -490,15 +518,55 @@ export class MouseController {
       );
       this.wheelDeltaYAccum -= isScrollUp ? -(steps * STEP) : steps * STEP;
       this.lastWheelCmdTime = now;
-      for (let s = 0; s < steps; s++) {
-        for (let i = 0; i < lines; i++) {
-          app.setNavCmd(cmd);
-        }
-      }
+      this._dispatchWheelNav(cmd, steps * lines, direction, now);
     }
 
     e.stopPropagation?.();
     e.preventDefault?.();
     return true;
+  }
+
+  _dispatchWheelNav(cmd, count, direction, now) {
+    const app = this.app;
+    if (!app || count <= 0) return;
+
+    const isContinuous = Boolean(this._gestureHasDispatchedCmd);
+    this._gestureHasDispatchedCmd = true;
+
+    let finalCmd = cmd;
+    let finalCount = count;
+
+    if (
+      !app.inputInterceptors?.isActive?.() &&
+      typeof app.site?.filterWheelScroll === 'function'
+    ) {
+      const filterRes = app.site.filterWheelScroll(app.buf, {
+        direction,
+        isContinuous,
+        cmd,
+        count,
+        now,
+      });
+      if (filterRes) {
+        if (filterRes.prevent) {
+          finalCount = 0;
+        } else {
+          if (typeof filterRes.maxSteps === 'number') {
+            finalCount = Math.min(finalCount, filterRes.maxSteps);
+          }
+          if (filterRes.overrideCmd) {
+            finalCmd = filterRes.overrideCmd;
+          }
+        }
+      }
+    }
+
+    for (let i = 0; i < finalCount; i++) {
+      app.setNavCmd(finalCmd, {
+        source: 'wheel',
+        direction,
+        isContinuous: i > 0 ? true : isContinuous,
+      });
+    }
   }
 }

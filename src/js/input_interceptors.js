@@ -40,9 +40,10 @@ export class InputInterceptors extends EventEmitter {
     return this.hasActive();
   }
 
-  dispatchNavCmd(cmd) {
+  dispatchNavCmd(cmd, context) {
     const event = {
       cmd,
+      context,
       defaultPrevented: false,
       preventDefault() {
         this.defaultPrevented = true;
@@ -148,7 +149,7 @@ export class InputInterceptors extends EventEmitter {
 
     if (typeof interceptor.handleNavCmd === 'function') {
       const fn = (e) => {
-        if (interceptor.handleNavCmd(e.cmd)) {
+        if (interceptor.handleNavCmd(e.cmd, e.context)) {
           e.preventDefault?.();
         }
       };

@@ -1086,7 +1086,8 @@ export class App extends EventEmitter {
   }
 
   setNavCmd(cmd) {
-    if (this.inputInterceptors?.dispatchNavCmd(cmd)) {
+    const context = arguments[1];
+    if (this.inputInterceptors?.dispatchNavCmd(cmd, context)) {
       return;
     }
     switch (cmd) {
