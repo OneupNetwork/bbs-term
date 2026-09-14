@@ -141,6 +141,12 @@ test('LoginModal structure adheres to browser password manager conventions', () 
   assert.ok(modalSource.includes('site_auth_target_frame'), 'Must define hidden iframe for WebKit password capture');
   assert.ok(modalSource.includes('window.history?.replaceState'), 'Must trigger history transition for WebKit');
 
+  // Firefox LoginManager compatibility: form action must resolve to same-origin (not about:blank which returns null formActionOrigin)
+  assert.ok(modalSource.includes('action="#"'), 'Form must use action="#" so Firefox LoginManager resolves a valid formActionOrigin');
+  assert.ok(!modalSource.includes('action="about:blank"'), 'Form must not use action="about:blank" which causes Firefox LoginManager addLogin to throw');
+  assert.ok(modalSource.includes('this.formRef.current.action = "about:blank"'), 'Form must redirect action to about:blank in handleSubmit to prevent HTTP POST credential leak');
+  assert.ok(modalSource.includes('readOnly={submitted}'), 'Inputs must use readOnly={submitted} rather than disabled={submitted} so FormData/PasswordCredential includes them on submit');
+
   // iOS Safari font-size 16px to prevent zoom
   assert.ok(modalCss.includes('font-size: 16px'), 'Input must have 16px font size to prevent iOS auto-zoom');
 
