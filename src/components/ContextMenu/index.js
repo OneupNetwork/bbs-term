@@ -5,14 +5,6 @@ import { readValuesWithDefault, writeValues } from "../../js/pref";
 import DropdownMenu from "./DropdownMenu";
 import PrefModal from "../Settings/PrefModal";
 
-const EVENT_KEY_BY_HOT_KEY = {
-  c: "copy",
-  e: "copyLinkUrl",
-  p: "paste",
-  s: "searchGoogle",
-  t: "openUrlNewTab",
-};
-
 const menuHandlerByEventKey = {
   copy: (app, { selectedText }) => app.doCopy(selectedText),
   copyAnsi: (app) => app.doCopyAnsi(),
@@ -238,26 +230,21 @@ export class ContextMenu extends React.Component {
       passive: true,
     });
 
-    this.hotKeyUpHandler = (event) => {
+    this.keyDownHandler = (event) => {
       if (!this.isInstanceActive()) {
-        window.removeEventListener("keyup", this.hotKeyUpHandler, false);
+        window.removeEventListener("keydown", this.keyDownHandler, false);
         return;
       }
       if (!this.state.open) {
         return;
       }
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.altKey || event.ctrlKey || event.shiftKey) {
-        return;
-      }
-      const key = (event.key || "").toLowerCase();
-      const eventKey = EVENT_KEY_BY_HOT_KEY[key];
-      if (eventKey) {
-        this.handleMenuSelect(eventKey, event);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.handleHide();
       }
     };
-    window.addEventListener("keyup", this.hotKeyUpHandler, false);
+    window.addEventListener("keydown", this.keyDownHandler, false);
   }
 
   componentDidUpdate(prevProps) {
@@ -319,7 +306,7 @@ export class ContextMenu extends React.Component {
     window.removeEventListener("touchstart", this.handleResizeOrTouch, {
       passive: true,
     });
-    window.removeEventListener("keyup", this.hotKeyUpHandler, false);
+    window.removeEventListener("keydown", this.keyDownHandler, false);
     window.removeEventListener("touchstart", this.touchStartHandler, {
       passive: true,
     });

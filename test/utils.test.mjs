@@ -365,6 +365,14 @@ test('ContextMenu showMenuAt sets selEnabled to false when right-clicking URL wi
     src.includes('const selEnabled = Boolean(selectedText);'),
     'ContextMenu showMenuAt must set selEnabled = Boolean(selectedText) instead of !normalEnabled'
   );
+  assert.ok(
+    !src.includes('EVENT_KEY_BY_HOT_KEY'),
+    'ContextMenu should not bind legacy single-key hotkeys (P/C/S/T/E)'
+  );
+  assert.ok(
+    src.includes('event.key === "Escape"'),
+    'ContextMenu should allow Escape key to dismiss the menu'
+  );
 });
 
 test('CanvasScreen prevents opening link overlays when drag-selecting text or dismissing selection', async () => {
