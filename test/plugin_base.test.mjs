@@ -1519,3 +1519,92 @@ test('MouseBrowsing tracks timers in PluginBase._timers and App supports unregis
   assert.ok(appSrc.includes('destroyPlugins()'), 'App must define destroyPlugins()');
   assert.ok(appSrc.includes('destroy()'), 'App must define destroy()');
 });
+
+test('Issue #33 fixes: EasyReading inline image row expansion, image load progress update, and InputInterceptors getter-only Event.defaultPrevented safety', async () => {
+  const mainCss = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
+  assert.ok(
+    mainCss.includes('min-height: var(--term-chh, auto);'),
+    'main.css must use min-height on outer row spans so inline image previews can expand vertically'
+  );
+  assert.ok(
+    mainCss.includes('span[type="termrow"]'),
+    'main.css must include span[type="termrow"] in display: block / min-height rules'
+  );
+  assert.ok(
+    mainCss.includes('span[data-type="termline"]'),
+    'main.css must explicitly style span[data-type="termline"] with height var(--term-chh, auto)'
+  );
+
+  const prefSrc = fs.readFileSync(path.resolve('src/js/pref.js'), 'utf-8');
+  assert.ok(
+    prefSrc.includes('saved.enablePicPreview !== undefined'),
+    'pref.js should migrate legacy enablePicPreview preference to enableMediaPreviewer'
+  );
+
+  const easyReadingSrc = fs.readFileSync(path.resolve('src/plugins/easy_reading/EasyReading.js'), 'utf-8');
+  assert.ok(
+    easyReadingSrc.includes("listenWhileEnabled(easyReadingContent, 'load'"),
+    'EasyReading should listen for image load events in capture phase to update scroll progress'
+  );
+
+  const { InputInterceptors } = await import('../src/js/input_interceptors.js');
+  const interceptors = new InputInterceptors({});
+  interceptors.registerInterceptor({
+    handleKeyDown: () => true,
+    handleMouseDown: () => true,
+    handleMouseUp: () => true,
+    handleMouseClick: () => true,
+    handleTextInput: () => true,
+  });
+
+  // Create an event-like object where defaultPrevented is a getter-only property (like native DOM Event)
+  const createNativeLikeEvent = () => {
+    let prevented = false;
+    const ev = {
+      preventDefault() {
+        prevented = true;
+      },
+    };
+    Object.defineProperty(ev, 'defaultPrevented', {
+      get() {
+        return prevented;
+      },
+      configurable: true,
+    });
+    return ev;
+  };
+
+  const keyEv = createNativeLikeEvent();
+  assert.doesNotThrow(() => {
+    const res = interceptors.dispatchKeyDown(keyEv);
+    assert.equal(res, true, 'dispatchKeyDown should return true when handled by interceptor');
+    assert.equal(keyEv.defaultPrevented, true, 'preventDefault() should have been called');
+    assert.equal(keyEv.handled, true, 'event should be marked handled');
+  });
+
+  const clickEv = createNativeLikeEvent();
+  assert.doesNotThrow(() => {
+    const res = interceptors.dispatchMouseClick(clickEv);
+    assert.equal(res, true, 'dispatchMouseClick should return true when handled by interceptor');
+  });
+
+  const termViewSrc = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  assert.ok(
+    termViewSrc.includes('resolveInlineHyperlinkPreview(href, key)'),
+    'term_view.js must define resolveInlineHyperlinkPreview(href, key) fallback method'
+  );
+  assert.ok(
+    termViewSrc.includes('detail.renderInline(key)'),
+    'resolveInlineHyperlinkPreview must invoke detail.renderInline(key) when term:hyperlink-preview provides renderInline'
+  );
+
+  const imagePreviewerSrc = fs.readFileSync(path.resolve('src/plugins/media_previewer/ImagePreviewer.js'), 'utf-8');
+  assert.ok(
+    imagePreviewerSrc.includes('height: img.naturalHeight || img.height'),
+    'resolveWithImageDOM must prefer img.naturalHeight || img.height'
+  );
+  assert.ok(
+    imagePreviewerSrc.includes('renderedSize.width > 0 && renderedSize.height > 0'),
+    'ImagePreviewer.OnHover must only apply explicit width/height styles when both dimensions are positive (> 0)'
+  );
+});

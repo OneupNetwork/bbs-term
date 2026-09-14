@@ -405,6 +405,18 @@ export class TermView extends EventEmitter {
     return detail.request;
   }
 
+  resolveInlineHyperlinkPreview(href, key) {
+    if (typeof this.renderInlineHyperlinkPreview === 'function') {
+      return this.renderInlineHyperlinkPreview(href, key);
+    }
+    const detail = { href, request: null, renderInline: null };
+    this.app?.emit('term:hyperlink-preview', detail);
+    if (typeof detail.renderInline === 'function') {
+      return detail.renderInline(key);
+    }
+    return detail.request;
+  }
+
   get enableMediaPreviewer() {
     return this.enableLinkHoverPreview;
   }
