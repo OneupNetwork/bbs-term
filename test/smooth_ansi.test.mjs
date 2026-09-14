@@ -500,3 +500,200 @@ test('CanvasRenderer snaps text draw coordinates and glyph em-box top to exact i
     );
   }
 });
+
+test('Multi-column DBCS fractional block ramps resolve boundary coordinates across all covered columns (hoody WANTED W and A)', () => {
+  const cols = 15;
+  const rows = 3;
+  const grid = new Array(rows * cols).fill(null);
+
+  // Set up Row 0 (top neighbors):
+  // W left (col 2..3): col 2 is yellow solid (3), col 3 is black solid (0) -> boundary at col 3 (topW = 0.5)
+  grid[0 * cols + 2] = { type: '█', fgIndex: 3, bgIndex: 3, span: 1, r: 0, c: 2, isSolid: true };
+  grid[0 * cols + 3] = { type: '█', fgIndex: 0, bgIndex: 0, span: 1, r: 0, c: 3, isSolid: true };
+  // W right (col 7..8): col 7 is ◢ (bottom black 0), col 8 is black solid (0) -> topW = 1.0 across [7, 9)
+  grid[0 * cols + 7] = { type: '◢', fgIndex: 0, bgIndex: 3, span: 2, r: 0, c: 7 };
+  grid[0 * cols + 8] = grid[0 * cols + 7];
+  // A right (col 11..12): col 11 is black solid (0), col 12 is yellow solid (3) -> boundary at col 12 (topW = 0.5)
+  grid[0 * cols + 11] = { type: '█', fgIndex: 0, bgIndex: 0, span: 1, r: 0, c: 11, isSolid: true };
+  grid[0 * cols + 12] = { type: '█', fgIndex: 3, bgIndex: 3, span: 1, r: 0, c: 12, isSolid: true };
+
+  // Set up Row 1 (fractional DBCS blocks in middle row):
+  // W left: ▊ fg=3 bg=0 at col 2..3
+  grid[1 * cols + 2] = { type: '▊', fgIndex: 3, bgIndex: 0, span: 2, r: 1, c: 2 };
+  grid[1 * cols + 3] = grid[1 * cols + 2];
+  // W right: ▊ fg=0 bg=3 at col 7..8
+  grid[1 * cols + 7] = { type: '▊', fgIndex: 0, bgIndex: 3, span: 2, r: 1, c: 7 };
+  grid[1 * cols + 8] = grid[1 * cols + 7];
+  // A right: ▊ fg=0 bg=3 at col 11..12
+  grid[1 * cols + 11] = { type: '▊', fgIndex: 0, bgIndex: 3, span: 2, r: 1, c: 11 };
+  grid[1 * cols + 12] = grid[1 * cols + 11];
+
+  // Set up Row 2 (bottom neighbors):
+  // W left (col 2..3): col 2 and col 3 are yellow solid (3) -> bottomW = 1.0
+  grid[2 * cols + 2] = { type: '█', fgIndex: 3, bgIndex: 3, span: 1, r: 2, c: 2, isSolid: true };
+  grid[2 * cols + 3] = { type: '█', fgIndex: 3, bgIndex: 3, span: 1, r: 2, c: 3, isSolid: true };
+  // W right (col 7..8): col 7 is black solid (0), col 8 is yellow solid (3) -> boundary at col 8 (bottomW = 0.5)
+  grid[2 * cols + 7] = { type: '█', fgIndex: 0, bgIndex: 0, span: 1, r: 2, c: 7, isSolid: true };
+  grid[2 * cols + 8] = { type: '█', fgIndex: 3, bgIndex: 3, span: 1, r: 2, c: 8, isSolid: true };
+  // A right (col 11..12): col 11 is ▃ (top edge black 0), col 12 is black solid (0) -> bottomW = 1.0
+  grid[2 * cols + 11] = { type: '▃', fgIndex: 3, bgIndex: 0, span: 2, r: 2, c: 11 };
+  grid[2 * cols + 12] = grid[2 * cols + 11];
+
+  const recordPolygon = (r, c, span) => {
+    const pts = [];
+    const ctx = {
+      fillStyle: '',
+      beginPath() {
+        pts.length = 0;
+      },
+      moveTo(x, y) {
+        pts.push({ x, y });
+      },
+      lineTo(x, y) {
+        pts.push({ x, y });
+      },
+      rect() {},
+      closePath() {},
+      fill() {},
+      fillRect() {},
+    };
+    const cell = grid[r * cols + c];
+    const item = {
+      type: cell.type,
+      x: 0,
+      y: 0,
+      w: 20 * span,
+      h: 20,
+      r,
+      c,
+      fgIndex: cell.fgIndex,
+      bgIndex: cell.bgIndex,
+      span,
+    };
+    SmoothAnsiArt.drawBlock(ctx, item, grid, cols, rows, 20, 20);
+    return pts;
+  };
+
+  // 1. W left (col 2..3): must slope \ (top right-edge X < bottom right-edge X) and have only 4 vertices (no < valley)
+  const wLeftPts = recordPolygon(1, 2, 2);
+  assert.equal(wLeftPts.length, 4, 'W left edge should be a clean 4-vertex trapezoid without a < valley');
+  const wLeftTopX = wLeftPts[1].x;
+  const wLeftBottomX = wLeftPts[2].x;
+  assert.ok(
+    wLeftTopX < wLeftBottomX,
+    `W left edge must slope \\ (topX=${wLeftTopX} < bottomX=${wLeftBottomX})`
+  );
+
+  // 2. W right (col 7..8): must slope / (top right-edge X > bottom right-edge X)
+  const wRightPts = recordPolygon(1, 7, 2);
+  assert.equal(wRightPts.length, 4, 'W right edge should be a 4-vertex trapezoid');
+  const wRightTopX = wRightPts[1].x;
+  const wRightBottomX = wRightPts[2].x;
+  assert.ok(
+    wRightTopX > wRightBottomX,
+    `W right edge must slope / (topX=${wRightTopX} > bottomX=${wRightBottomX})`
+  );
+
+  // 3. A right (col 11..12): must slope \ (top right-edge X < bottom right-edge X)
+  const aRightPts = recordPolygon(1, 11, 2);
+  assert.equal(aRightPts.length, 4, 'A right edge should be a 4-vertex trapezoid');
+  const aRightTopX = aRightPts[1].x;
+  const aRightBottomX = aRightPts[2].x;
+  assert.ok(
+    aRightTopX < aRightBottomX,
+    `A right edge must slope \\ (topX=${aRightTopX} < bottomX=${aRightBottomX})`
+  );
+});
+
+test('Solid background cells touching fractional ramps emit sloped continuation wedges', () => {
+  const cols = 6;
+  const rows = 3;
+  const grid = new Array(rows * cols).fill(null);
+
+  // Row 0: col 1 is yellow (3), col 2 is black (0) -> vertical transition between col 1 and col 2
+  grid[0 * cols + 1] = { type: '█', fgIndex: 3, bgIndex: 3, span: 1, r: 0, c: 1, w: 20, h: 20, isSolid: true };
+  grid[0 * cols + 2] = { type: '█', fgIndex: 0, bgIndex: 0, span: 1, r: 0, c: 2, w: 20, h: 20, isSolid: true };
+
+  // Row 1: col 1..2 is ▊ fg=3 bg=0 (fractional ramp continuing that transition across Row 1; boundary at 2.5 inside col 2)
+  grid[1 * cols + 1] = { type: '▊', fgIndex: 3, bgIndex: 0, span: 2, r: 1, c: 1, w: 40, h: 20 };
+  grid[1 * cols + 2] = grid[1 * cols + 1];
+
+  // Row 2: col 2 is yellow (3), col 3 is black (0)
+  grid[2 * cols + 2] = { type: '█', fgIndex: 3, bgIndex: 3, span: 1, r: 2, c: 2, w: 20, h: 20, isSolid: true };
+  grid[2 * cols + 3] = { type: '█', fgIndex: 0, bgIndex: 0, span: 1, r: 2, c: 3, w: 20, h: 20, isSolid: true };
+
+  const wedges = [];
+  const buckets = Array.from({ length: 16 }, () => []);
+  SmoothAnsiArt.collectSolidRampWedges(
+    grid,
+    cols,
+    rows,
+    buckets,
+    (type, r, c, x, y, w, h, fgIndex, bgIndex, clip, span) => {
+      const item = { type, r, c, x, y, w, h, fgIndex, bgIndex, clip, span };
+      wedges.push(item);
+      return item;
+    }
+  );
+  assert.ok(wedges.length > 0, 'Should emit solid continuation wedges for Row 0 and/or Row 2 adjacent to fractional ramp');
+  const row0Wedge = wedges.find((w) => w.r === 0 && w.c === 2);
+  assert.ok(row0Wedge, 'Row 0 Col 2 solid cell should receive a left-side continuation wedge');
+  assert.equal(row0Wedge.fgIndex, 3, 'Complement wedge color should match adjacent cell color (3)');
+  assert.equal(row0Wedge.isSolidWedge, 'left', 'Row 0 Col 2 wedge should be on the left side');
+});
+
+test('Flat horizontal lower-block bars adjacent to solid blocks remain flat without diagonal endpoint beveling', () => {
+  const cols = 5;
+  const rows = 1;
+  const grid = new Array(cols).fill(null);
+
+  // Col 0: black solid block (fg=0, bg=0)
+  grid[0] = { type: '█', fgIndex: 0, bgIndex: 0, span: 1, r: 0, c: 0, w: 20, h: 20, isSolid: true };
+  // Col 1..2: flat ▂ bar (fg=0, bg=3, span=2)
+  grid[1] = { type: '▂', fgIndex: 0, bgIndex: 3, span: 2, r: 0, c: 1, w: 40, h: 20 };
+  grid[2] = grid[1];
+  // Col 3..4: flat ▂ bar (fg=0, bg=3, span=2)
+  grid[3] = { type: '▂', fgIndex: 0, bgIndex: 3, span: 2, r: 0, c: 3, w: 40, h: 20 };
+  grid[4] = grid[3];
+
+  const pts = [];
+  const rects = [];
+  const ctx = {
+    fillStyle: '',
+    beginPath() {
+      pts.length = 0;
+    },
+    moveTo(x, y) {
+      pts.push({ x, y });
+    },
+    lineTo(x, y) {
+      pts.push({ x, y });
+    },
+    rect(x, y, w, h) {
+      rects.push({ x, y, w, h });
+    },
+    closePath() {},
+    fill() {},
+    fillRect() {},
+  };
+
+  const item = {
+    type: '▂',
+    x: 0,
+    y: 0,
+    w: 40,
+    h: 20,
+    r: 0,
+    c: 1,
+    fgIndex: 0,
+    bgIndex: 3,
+    span: 2,
+  };
+  SmoothAnsiArt.drawBlock(ctx, item, grid, cols, rows, 20, 20);
+
+  // When leftY == rightY, drawLowerBlockRamp draws a crisp rectangle via ctx.rect(x, topY, w, h - topY)
+  assert.equal(pts.length, 0, 'Flat horizontal bar should not emit diagonal polygon vertices');
+  assert.equal(rects.length, 1, 'Flat horizontal bar should be drawn as a single crisp rectangle');
+  assert.equal(rects[0].y, 15, 'Top edge of ▂ bar should stay at 0.75 * h (15), not bevel up toward 0');
+});
+

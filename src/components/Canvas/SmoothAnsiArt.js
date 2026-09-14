@@ -153,8 +153,395 @@ export class SmoothAnsiArt {
     return false;
   }
 
+  static getCellEdgeColors(cell, edge) {
+    if (!cell) return null;
+    const type = cell.type;
+    if (type === "\u2588" || type === "\u25a0") {
+      return { type: "solid", color: cell.fgIndex };
+    }
+    if (LOWER_BLOCK_MAP[type] !== undefined) {
+      const h = LOWER_BLOCK_MAP[type];
+      return {
+        type: "solid",
+        color: edge === "bottom" || h >= 1.0 ? cell.fgIndex : cell.bgIndex,
+      };
+    }
+    if (UPPER_BLOCK_MAP[type] !== undefined) {
+      const h = UPPER_BLOCK_MAP[type];
+      return {
+        type: "solid",
+        color: edge === "top" || h >= 1.0 ? cell.fgIndex : cell.bgIndex,
+      };
+    }
+    if (LEFT_BLOCK_MAP[type] !== undefined) {
+      const frac = LEFT_BLOCK_MAP[type];
+      const span = cell.span || 1;
+      return {
+        type: "split",
+        leftColor: cell.fgIndex,
+        rightColor: cell.bgIndex,
+        splitCol: cell.c + frac * span,
+      };
+    }
+    if (RIGHT_BLOCK_MAP[type] !== undefined) {
+      const frac = RIGHT_BLOCK_MAP[type];
+      const span = cell.span || 1;
+      return {
+        type: "split",
+        leftColor: cell.bgIndex,
+        rightColor: cell.fgIndex,
+        splitCol: cell.c + (1 - frac) * span,
+      };
+    }
+    if (type === "\u25e2" || type === "\u25e3") {
+      if (edge === "bottom") return { type: "solid", color: cell.fgIndex };
+      const span = cell.span || 1;
+      return type === "\u25e2"
+        ? {
+            type: "split",
+            leftColor: cell.bgIndex,
+            rightColor: cell.fgIndex,
+            splitCol: cell.c + span,
+          }
+        : {
+            type: "split",
+            leftColor: cell.fgIndex,
+            rightColor: cell.bgIndex,
+            splitCol: cell.c,
+          };
+    }
+    if (type === "\u25e5" || type === "\u25e4") {
+      if (edge === "top") return { type: "solid", color: cell.fgIndex };
+      const span = cell.span || 1;
+      return type === "\u25e5"
+        ? {
+            type: "split",
+            leftColor: cell.bgIndex,
+            rightColor: cell.fgIndex,
+            splitCol: cell.c + span,
+          }
+        : {
+            type: "split",
+            leftColor: cell.fgIndex,
+            rightColor: cell.bgIndex,
+            splitCol: cell.c,
+          };
+    }
+    return { type: "solid", color: cell.fgIndex };
+  }
+
+  static getRowBoundaryX(
+    grid,
+    cols,
+    targetRow,
+    cStart,
+    span,
+    leftColor,
+    rightColor,
+    edge
+  ) {
+    if (!grid || targetRow < 0) return null;
+    const rows = Math.floor(grid.length / cols);
+    if (targetRow >= rows) return null;
+
+    for (let k = cStart; k < cStart + span && k < cols; k++) {
+      const cell = grid[targetRow * cols + k];
+      if (!cell) continue;
+      const info = this.getCellEdgeColors(cell, edge);
+      if (
+        info &&
+        info.type === "split" &&
+        info.leftColor === leftColor &&
+        (rightColor === undefined ||
+          info.rightColor === rightColor ||
+          rightColor === leftColor) &&
+        info.splitCol >= cStart &&
+        info.splitCol <= cStart + span
+      ) {
+        return (info.splitCol - cStart) / span;
+      }
+    }
+
+    const getColorAtColEdge = (colIdx, side) => {
+      if (colIdx < 0 || colIdx >= cols) return null;
+      const cell = grid[targetRow * cols + colIdx];
+      if (!cell) return null;
+      const info = this.getCellEdgeColors(cell, edge);
+      if (!info) return null;
+      if (info.type === "solid") return info.color;
+      if (side === "left") {
+        return colIdx < info.splitCol ? info.leftColor : info.rightColor;
+      }
+      return colIdx + 1 <= info.splitCol ? info.leftColor : info.rightColor;
+    };
+
+    for (let k = cStart + 1; k < cStart + span; k++) {
+      const cL = getColorAtColEdge(k - 1, "right");
+      const cR = getColorAtColEdge(k, "left");
+      if (cL === leftColor && (rightColor === undefined || cR === rightColor)) {
+        return (k - cStart) / span;
+      }
+    }
+
+    let allLeft = true;
+    for (let k = cStart; k < cStart + span; k++) {
+      if (
+        getColorAtColEdge(k, "left") !== leftColor ||
+        getColorAtColEdge(k, "right") !== leftColor
+      ) {
+        allLeft = false;
+        break;
+      }
+    }
+    if (allLeft) {
+      const rightCol = cStart + span;
+      if (rightCol < cols) {
+        const cR = getColorAtColEdge(rightCol, "left");
+        const rightCell = grid[targetRow * cols + rightCol];
+        const rightInfo = this.getCellEdgeColors(rightCell, edge);
+        if (
+          cR === rightColor ||
+          (rightInfo &&
+            rightInfo.type === "split" &&
+            rightInfo.leftColor === leftColor &&
+            (rightColor === undefined || rightInfo.rightColor === rightColor)) ||
+          this.hasLRBoundary(rightCell, grid, cols, 1, leftColor, rightColor)
+        ) {
+          return 1.0;
+        }
+      }
+    }
+
+    let allRight = true;
+    for (let k = cStart; k < cStart + span; k++) {
+      if (
+        getColorAtColEdge(k, "left") !== rightColor ||
+        getColorAtColEdge(k, "right") !== rightColor
+      ) {
+        allRight = false;
+        break;
+      }
+    }
+    if (allRight) {
+      const leftCol = cStart - 1;
+      if (leftCol >= 0) {
+        const cL = getColorAtColEdge(leftCol, "right");
+        const leftCell = grid[targetRow * cols + leftCol];
+        const leftInfo = this.getCellEdgeColors(leftCell, edge);
+        if (
+          cL === leftColor ||
+          (leftInfo &&
+            leftInfo.type === "split" &&
+            leftInfo.leftColor === leftColor &&
+            (rightColor === undefined || leftInfo.rightColor === rightColor)) ||
+          this.hasLRBoundary(leftCell, grid, cols, 1, leftColor, rightColor)
+        ) {
+          return 0.0;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  static collectSolidRampWedges(
+    grid,
+    cols,
+    rows,
+    ansiBlockBuckets,
+    createBlockItem
+  ) {
+    if (!grid) return;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cell = grid[r * cols + c];
+        if (!cell || cell.c !== c) continue;
+        if (
+          (cell.type !== "\u2588" && cell.type !== "\u25a0") ||
+          cell.fgIndex !== cell.bgIndex
+        ) {
+          continue;
+        }
+        const C = cell.fgIndex;
+        const span = cell.span || 1;
+
+        if (c > 0) {
+          const leftCell = grid[r * cols + c - 1];
+          const leftInfo = this.getCellEdgeColors(leftCell, "top");
+          const L =
+            leftInfo && leftInfo.type === "solid" ? leftInfo.color : null;
+          if (L !== null && L !== C) {
+            const topX = this.getRowBoundaryX(
+              grid,
+              cols,
+              r - 1,
+              c,
+              span,
+              L,
+              C,
+              "bottom"
+            );
+            const botX = this.getRowBoundaryX(
+              grid,
+              cols,
+              r + 1,
+              c,
+              span,
+              L,
+              C,
+              "top"
+            );
+            if (
+              (topX !== null && topX > 0.0 && topX < 1.0) ||
+              (botX !== null && botX > 0.0 && botX < 1.0)
+            ) {
+              const item = createBlockItem(
+                "\u2588",
+                r,
+                c,
+                cell.x,
+                cell.y,
+                cell.w,
+                cell.h,
+                L,
+                C,
+                cell.clip,
+                span
+              );
+              item.isSolidWedge = "left";
+              ansiBlockBuckets[L].push(item);
+            }
+          }
+        }
+
+        if (c + span < cols) {
+          const rightCell = grid[r * cols + c + span];
+          const rightInfo = this.getCellEdgeColors(rightCell, "top");
+          const R =
+            rightInfo && rightInfo.type === "solid" ? rightInfo.color : null;
+          if (R !== null && R !== C) {
+            const topX = this.getRowBoundaryX(
+              grid,
+              cols,
+              r - 1,
+              c,
+              span,
+              C,
+              R,
+              "bottom"
+            );
+            const botX = this.getRowBoundaryX(
+              grid,
+              cols,
+              r + 1,
+              c,
+              span,
+              C,
+              R,
+              "top"
+            );
+            if (
+              (topX !== null && topX > 0.0 && topX < 1.0) ||
+              (botX !== null && botX > 0.0 && botX < 1.0)
+            ) {
+              const item = createBlockItem(
+                "\u2588",
+                r,
+                c,
+                cell.x,
+                cell.y,
+                cell.w,
+                cell.h,
+                R,
+                C,
+                cell.clip,
+                span
+              );
+              item.isSolidWedge = "right";
+              ansiBlockBuckets[R].push(item);
+            }
+          }
+        }
+      }
+    }
+  }
+
   static drawBlock(ctx, item, grid, cols, rows, chw, chh) {
     const { type, x, y, w, h } = item;
+
+    if (item.isSolidWedge === "left") {
+      const stepCol = item.span || (chw && w > chw ? 2 : 1);
+      const topW = this.getRowBoundaryX(
+        grid,
+        cols,
+        item.r - 1,
+        item.c,
+        stepCol,
+        item.fgIndex,
+        item.bgIndex,
+        "bottom"
+      );
+      const bottomW = this.getRowBoundaryX(
+        grid,
+        cols,
+        item.r + 1,
+        item.c,
+        stepCol,
+        item.fgIndex,
+        item.bgIndex,
+        "top"
+      );
+      const wT = topW !== null && topW > 0.0 && topW < 1.0 ? topW / 2 : 0.0;
+      const wB =
+        bottomW !== null && bottomW > 0.0 && bottomW < 1.0
+          ? bottomW / 2
+          : 0.0;
+      if (wT === 0.0 && wB === 0.0) return;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + wT * w, y);
+      ctx.lineTo(x + wB * w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      return;
+    }
+
+    if (item.isSolidWedge === "right") {
+      const stepCol = item.span || (chw && w > chw ? 2 : 1);
+      const topX = this.getRowBoundaryX(
+        grid,
+        cols,
+        item.r - 1,
+        item.c,
+        stepCol,
+        item.bgIndex,
+        item.fgIndex,
+        "bottom"
+      );
+      const bottomX = this.getRowBoundaryX(
+        grid,
+        cols,
+        item.r + 1,
+        item.c,
+        stepCol,
+        item.bgIndex,
+        item.fgIndex,
+        "top"
+      );
+      const xT =
+        topX !== null && topX > 0.0 && topX < 1.0 ? (1.0 + topX) / 2 : 1.0;
+      const xB =
+        bottomX !== null && bottomX > 0.0 && bottomX < 1.0
+          ? (1.0 + bottomX) / 2
+          : 1.0;
+      if (xT === 1.0 && xB === 1.0) return;
+      const xR = x + w;
+      ctx.moveTo(x + xT * w, y);
+      ctx.lineTo(xR, y);
+      ctx.lineTo(xR, y + h);
+      ctx.lineTo(x + xB * w, y + h);
+      ctx.closePath();
+      return;
+    }
 
     if (type === "\u2588" || type === "\u25a0") {
       if (grid) {
@@ -245,17 +632,65 @@ export class SmoothAnsiArt {
       rightCell.fgIndex === fgIndex &&
       LOWER_BLOCK_MAP[rightCell.type] !== undefined;
 
-    const leftH = isSameLeft ? LOWER_BLOCK_MAP[leftCell.type] : null;
-    const rightH = isSameRight ? LOWER_BLOCK_MAP[rightCell.type] : null;
+    let leftH = isSameLeft ? LOWER_BLOCK_MAP[leftCell.type] : null;
+    let rightH = isSameRight ? LOWER_BLOCK_MAP[rightCell.type] : null;
+
+    if (curH < 1.0) {
+      if (
+        leftH === 1.0 &&
+        ((rightH !== null && Math.abs(rightH - curH) < 1e-6) || curH < 0.5)
+      ) {
+        leftH = null;
+      }
+      if (
+        rightH === 1.0 &&
+        ((leftH !== null && Math.abs(leftH - curH) < 1e-6) || curH < 0.5)
+      ) {
+        rightH = null;
+      }
+    }
 
     if (type === "\u2588" || type === "\u25a0") {
+      if (leftH !== null && leftH < 1.0) {
+        const leftStep = leftCell.span || 1;
+        const leftLeftCell =
+          leftCell.c - 1 >= 0 ? grid[r * cols + leftCell.c - 1] : null;
+        const leftLeftH =
+          leftLeftCell &&
+          leftLeftCell.fgIndex === fgIndex &&
+          LOWER_BLOCK_MAP[leftLeftCell.type] !== undefined
+            ? LOWER_BLOCK_MAP[leftLeftCell.type]
+            : null;
+        if (leftH < 0.5 || (leftLeftH !== null && Math.abs(leftLeftH - leftH) < 1e-6)) {
+          leftH = null;
+        }
+      }
+      if (rightH !== null && rightH < 1.0) {
+        const rightStep = rightCell.span || 1;
+        const rightRightCell =
+          rightCell.c + rightStep < cols
+            ? grid[r * cols + rightCell.c + rightStep]
+            : null;
+        const rightRightH =
+          rightRightCell &&
+          rightRightCell.fgIndex === fgIndex &&
+          LOWER_BLOCK_MAP[rightRightCell.type] !== undefined
+            ? LOWER_BLOCK_MAP[rightRightCell.type]
+            : null;
+        if (
+          rightH < 0.5 ||
+          (rightRightH !== null && Math.abs(rightRightH - rightH) < 1e-6)
+        ) {
+          rightH = null;
+        }
+      }
       const touchesLowerRamp =
         (leftH !== null && leftH < 1.0) || (rightH !== null && rightH < 1.0);
       if (!touchesLowerRamp) return false;
     }
 
-    const leftW = isSameLeft ? leftCell.w : w;
-    const rightW = isSameRight ? rightCell.w : w;
+    const leftW = leftH !== null && leftCell ? leftCell.w : w;
+    const rightW = rightH !== null && rightCell ? rightCell.w : w;
 
     let hL, hR;
     if (leftH !== null && rightH !== null) {
@@ -323,17 +758,64 @@ export class SmoothAnsiArt {
       rightCell.fgIndex === fgIndex &&
       UPPER_BLOCK_MAP[rightCell.type] !== undefined;
 
-    const leftH = isSameLeft ? UPPER_BLOCK_MAP[leftCell.type] : null;
-    const rightH = isSameRight ? UPPER_BLOCK_MAP[rightCell.type] : null;
+    let leftH = isSameLeft ? UPPER_BLOCK_MAP[leftCell.type] : null;
+    let rightH = isSameRight ? UPPER_BLOCK_MAP[rightCell.type] : null;
+
+    if (curH < 1.0) {
+      if (
+        leftH === 1.0 &&
+        ((rightH !== null && Math.abs(rightH - curH) < 1e-6) || curH < 0.5)
+      ) {
+        leftH = null;
+      }
+      if (
+        rightH === 1.0 &&
+        ((leftH !== null && Math.abs(leftH - curH) < 1e-6) || curH < 0.5)
+      ) {
+        rightH = null;
+      }
+    }
 
     if (type === "\u2588" || type === "\u25a0") {
+      if (leftH !== null && leftH < 1.0) {
+        const leftLeftCell =
+          leftCell.c - 1 >= 0 ? grid[r * cols + leftCell.c - 1] : null;
+        const leftLeftH =
+          leftLeftCell &&
+          leftLeftCell.fgIndex === fgIndex &&
+          UPPER_BLOCK_MAP[leftLeftCell.type] !== undefined
+            ? UPPER_BLOCK_MAP[leftLeftCell.type]
+            : null;
+        if (leftH < 0.5 || (leftLeftH !== null && Math.abs(leftLeftH - leftH) < 1e-6)) {
+          leftH = null;
+        }
+      }
+      if (rightH !== null && rightH < 1.0) {
+        const rightStep = rightCell.span || 1;
+        const rightRightCell =
+          rightCell.c + rightStep < cols
+            ? grid[r * cols + rightCell.c + rightStep]
+            : null;
+        const rightRightH =
+          rightRightCell &&
+          rightRightCell.fgIndex === fgIndex &&
+          UPPER_BLOCK_MAP[rightRightCell.type] !== undefined
+            ? UPPER_BLOCK_MAP[rightRightCell.type]
+            : null;
+        if (
+          rightH < 0.5 ||
+          (rightRightH !== null && Math.abs(rightRightH - rightH) < 1e-6)
+        ) {
+          rightH = null;
+        }
+      }
       const touchesUpperRamp =
         (leftH !== null && leftH < 1.0) || (rightH !== null && rightH < 1.0);
       if (!touchesUpperRamp) return false;
     }
 
-    const leftW = isSameLeft ? leftCell.w : w;
-    const rightW = isSameRight ? rightCell.w : w;
+    const leftW = leftH !== null && leftCell ? leftCell.w : w;
+    const rightW = rightH !== null && rightCell ? rightCell.w : w;
 
     let hL, hR;
     if (leftH !== null && rightH !== null) {
@@ -395,24 +877,42 @@ export class SmoothAnsiArt {
     const rightCell =
       c + stepCol < cols && grid ? grid[r * cols + c + stepCol] : null;
 
-    let topW = this.getLeftBoundaryX(topCell, L, R);
-    if (
-      topW === null &&
-      topCell &&
-      topCell.fgIndex === L &&
-      LEFT_BLOCK_MAP[topCell.type] !== undefined
-    ) {
-      topW = LEFT_BLOCK_MAP[topCell.type];
-    }
+    let topW = this.getRowBoundaryX(
+      grid,
+      cols,
+      r - 1,
+      c,
+      stepCol,
+      L,
+      R,
+      "bottom"
+    );
+    let bottomW = this.getRowBoundaryX(
+      grid,
+      cols,
+      r + 1,
+      c,
+      stepCol,
+      L,
+      R,
+      "top"
+    );
 
-    let bottomW = this.getLeftBoundaryX(bottomCell, L, R);
-    if (
-      bottomW === null &&
-      bottomCell &&
-      bottomCell.fgIndex === L &&
-      LEFT_BLOCK_MAP[bottomCell.type] !== undefined
-    ) {
-      bottomW = LEFT_BLOCK_MAP[bottomCell.type];
+    if (curW < 1.0) {
+      if (
+        bottomW !== null &&
+        Math.abs(bottomW - curW) < 1e-6 &&
+        (topW === 0.0 || topW === 1.0)
+      ) {
+        topW = null;
+      }
+      if (
+        topW !== null &&
+        Math.abs(topW - curW) < 1e-6 &&
+        (bottomW === 0.0 || bottomW === 1.0)
+      ) {
+        bottomW = null;
+      }
     }
 
     if (type === "\u2588" || type === "\u25a0") {
@@ -619,8 +1119,43 @@ export class SmoothAnsiArt {
     const rightCell =
       c + stepCol < cols && grid ? grid[r * cols + c + stepCol] : null;
 
-    const topX = this.getLeftBoundaryX(topCell, L, R);
-    const bottomX = this.getLeftBoundaryX(bottomCell, L, R);
+    let topX = this.getRowBoundaryX(
+      grid,
+      cols,
+      r - 1,
+      c,
+      stepCol,
+      L,
+      R,
+      "bottom"
+    );
+    let bottomX = this.getRowBoundaryX(
+      grid,
+      cols,
+      r + 1,
+      c,
+      stepCol,
+      L,
+      R,
+      "top"
+    );
+
+    if (curRightW < 1.0) {
+      if (
+        bottomX !== null &&
+        Math.abs(bottomX - curX) < 1e-6 &&
+        (topX === 0.0 || topX === 1.0)
+      ) {
+        topX = null;
+      }
+      if (
+        topX !== null &&
+        Math.abs(topX - curX) < 1e-6 &&
+        (bottomX === 0.0 || bottomX === 1.0)
+      ) {
+        bottomX = null;
+      }
+    }
 
     let pinnedXT = null;
     let pinnedXB = null;
