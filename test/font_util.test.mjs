@@ -159,6 +159,14 @@ test("FontManager filters preset fonts by availability and validates custom font
     src.includes("options_fontList_notFound"),
     "FontManager should display error message when custom font is not found",
   );
+  assert(
+    src.includes("FontManager__Actions") &&
+      src.indexOf("FontManager__List") < src.indexOf("FontManager__Actions") &&
+      src.indexOf("FontManager__Actions") < src.indexOf("FontManager__AddBox") &&
+      src.indexOf("FontManager__Actions") < src.indexOf("this.handleQueryLocalFonts") &&
+      src.indexOf("FontManager__Actions") < src.indexOf("this.handleRestoreDefault"),
+    "FontManager should render query local fonts and restore default buttons above AddBox",
+  );
 
   const zhMessages = JSON.parse(
     fs.readFileSync(path.resolve("src/_locales/zh_TW/messages.json"), "utf-8"),

@@ -280,35 +280,6 @@ export class FontManager extends React.Component {
           <span className="FontManager__Toolbar__Title">
             {_("options_fontList_title")}
           </span>
-          <div className="FontManager__Toolbar__Actions">
-            {canQueryLocalFonts && (
-              <button
-                type="button"
-                className="btn btn-default btn-xs"
-                onClick={this.handleQueryLocalFonts}
-                disabled={isQuerying}
-                title={
-                  hasQueried
-                    ? `${_("options_fontList_queried")} (${deviceFonts.length})`
-                    : _("options_fontList_queryDevice")
-                }
-              >
-                {isQuerying
-                  ? _("options_fontList_querying")
-                  : hasQueried
-                    ? `✓ ${_("options_fontList_queried")} (${deviceFonts.length})`
-                    : _("options_fontList_queryDevice")}
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-default btn-xs"
-              onClick={this.handleRestoreDefault}
-              title={_("options_fontList_restoreDefault")}
-            >
-              {_("options_fontList_restoreDefault")}
-            </button>
-          </div>
         </div>
 
         <div className="FontManager__List">
@@ -390,6 +361,36 @@ export class FontManager extends React.Component {
               );
             })
           )}
+        </div>
+
+        <div className="FontManager__Actions">
+          {canQueryLocalFonts && (
+            <button
+              type="button"
+              className="btn btn-default btn-xs"
+              onClick={this.handleQueryLocalFonts}
+              disabled={isQuerying}
+              title={
+                hasQueried
+                  ? `${_("options_fontList_queried")} (${deviceFonts.length})`
+                  : _("options_fontList_queryDevice")
+              }
+            >
+              {isQuerying
+                ? _("options_fontList_querying")
+                : hasQueried
+                  ? `✓ ${_("options_fontList_queried")} (${deviceFonts.length})`
+                  : _("options_fontList_queryDevice")}
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-default btn-xs"
+            onClick={this.handleRestoreDefault}
+            title={_("options_fontList_restoreDefault")}
+          >
+            {_("options_fontList_restoreDefault")}
+          </button>
         </div>
 
         <div className="FontManager__AddBox">
