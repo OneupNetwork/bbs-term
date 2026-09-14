@@ -3898,5 +3898,26 @@ test('TermView clientToPos and convertMN2XYEx are consistent inverses in both un
   assert.deepEqual(mockView.clientToPos(px2 + 2, py2 + 2), { col: 40, row: 12 });
 });
 
+test('TouchKeyboard zoom buttons only trigger zoom on pointerdown and swallow synthetic click', () => {
+  const touchKbSource = fs.readFileSync(path.resolve('src/touch/TouchKeyboard.js'), 'utf-8');
 
+  const fontZoomInBlock = touchKbSource.slice(
+    touchKbSource.indexOf('renderFontZoomIn = () => ('),
+    touchKbSource.indexOf('renderFontZoomOut = () => (')
+  );
+  const fontZoomOutBlock = touchKbSource.slice(
+    touchKbSource.indexOf('renderFontZoomOut = () => ('),
+    touchKbSource.indexOf('renderKeyboardToggle = () => {')
+  );
 
+  assert.ok(
+    fontZoomInBlock.includes('onPointerDown={(e) => this.handleTermFontZoom(1, e)}') &&
+      fontZoomInBlock.includes('onClick={(e) => e.preventDefault()}'),
+    'renderFontZoomIn must fire handleTermFontZoom only on onPointerDown and prevent default on onClick'
+  );
+  assert.ok(
+    fontZoomOutBlock.includes('onPointerDown={(e) => this.handleTermFontZoom(-1, e)}') &&
+      fontZoomOutBlock.includes('onClick={(e) => e.preventDefault()}'),
+    'renderFontZoomOut must fire handleTermFontZoom only on onPointerDown and prevent default on onClick'
+  );
+});
