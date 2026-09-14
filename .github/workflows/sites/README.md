@@ -25,7 +25,7 @@ BRANCH: 'gh-pages'     # Target branch in TARGET_REPO (default: 'gh-pages')
 #   easy_reading: true
 #   mouse_browsing: false
 # DEFAULT_PREFS:       # Override default preferences for this site (optional)
-#   termSizeMode: 'max-font-size'
+#   termSizeMode: 'fixed-font-size'
 # DEPLOY_BRANCH: 'prod' # Source branch in this repository triggering deployment (optional)
 # DEPLOY_TOKEN_SECRET: 'GH_PAT_MYSITE' # Secret name in repository secrets (optional)
 # enabled: true        # Set to false to temporarily skip building this site

@@ -122,7 +122,6 @@ body:
       description: 請選擇目前設定的終端機大小或縮放模式。（若由「設定」視窗點擊「問題回報」，下方環境資訊已自動包含，此項可略過）
       options:
         - 固定終端機大小 (Fixed Terminal Size)（預設）
-        - 依視窗調整字體大小 (Max Font Size)
         - 固定字型大小 (Fixed Font Size)
         - 固定終端機大小 + 把字體拉大來補滿畫面 (Fixed Terminal Size + fontFitWindowWidth)
         - 其他 / 不確定
@@ -166,7 +165,7 @@ body:
       label: 相關特殊設定 (Relevant Settings)
       description: 請勾選目前有開啟或調整的特殊選項（若由「設定」視窗點擊「問題回報」，下方環境資訊已自動包含，此項可略過）
       options:
-        - label: 變更「終端機大小與縮放模式 (termSizeMode)」（如：限制最大字體大小、固定字體大小）
+        - label: 變更「終端機大小與縮放模式 (termSizeMode)」（如：固定字體大小）
         - label: 開啟「把字體拉大來補滿畫面 (fontFitWindowWidth)」
         - label: 變更「文字游標樣式 (Caret Style)」（如：半高方塊、實心方塊、垂直線）
         - label: 開啟「平滑 ANSI 圖形 (smoothAnsiArt)」

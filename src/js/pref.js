@@ -62,7 +62,6 @@ export const DEFAULT_PREFS = {
   fontFitWindowWidth: false,
   fontFace: "MingLiu,SymMingLiu,'Noto Sans Mono CJK TC','PingFang TC',monospace",
   fontSize: 24,
-  maxFontSize: 999,
   termSize: { cols: 80, rows: 24 },
   termSizeMode: "fixed-term-size",
   termMargin: 0,
@@ -246,6 +245,10 @@ export const getDefaultPrefs = () => {
   ) {
     customDefaults.enableLoginAssist = Boolean(customDefaults.enableAutoLogin);
   }
+  if (customDefaults.termSizeMode === "max-font-size") {
+    customDefaults.termSizeMode = DEFAULT_PREFS.termSizeMode;
+  }
+  delete customDefaults.maxFontSize;
   return {
     ...DEFAULT_PREFS,
     enablePwaPrompt: getDefaultPwaPrompt(),
@@ -329,15 +332,13 @@ export const readValuesWithDefault = () => {
       if (saved.showLiveUpdateToolbar !== undefined) {
         prefs.showLiveUpdateToolbar = Boolean(saved.showLiveUpdateToolbar);
       }
-      if (saved.maxFontSize === undefined) {
-        prefs.maxFontSize =
-          saved.termSizeMode === "max-font-size" && saved.fontSize
-            ? saved.fontSize
-            : DEFAULT_PREFS.maxFontSize;
+      if (saved.termSizeMode === "max-font-size") {
+        prefs.termSizeMode = DEFAULT_PREFS.termSizeMode;
       }
-      if (saved.fontSize === 999 || saved.fontSize === undefined) {
+      if (prefs.fontSize === 999 || prefs.fontSize === undefined) {
         prefs.fontSize = DEFAULT_PREFS.fontSize;
       }
+      delete prefs.maxFontSize;
       if (saved.lineHeight !== undefined) {
         const parsedLineHeight = parseFloat(saved.lineHeight);
         prefs.lineHeight = !isNaN(parsedLineHeight) && parsedLineHeight > 0 ? parsedLineHeight : 1.0;

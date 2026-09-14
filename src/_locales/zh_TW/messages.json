@@ -384,17 +384,11 @@
   "options_fontSize": {
     "message": "字體大小 (px)"
   },
-  "options_fontSizeMax": {
-    "message": "最大字體大小 (px)"
-  },
   "options_fixedTermSize": {
-    "message": "固定終端機大小"
+    "message": "固定終端機大小 (依視窗縮放字體，預設 80×24)"
   },
   "options_fixedFontSize": {
-    "message": "固定字體大小"
-  },
-  "options_maxFontSize": {
-    "message": "限制最大字體大小"
+    "message": "固定字體大小 (依視窗大小自動增減行列數)"
   },
   "options_touchFixedFontNote": {
     "message": "觸控介面固定使用字體大小並支援平移"

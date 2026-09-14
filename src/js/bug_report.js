@@ -306,8 +306,6 @@ export function buildBugReportUrl({
       termSizeDetail = `fixed-term-size (${cols}x${rows}, fontFitWindowWidth=${fitWidth})`;
     } else if (termSizeMode === "fixed-font-size") {
       termSizeDetail = `fixed-font-size (fontSize=${values.fontSize || DEFAULT_PREFS.fontSize})`;
-    } else if (termSizeMode === "max-font-size") {
-      termSizeDetail = `max-font-size (maxFontSize=${values.maxFontSize || DEFAULT_PREFS.maxFontSize})`;
     }
     envLines.push(`Terminal Size: ${termSizeDetail}`);
   }
