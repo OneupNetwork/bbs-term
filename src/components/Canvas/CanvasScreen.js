@@ -265,12 +265,14 @@ export class CanvasScreen extends React.Component {
   clearSelection = () => {
     this.isMouseDown = false;
     this.dragStarted = false;
+    this.hadSelectionOnMouseDown = false;
     this.startPos = null;
     this.setState({ selStart: null, selEnd: null });
   };
 
   handleMouseDown = (e) => {
     if (e.button !== 0) return;
+    this.hadSelectionOnMouseDown = Boolean(this.getNormalizedSelection());
     if (e.target && e.target.tagName !== "A") {
       e.preventDefault();
       if (
@@ -400,6 +402,17 @@ export class CanvasScreen extends React.Component {
     this.setState(resetState());
   };
 
+  handleHyperLinkClick = (e) => {
+    if (
+      this.dragStarted ||
+      this.hadSelectionOnMouseDown ||
+      this.getNormalizedSelection()
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   renderLinkOverlays() {
     const { lines } = this.props;
     if (!lines) return null;
@@ -432,6 +445,7 @@ export class CanvasScreen extends React.Component {
               data-scol={startCol}
               draggable="false"
               onDragStart={(e) => e.preventDefault()}
+              onClick={this.handleHyperLinkClick}
               onMouseOver={this.handleHyperLinkMouseOver}
               onMouseOut={this.handleHyperLinkMouseOut}
               style={{
