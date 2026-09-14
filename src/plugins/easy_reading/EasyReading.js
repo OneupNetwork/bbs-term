@@ -73,9 +73,20 @@ export class EasyReading extends PluginBase {
     this._lastRequestedRowIndexStart = null;
     this._inFlightTimer = null;
     this._inFlightRetries = 0;
+    this._changeHandled = false;
+    this._needsRefreshAfterPushOrReply = false;
+    this._lastPageBeginIndex = 0;
+    this._lastPageRowCount = 0;
 
-    this._onBufChanged = (e) => this._onChanged(e);
+    this._onBufChanged = (e) => {
+      if (this._changeHandled) {
+        this._changeHandled = false;
+        return;
+      }
+      this._onChanged(e);
+    };
     this._onBufViewUpdated = (e) => this._onViewUpdated(e);
+    this._onBufCursorMove = () => this._onCursorMove();
   }
 
   onInit() {
@@ -104,6 +115,7 @@ export class EasyReading extends PluginBase {
       this.buf = buf;
       this.listenWhileEnabled(buf, 'change', this._onBufChanged);
       this.listenWhileEnabled(buf, 'viewUpdate', this._onBufViewUpdated);
+      this.listenWhileEnabled(buf, 'cursor-move', this._onBufCursorMove);
     }
 
     if (this.enabled && typeof document !== 'undefined' && !this._uiInitialized) {
@@ -255,6 +267,27 @@ export class EasyReading extends PluginBase {
     easyReadingOverlay.setAttribute('id', 'easyReadingOverlay');
     easyReadingOverlay.style.display = 'none';
     this._onOverlayMouseDown = (e) => {
+      const cmdEl = e.target?.closest?.('[data-er-cmd]');
+      if (cmdEl) {
+        const cmd = cmdEl.getAttribute('data-er-cmd');
+        const leaveToTermCmds = this.site?.getLeaveToTerminalCommands?.() || [];
+        if (leaveToTermCmds.includes(cmd)) {
+          this.leaveToTerminal();
+          this.send(cmd);
+        } else if (cmd === 'Escape') {
+          this.leaveToTerminal();
+        } else if (cmd === 'q') {
+          this.stopEasyReading();
+          this.leaveCurrentPost();
+          this.send('\x1b[D');
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.app?.setInputAreaFocus) {
+          this.app.setInputAreaFocus();
+        }
+        return;
+      }
       if (e.target && e.target.tagName !== 'A' && this.app?.setInputAreaFocus) {
         this.app.setInputAreaFocus();
       }
@@ -399,6 +432,26 @@ export class EasyReading extends PluginBase {
     this.view?.updateCursorPos?.();
   }
 
+  leaveToTerminal() {
+    this._cancelPendingHide();
+    this._resetInFlight();
+    this.sendCommandAfterUpdate = '';
+    this._temporarilyHidden = true;
+    this._needsRefreshAfterPushOrReply = true;
+    this.showReplyText = false;
+    this.showPushInitText = false;
+    if (this.overlay) {
+      this.overlay.style.display = 'none';
+    }
+    if (this.lastRowDiv) {
+      this.lastRowDiv.style.display = 'none';
+    }
+    if (this.replyRowDiv) {
+      this.replyRowDiv.style.display = 'none';
+    }
+    this.view?.updateCursorPos?.();
+  }
+
   clearRows() {
     if (this.content) {
       this.content.innerHTML = '';
@@ -527,24 +580,66 @@ export class EasyReading extends PluginBase {
         }
       : false;
     let lastRowNum = site.getLastRowNum(this.buf);
+    if (site.pageState === PAGE_STATE.READING && this._temporarilyHidden) {
+      site.prevPageState = PAGE_STATE.READING;
+      return;
+    }
+    const isFrameReady =
+      typeof this.buf?.isFrameReady === 'function'
+        ? this.buf.isFrameReady()
+        : this.buf?.cur_x !== undefined && typeof site.isCursorParked === 'function'
+          ? site.isCursorParked(this.buf)
+          : true;
+    if (site.pageState === PAGE_STATE.READING && !isFrameReady) {
+      return;
+    }
     if (site.pageState === PAGE_STATE.READING && site.prevPageState === PAGE_STATE.READING) {
-      if (!this._temporarilyHidden) {
-        this.show();
-      }
+      this.show();
       const lastRowText = this.buf.getRowText(lastRowNum, 0, this.buf.cols);
       const result = site.parseReadingStatus(lastRowText, this.buf);
       if (result) {
         const isEnd = result.isEnd || site.isArticleEnd(lastRowText, this.buf, result);
-        if (result.pageIndex && result.pageIndex === this._lastEasyReadingPageIndex && !isEnd) {
-          if (!this.isPromptActive()) {
+        if (this._needsRefreshAfterPushOrReply) {
+          this._needsRefreshAfterPushOrReply = false;
+          if (result.pageIndex === 1 && this._lastEasyReadingPageIndex === 1) {
+            this.clearRows();
+            this.appendRows(this.buf.lines.slice(0, lastRowNum), showsLinkPreview);
+            this.pageLines = JSON.parse(JSON.stringify(this.buf.lines.slice(0, lastRowNum)));
+            this._lastPageBeginIndex = 0;
+            this._lastPageRowCount = lastRowNum;
+            if (isEnd) {
+              this._easyReadingAppendedEnd = true;
+            }
             this._restoreReadingFooter();
+            return;
           }
+          const overlap = site.findContentOverlap(this.buf, lastRowNum, this.pageLines);
+          if (overlap === 0 && this._lastPageRowCount > 0 && this.content) {
+            for (let r = 0; r < this._lastPageRowCount && this.content.lastChild; r++) {
+              this.content.removeChild(this.content.lastChild);
+            }
+            if (this.pageLines && this.pageLines.length >= this._lastPageRowCount) {
+              this.pageLines.splice(this.pageLines.length - this._lastPageRowCount, this._lastPageRowCount);
+            }
+            const beginIndex = this._lastPageBeginIndex || 0;
+            this.appendRows(this.buf.lines.slice(beginIndex, lastRowNum), showsLinkPreview);
+            this.pageLines = (this.pageLines || []).concat(
+              JSON.parse(JSON.stringify(this.buf.lines.slice(beginIndex, lastRowNum)))
+            );
+            this._lastPageRowCount = lastRowNum - beginIndex;
+            if (isEnd) {
+              this._easyReadingAppendedEnd = true;
+            }
+            this._restoreReadingFooter();
+            return;
+          }
+        }
+        if (result.pageIndex && result.pageIndex === this._lastEasyReadingPageIndex && !isEnd) {
+          this._restoreReadingFooter();
           return;
         }
         if (isEnd && this._easyReadingAppendedEnd) {
-          if (!this.isPromptActive()) {
-            this._restoreReadingFooter();
-          }
+          this._restoreReadingFooter();
           return;
         }
         if (isEnd) {
@@ -582,10 +677,10 @@ export class EasyReading extends PluginBase {
           this.pageLines = (this.pageLines || []).concat(
             JSON.parse(JSON.stringify(this.buf.lines.slice(beginIndex, lastRowNum)))
           );
+          this._lastPageBeginIndex = beginIndex;
+          this._lastPageRowCount = lastRowNum - beginIndex;
         }
-        if (!this.isPromptActive()) {
-          this._restoreReadingFooter();
-        }
+        this._restoreReadingFooter();
       }
       site.prevPageState = PAGE_STATE.READING;
     } else {
@@ -594,6 +689,7 @@ export class EasyReading extends PluginBase {
       this._lastEasyReadingPageIndex = 1;
       this._easyReadingAppendedEnd = false;
       this._temporarilyHidden = false;
+      this._needsRefreshAfterPushOrReply = false;
       if (site.pageState === PAGE_STATE.READING) {
         const lastRowText = this.buf.getRowText(lastRowNum, 0, this.buf.cols);
         const statusResult = site.parseReadingStatus(lastRowText, this.buf);
@@ -611,14 +707,18 @@ export class EasyReading extends PluginBase {
           this.content.scrollTop = 0;
         }
         this.appendRows(this.buf.lines.slice(0, lastRowNum), showsLinkPreview);
+        this._lastPageBeginIndex = 0;
+        this._lastPageRowCount = lastRowNum;
         if (isEnd) {
           this._easyReadingAppendedEnd = true;
         }
         this._restoreReadingFooter();
         // deep clone lines for selection (getRowText and get ansi color)
         this.pageLines = JSON.parse(JSON.stringify(this.buf.lines.slice(0, lastRowNum)));
-      } else {
+      } else if (site.pageState === PAGE_STATE.LIST || site.pageState === PAGE_STATE.MENU) {
         this.scheduleHide();
+      } else {
+        this.hide();
       }
       site.prevPageState = site.pageState;
     }
@@ -626,13 +726,7 @@ export class EasyReading extends PluginBase {
 
   updatePage(changedLineHtmlStrs) {
     if (this.enabled) {
-      if (this.started && this.showReplyText) {
-        this.updateReplyRow(changedLineHtmlStrs[changedLineHtmlStrs.length - 1]);
-      } else if (this.started && this.showPushInitText) {
-        this.updatePushInitRow(changedLineHtmlStrs[changedLineHtmlStrs.length - 1]);
-      } else {
-        this.populatePage();
-      }
+      this.populatePage();
     } else if (this.isActive()) {
       this.hide();
     }
@@ -653,38 +747,65 @@ export class EasyReading extends PluginBase {
     this._customTurnPageLines = val;
   }
 
+  _onCursorMove() {
+    if (!this.enabled || !this.started || this._temporarilyHidden || !this.site || !this.buf) return;
+    if (this.buf.inSyncUpdate) return;
+    if (this.site.isReplyPrompt(this.buf) || this.site.isPushPrompt(this.buf)) {
+      this.leaveToTerminal();
+    }
+  }
+
   _onChanged(e) {
     const site = this.site;
     console.debug("page state: " + site?.prevPageState + "->" + site?.pageState);
-    const isEnteringReading = (site?.prevPageState === PAGE_STATE.LIST || site?.prevPageState === PAGE_STATE.NORMAL) &&
-        site?.pageState === PAGE_STATE.READING;
+    const isEnteringReading =
+      site?.prevPageState !== PAGE_STATE.READING &&
+      site?.pageState === PAGE_STATE.READING;
     if (isEnteringReading) {
       this._resetInFlight();
+      this._temporarilyHidden = false;
     }
 
     if (
       !this.enabled ||
       !site ||
+      !this.buf ||
+      typeof this.buf.getRowText !== 'function' ||
       site.easyReadingSupported === false ||
       this.app?.connectedUrl?.easyReadingSupported === false
     )
       return;
 
-    const prevPromptActive = this.isPromptActive();
+    if (this.buf?.inSyncUpdate) {
+      return;
+    }
+
     let lastRowNum = site.getLastRowNum(this.buf);
     const lastRowText = this.buf.getRowText(lastRowNum, 0, this.buf.cols);
-    // dealing with page state jump to 0 because last row wasn't updated fully 
     if (site.pageState === PAGE_STATE.READING) {
       this.started = true;
-    } else if (this.started && site.isPushPrompt(this.buf)) {
-      this.showPushInitText = true;
     } else {
       this.showReplyText = false;
       this.showPushInitText = false;
       this.started = false;
+      this._temporarilyHidden = false;
       this._resetInFlight();
     }
+
     if (this.started) {
+      if (
+        !this._temporarilyHidden &&
+        (site.isReplyPrompt(this.buf) || site.isPushPrompt(this.buf))
+      ) {
+        this.leaveToTerminal();
+        return;
+      }
+      if (this._temporarilyHidden) {
+        this._resetInFlight();
+        this.sendCommandAfterUpdate = '';
+        return;
+      }
+
       const isParked = this.buf.isFrameReady
         ? this.buf.isFrameReady()
         : site.isCursorParked(this.buf);
@@ -696,19 +817,13 @@ export class EasyReading extends PluginBase {
         }
         const result = site.parseReadingStatus(lastRowText, this.buf);
         if (result) {
-          const wasPushOrReply = this.showPushInitText || this.showReplyText;
-          this.showPushInitText = false;
-          this.showReplyText = false;
-          if (wasPushOrReply) {
-            // Reset appended end flag so newly submitted push comments can be appended
-            this._easyReadingAppendedEnd = false;
-          }
           const isEnd = site.isArticleEnd(lastRowText, this.buf, result);
 
           if (this._pageDownInFlight) {
-            const pageAdvanced = (result.pageIndex != null && result.pageIndex !== this._lastRequestedPageIndex) ||
-                                 (result.rowIndexStart != null && result.rowIndexStart !== this._lastRequestedRowIndexStart) ||
-                                 isEnd;
+            const pageAdvanced =
+              (result.pageIndex != null && result.pageIndex !== this._lastRequestedPageIndex) ||
+              (result.rowIndexStart != null && result.rowIndexStart !== this._lastRequestedRowIndexStart) ||
+              isEnd;
             if (pageAdvanced) {
               this._pageDownInFlight = false;
               this._clearInFlightWatchdog();
@@ -732,32 +847,14 @@ export class EasyReading extends PluginBase {
         } else if (site.isArticleEnd(lastRowText, this.buf, null)) {
           this.easyReadingReachedPageEnd = true;
           this._resetInFlight();
-        } else if (!this.showPushInitText) { // only if not showing last row text
+        } else {
           if (site) {
             site.pageState = PAGE_STATE.PASS;
           }
           this.started = false;
           this._resetInFlight();
         }
-      } else if (site.isPushPrompt(this.buf)) {
-        this.showPushInitText = true;
-      } else if (site.isReplyPrompt(this.buf)) {
-        this.showReplyText = true;
-      } else {
-        if (this.buf.cur_y === lastRowNum) {
-          this.showPushInitText = false;
-        } else if (this.buf.cur_y === lastRowNum - 1) {
-          this.showReplyText = false;
-        }
-        if (prevPromptActive !== this.isPromptActive()) {
-          this.view?.updateCursorPos?.();
-        }
-        // last line hasn't changed
-        return;
       }
-    }
-    if (prevPromptActive !== this.isPromptActive()) {
-      this.view?.updateCursorPos?.();
     }
   }
 
@@ -800,6 +897,7 @@ export class EasyReading extends PluginBase {
   }
 
   _onViewUpdated(e) {
+    this._changeHandled = false;
     console.debug('view update');
     if (this.sendCommandAfterUpdate) {
       console.debug("send:" + this.sendCommandAfterUpdate);
@@ -828,6 +926,7 @@ export class EasyReading extends PluginBase {
   leaveCurrentPost() {
     console.debug('leave current post');
     this._resetInFlight();
+    this._temporarilyHidden = false;
     const now = Date.now();
     const duration = (this.lastWheelTime && (now - this.lastWheelTime < 1000)) ? 1200 : 300;
     this.suppressInertialWheel(duration);
@@ -970,12 +1069,7 @@ export class EasyReading extends PluginBase {
           stop = true;
           break;
         case 'Escape':
-          // Temporarily hide easy reading overlay to reveal the underlying terminal screen without wiping loaded pages
-          if (this.overlay) {
-            this._temporarilyHidden = true;
-            this.overlay.style.display = 'none';
-            this.view?.updateCursorPos?.();
-          }
+          this.leaveToTerminal();
           stop = true;
           break;
         case 'ArrowLeft':
@@ -1231,7 +1325,7 @@ export class EasyReading extends PluginBase {
   }
 
   handleMouseClick(e) {
-    if (!this.isActive() || this.isPromptActive())
+    if (!this.isActive() || !this.started)
       return false;
     this._onMouseClick(e);
     return !!e.defaultPrevented;
@@ -1239,16 +1333,29 @@ export class EasyReading extends PluginBase {
 
   handleKeyDown(e) {
     if (this._temporarilyHidden && this.started && this.enabled) {
-      if (e.key === 'Escape') {
+      const isInPrompt =
+        this.site?.isReplyPrompt?.(this.buf) ||
+        this.site?.isPushPrompt?.(this.buf);
+      if (e.key === 'Escape' && !isInPrompt) {
         this.show();
+        if (this.site?.pageState === PAGE_STATE.READING) {
+          this.populatePage();
+        }
         e.preventDefault();
         return true;
       }
-      this._temporarilyHidden = false;
-      this.hide();
+      const leavePostCmds = this.site?.getLeaveCurrentPostCommands?.() || [];
+      if (
+        !e.ctrlKey &&
+        !e.altKey &&
+        leavePostCmds.includes(e.key) &&
+        !isInPrompt
+      ) {
+        this.leaveCurrentPost();
+      }
       return false;
     }
-    if (!this.isActive() || this.isPromptActive())
+    if (!this.isActive() || !this.started)
       return false;
     this._keyDownKeyCode = e.keyCode;
     this._keyDownIsComposing = !!(e.isComposing || e.key === 'Process' || e.keyCode === 229);
@@ -1257,9 +1364,14 @@ export class EasyReading extends PluginBase {
   }
 
   handleTextInput(e) {
-    if (!this.isActive() || this.isPromptActive())
+    if (!this.isActive() || !this.started)
       return false;
-    if ((this._keyDownIsComposing || this._keyDownKeyCode === 229) && e?.target && e.target.value !== 'X') {
+    const leaveToTermCmds = this.site?.getLeaveToTerminalCommands?.() || [];
+    if (
+      (this._keyDownIsComposing || this._keyDownKeyCode === 229) &&
+      e?.target &&
+      !leaveToTermCmds.includes(e.target.value)
+    ) {
       e.target.value = '';
       return true;
     }
@@ -1267,7 +1379,7 @@ export class EasyReading extends PluginBase {
   }
 
   getClientToPos(cX, cY) {
-    if (!this.isActive() || !this.view || !this.overlay) return undefined;
+    if (!this.isActive() || !this.started || !this.view || !this.overlay) return undefined;
     const origin = this.view._getGridOrigin ? this.view._getGridOrigin() : [0, 0];
     const chw = (this.view.chw || 8) * (this.view.scaleX || 1);
     const chh = (this.view.chh || 16) * (this.view.scaleY || 1);
@@ -1301,26 +1413,8 @@ export class EasyReading extends PluginBase {
   }
 
   getCursorPos(col, row) {
-    if (!this.isActive()) return undefined;
-    if (!this.isPromptActive()) return 'hide';
-    const view = this.view;
-    if (!view || typeof view.convertMN2XYEx !== 'function') return undefined;
-    const [gridX, gridY] = view.convertMN2XYEx(col, row);
-    const targetDiv = this.showReplyText ? this.replyRowDiv : this.lastRowDiv;
-    if (targetDiv && this.overlay) {
-      const termWin = view.termWin || this.overlay.parentNode;
-      if (termWin && typeof targetDiv.getBoundingClientRect === 'function') {
-        const winRect = termWin.getBoundingClientRect();
-        const divRect = targetDiv.getBoundingClientRect();
-        if (divRect.height > 0) {
-          return [gridX, divRect.top - winRect.top];
-        }
-      }
-      if (this.footer && this.footer.offsetTop > 0) {
-        return [gridX, this.footer.offsetTop];
-      }
-    }
-    return [gridX, gridY];
+    if (!this.isActive() || !this.started) return undefined;
+    return 'hide';
   }
 
   getSelectedText() {
@@ -1366,6 +1460,8 @@ export class EasyReading extends PluginBase {
 
   onScreenUpdate(changedLineHtmlStrs) {
     if (this.enabled) {
+      this._onChanged();
+      this._changeHandled = true;
       this.updatePage(changedLineHtmlStrs);
       return true;
     } else if (this.isActive()) {

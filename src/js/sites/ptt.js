@@ -1,20 +1,34 @@
 import { BaseSite } from './base.js';
 
 export function parseReplyText(it) {
-  return (it.indexOf('▲ 回應至 (F)看板 (M)作者信箱 (B)二者皆是 (Q)取消？[F] ') === 0 ||
-      it.indexOf('▲ 無法回應至看板。 改回應至 (M)作者信箱 (Q)取消？[Q]') === 0 ||
-      it.indexOf('把這篇文章收入到暫存檔？[y/N]') === 0 ||
-      it.indexOf('請選擇暫存檔 (0-9)[0]:') === 0);
+  return (
+    it.indexOf('▲ 回應至 (F)看板 (M)作者信箱 (B)二者皆是 (Q)取消？[F] ') === 0 ||
+    it.indexOf('▲ 無法回應至看板。 改回應至 (M)作者信箱 (Q)取消？[Q]') === 0 ||
+    it.indexOf('很抱歉, 本板不開放回覆文章，要改回信給作者嗎？ [y/N]:') === 0 ||
+    it.indexOf('把這篇文章收入到暫存檔？[y/N]') === 0 ||
+    it.indexOf('請選擇暫存檔 (0-9)[0]:') === 0 ||
+    it.indexOf('採用原標題') >= 0 ||
+    it.indexOf('請問要引用原文嗎') >= 0
+  );
 }
 
 export function parsePushInitText(it) {
-  return (it.indexOf('您覺得這篇文章 ') === 0 || 
-      it.search(/→ \w+ *: +/) === 0 ||
-      it.indexOf('很抱歉, 本板不開放回覆文章，要改回信給作者嗎？ [y/N]:') === 0);
+  return (
+    it.indexOf('您覺得這篇文章 ') === 0 ||
+    /^(?:推|噓|→) *[A-Za-z0-9_]+ *:/.test(it) ||
+    it.indexOf('很抱歉, 本板不開放回覆文章，要改回信給作者嗎？ [y/N]:') === 0 ||
+    it.indexOf('確定[y/N]:') >= 0
+  );
 }
 
 export function parseReqNotMetText(it) {
-  return (it.indexOf(' ◆ 未達看板發文限制:') === 0);
+  return (
+    it.indexOf(' ◆ 未達看板發文限制:') === 0 ||
+    it.indexOf(' ◆ 本板不開放推文') === 0 ||
+    it.indexOf(' ◆ 很抱歉, 距離上次推文時間過短') === 0 ||
+    it.indexOf(' ◆ 本篇文章禁止推文') === 0 ||
+    it.indexOf(' ◆ 此文章已鎖定') === 0
+  );
 }
 
 export function parseStatusRow(str) {
@@ -136,6 +150,9 @@ export class PttSite extends BaseSite {
   }
 
   isArticleEnd(lastRowText, termBuf, statusResult) {
+    if (termBuf && (this.isPushPrompt(termBuf) || this.isReplyPrompt(termBuf))) {
+      return false;
+    }
     if (termBuf && termBuf.lines) {
       let lastRowNum = this.getLastRowNum(termBuf);
       let lastRowFirstCh = termBuf.lines[lastRowNum] && termBuf.lines[lastRowNum][0];
@@ -247,26 +264,28 @@ export class PttSite extends BaseSite {
     if (parseReqNotMetText(lastRowText)) {
       return true;
     }
-    if (termBuf.cur_y === lastRowNum && parsePushInitText(lastRowText)) {
+    if (
+      termBuf.cur_y === lastRowNum &&
+      (parsePushInitText(lastRowText) || parseReplyText(lastRowText))
+    ) {
       return true;
     }
     return false;
   }
 
+  getLeaveToTerminalCommands() {
+    return ['y', 'Y', 'X', '%', 'r', 'R', 'E', 'T'];
+  }
+
+  getLeaveCurrentPostCommands() {
+    return ['a', 'b', 'f', '=', '+', '-', '[', ']', 'A', 'B', 'F'];
+  }
+
   handleEasyReadingKeyDown(easyReading, e) {
+    if (super.handleEasyReadingKeyDown(easyReading, e)) {
+      return true;
+    }
     if (!e.ctrlKey && !e.altKey) {
-      switch (e.key) {
-        case 'q':
-        case 'Q':
-          easyReading.stopEasyReading();
-          easyReading.leaveCurrentPost();
-          easyReading.send('\x1b[D');
-          return true;
-      }
-      if ("abf=+-[]ABF".indexOf(e.key) >= 0) {
-        easyReading.leaveCurrentPost();
-        return false;
-      }
       if ("123456789hops;,./\\H#OP:<>".indexOf(e.key) >= 0) {
         return true;
       }
