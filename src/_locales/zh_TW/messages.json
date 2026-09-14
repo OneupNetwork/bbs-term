@@ -656,6 +656,9 @@
   "liveHelperEnable": {
     "message": "啟用"
   },
+  "liveHelperStateEnabled": {
+    "message": "已啟用"
+  },
   "liveHelperSpan": {
     "message": "推文每"
   },

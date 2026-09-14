@@ -1671,3 +1671,56 @@ test('LiveUpdate immediately refreshes on start and survives mid-redraw transien
   liveUpdate.destroy();
 });
 
+test('LiveHelperModal clearly distinguishes enabled and disabled UI states', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { _, setupI18n } = await import('../src/js/i18n.js');
+
+  // 1. Verify i18n translations for enabled and disabled states in zh_TW and en_US
+  setupI18n('zh_tw');
+  assert.equal(_('liveHelperEnable'), '啟用');
+  assert.equal(_('liveHelperStateEnabled'), '已啟用');
+
+  setupI18n('en_us');
+  assert.equal(_('liveHelperEnable'), 'Enable');
+  assert.equal(_('liveHelperStateEnabled'), 'Enabled');
+
+  // 2. Verify LiveHelperModal.css styles for active/inactive states
+  const cssContent = fs.readFileSync(
+    path.resolve('src/plugins/live_update/LiveHelperModal.css'),
+    'utf-8'
+  );
+  assert.ok(
+    cssContent.includes('.LiveHelperModal__Body__ToggleBtn--active') &&
+      cssContent.includes('#34c759') &&
+      cssContent.includes('.LiveHelperModal__Body__StatusDot') &&
+      cssContent.includes('@keyframes liveHelperDotPulse') &&
+      cssContent.includes('dialog.LiveHelperModal__Dialog.LiveHelperModal__Dialog--active'),
+    'LiveHelperModal.css must define distinct active button color (#34c759), pulsing status dot, and active dialog styles'
+  );
+
+  // 3. Verify ui.css defines .btn-default.active
+  const uiCss = fs.readFileSync(path.resolve('src/css/ui.css'), 'utf-8');
+  assert.ok(
+    uiCss.includes('.btn-default.active'),
+    'ui.css must style .btn-default.active'
+  );
+
+  // 4. Verify LiveHelperModal.js renders active state classes, aria-pressed, status dot, and dynamic label
+  const modalSource = fs.readFileSync(
+    path.resolve('src/plugins/live_update/LiveHelperModal.js'),
+    'utf-8'
+  );
+  assert.ok(
+    modalSource.includes('LiveHelperModal__Dialog--active') &&
+      modalSource.includes('LiveHelperModal__Body--active') &&
+      modalSource.includes('LiveHelperModal__Body--inactive') &&
+      modalSource.includes('LiveHelperModal__Body__ToggleBtn--active') &&
+      modalSource.includes('aria-pressed={Boolean(active)}') &&
+      modalSource.includes('LiveHelperModal__Body__StatusDot') &&
+      modalSource.includes("liveHelperStateEnabled"),
+    'LiveHelperModal.js must render distinct active/inactive classes, aria-pressed, status dot, and dynamic label'
+  );
+});
+
+

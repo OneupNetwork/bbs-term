@@ -656,6 +656,9 @@
   "liveHelperEnable": {
     "message": "Enable"
   },
+  "liveHelperStateEnabled": {
+    "message": "Enabled"
+  },
   "liveHelperSpan": {
     "message": "thread refreshes every"
   },
