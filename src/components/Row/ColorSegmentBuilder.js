@@ -19,10 +19,10 @@ export class ColorSegmentBuilder {
     this.wordBuilder = new WordSegmentBuilder(this.segs.length, color);
   }
 
-  appendNormalChar(text, color) {
+  appendNormalChar(text, color, isDBCS = false) {
     if (!this.wordBuilder.isLastSegmentSameColor(color))
       this.beginSegment(color);
-    this.wordBuilder.appendNormalText(text);
+    this.wordBuilder.appendNormalText(text, isDBCS);
   }
 
   readChar(ch) {
@@ -43,22 +43,22 @@ export class ColorSegmentBuilder {
             trailColor,
             this.forceWidth
           );
-          this.wordBuilder.appendNormalText(text);
+          this.wordBuilder.appendNormalText(text, true);
           return;
         }
 
         const forceWidth = shouldForceWidth(text) ? this.forceWidth : 0;
         if (!forceWidth) {
-          this.appendNormalChar(text, leadColor);
+          this.appendNormalChar(text, leadColor, true);
           return;
         }
         if (!this.wordBuilder.isLastSegmentSameColor(leadColor))
           this.beginSegment(leadColor);
-        this.wordBuilder.appendForceWidthWord(text, forceWidth);
+        this.wordBuilder.appendForceWidthWord(text, forceWidth, 2);
         return;
       }
 
-      this.appendNormalChar(lead.ch, lead.getColor());
+      this.appendNormalChar(lead.ch, lead.getColor(), false);
     }
 
     if (ch.isDBCSTrail || ch.ch === '') {
@@ -73,16 +73,16 @@ export class ColorSegmentBuilder {
     if (shouldForceWidth(ch.ch) && this.forceWidth) {
       if (!this.wordBuilder.isLastSegmentSameColor(ch.getColor()))
         this.beginSegment(ch.getColor());
-      this.wordBuilder.appendForceWidthWord(ch.ch, this.forceWidth);
+      this.wordBuilder.appendForceWidthWord(ch.ch, this.forceWidth / 2, 1);
       return;
     }
 
-    this.appendNormalChar(ch.ch, ch.getColor());
+    this.appendNormalChar(ch.ch, ch.getColor(), false);
   }
 
   build() {
     if (this.lead) {
-      this.appendNormalChar(this.lead.ch, this.lead.getColor());
+      this.appendNormalChar(this.lead.ch, this.lead.getColor(), false);
       this.lead = null;
     }
     this.beginSegment();

@@ -182,6 +182,10 @@ span[data-type="termline"],
   font-family: inherit !important;
 }
 
+.term-ascii {
+  letter-spacing: var(--term-ascii-ls, 0px);
+}
+
 #easyReadingContent {
   position: absolute;
   top: 0;
@@ -194,8 +198,8 @@ span[data-type="termline"],
   text-align: left;
   padding-top: var(--easy-reading-pad-top, 0px);
   padding-bottom: 0;
-  padding-left: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
-  padding-right: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
+  padding-left: max(4px, calc((100% - var(--term-chw, 13px) * 80) / 2));
+  padding-right: max(4px, calc((100% - var(--term-chw, 13px) * 80) / 2));
   box-sizing: border-box;
   overscroll-behavior-y: contain;
   overscroll-behavior-x: auto;
@@ -245,8 +249,8 @@ span[data-type="termline"],
   text-align: left;
   padding-top: 0;
   padding-bottom: 0;
-  padding-left: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
-  padding-right: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
+  padding-left: max(4px, calc((100% - var(--term-chw, 13px) * 80) / 2));
+  padding-right: max(4px, calc((100% - var(--term-chw, 13px) * 80) / 2));
   box-sizing: border-box;
 }
 
@@ -269,8 +273,8 @@ span[data-type="termline"],
   text-align: left;
   padding-top: 0;
   padding-bottom: 0;
-  padding-left: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
-  padding-right: max(8px, calc((100% - var(--term-chw, 13px) * 80) / 2));
+  padding-left: max(4px, calc((100% - var(--term-chw, 13px) * 80) / 2));
+  padding-right: max(4px, calc((100% - var(--term-chw, 13px) * 80) / 2));
   box-sizing: border-box;
 }
 

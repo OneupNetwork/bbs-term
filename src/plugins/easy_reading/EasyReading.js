@@ -5,6 +5,7 @@ import {
   isDiscreteMouseWheelEvent,
   isHorizontalWheelEvent,
 } from '../../js/mouse_controller.js';
+import { getAsciiLetterSpacingEm, wrapAsciiHtml } from '../../js/font_util.js';
 
 export const INFLIGHT_WATCHDOG_MS = 1500;
 export const MAX_INFLIGHT_RETRIES = 2;
@@ -166,6 +167,7 @@ export class EasyReading extends PluginBase {
         fontFace: this.view.fontFace,
         fontSize: this.view.mainDisplay?.style?.fontSize,
         lineHeight: this.view.mainDisplay?.style?.lineHeight,
+        asciiLetterSpacing: this.view.asciiLetterSpacing,
       });
     }
     if (!this._initializing) {
@@ -253,7 +255,36 @@ export class EasyReading extends PluginBase {
     if (!this._overlay || !this.view) return;
     const termWinHeight =
       this.view.innerBounds?.height || this._overlay.clientHeight || 0;
-    const rowsHeight = (this.view.chh || 16) * (this.buf?.rows || 24);
+    const termWinWidth =
+      this.view.innerBounds?.width || this._overlay.clientWidth || 0;
+    const cols = this.buf?.cols || 80;
+    const baseChw = this.view.chw || 13;
+    const baseFontSize = this.view.fontSizePx || baseChw * 2;
+    const baseChh = this.view.chh || baseFontSize;
+
+    let effectiveChw = baseChw;
+    if (this.view.scaleX && this.view.scaleX < 1) {
+      effectiveChw = baseChw * this.view.scaleX;
+    } else if (termWinWidth > 16 && termWinWidth < baseChw * cols + 16) {
+      effectiveChw = (termWinWidth - 16) / cols;
+    }
+
+    let effectiveChh = baseChh;
+    if (effectiveChw < baseChw) {
+      const ratio = effectiveChw / baseChw;
+      effectiveChh = Math.round(baseChh * ratio);
+      const effFontSize = `${(baseFontSize * ratio).toFixed(2)}px`;
+      const effLineHeight = `${effectiveChh}px`;
+      this._overlay.style?.setProperty?.('--term-chw', `${effectiveChw.toFixed(2)}px`);
+      this._overlay.style?.setProperty?.('--term-chh', effLineHeight);
+      this._overlay.style.fontSize = effFontSize;
+      this._overlay.style.lineHeight = effLineHeight;
+    } else {
+      this._overlay.style?.setProperty?.('--term-chw', `${baseChw}px`);
+      this._overlay.style?.setProperty?.('--term-chh', `${baseChh}px`);
+    }
+
+    const rowsHeight = effectiveChh * (this.buf?.rows || 24);
     const padTop = Math.max(0, Math.floor((termWinHeight - rowsHeight) / 2));
     this._overlay.style?.setProperty?.('--easy-reading-pad-top', `${padTop}px`);
   }
@@ -346,7 +377,7 @@ export class EasyReading extends PluginBase {
     const lastRowDiv = document.createElement('div');
     lastRowDiv.setAttribute('id', 'easyReadingLastRow');
     const spaces = ' ';
-    this.lastRowDivContent = '<span align="left"><span class="q0 b7">' + spaces + '瀏覽 </span><span class="q1 b7">(100%)</span><span class="q1 b7"> [好讀模式]</span><span class="q0 b7"> 滾輪/上下鍵捲動，</span><span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span><span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span></span>';
+    this.lastRowDivContent = wrapAsciiHtml('<span align="left"><span class="q0 b7">' + spaces + '瀏覽 </span><span class="q1 b7">(100%)</span><span class="q1 b7"> [好讀模式]</span><span class="q0 b7"> 滾輪/上下鍵捲動，</span><span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span><span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span></span>');
     lastRowDiv.innerHTML = this.lastRowDivContent;
     this._lastRowDiv = lastRowDiv;
     easyReadingFooter.appendChild(lastRowDiv);
@@ -362,6 +393,7 @@ export class EasyReading extends PluginBase {
       fontFace: this.view?.fontFace,
       fontSize: this.view?.mainDisplay?.style?.fontSize,
       lineHeight: this.view?.mainDisplay?.style?.lineHeight,
+      asciiLetterSpacing: this.view?.asciiLetterSpacing,
     });
     this._uiInitialized = true;
   }
@@ -423,6 +455,7 @@ export class EasyReading extends PluginBase {
         fontFace: this.view.fontFace,
         fontSize: this.view.mainDisplay?.style?.fontSize,
         lineHeight: this.view.mainDisplay?.style?.lineHeight,
+        asciiLetterSpacing: this.view.asciiLetterSpacing,
       });
     } else {
       this._updateOverlayPadding();
@@ -1641,11 +1674,20 @@ export class EasyReading extends PluginBase {
     return false;
   }
 
-  onFontUpdate({ fontFace, fontSize, lineHeight } = {}) {
+  onFontUpdate({ fontFace, fontSize, lineHeight, asciiLetterSpacing } = {}) {
     if (this.overlay) {
       if (fontFace) {
         this.overlay.style.setProperty('--font-face', fontFace);
         this.overlay.style.setProperty('font-family', fontFace, 'important');
+      }
+      const effectiveFontFace = fontFace || this.view?.fontFace;
+      let ls = asciiLetterSpacing ?? this.view?.asciiLetterSpacing;
+      if (ls === undefined && effectiveFontFace) {
+        const em = getAsciiLetterSpacingEm(effectiveFontFace);
+        ls = em ? `${em}em` : '0px';
+      }
+      if (ls !== undefined) {
+        this.overlay.style.setProperty('--term-ascii-ls', ls);
       }
       if (fontSize) {
         this.overlay.style.fontSize = fontSize;

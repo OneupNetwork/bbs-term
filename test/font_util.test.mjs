@@ -8,6 +8,9 @@ import {
   PRESET_FONTS,
   isFontAvailable,
   filterAvailableFonts,
+  getAsciiWidthRatio,
+  getAsciiLetterSpacingEm,
+  wrapAsciiHtml,
 } from "../src/js/font_util.js";
 
 test("parseFontList correctly handles quoted and unquoted font names", () => {
@@ -240,5 +243,150 @@ test("FontManager handleAdd places newly added font at top priority (index 0)", 
   assert.deepEqual(updatedList, ["monospace", "DFKai-SB", "MingLiu"]);
 });
 
+test("getAsciiWidthRatio and getAsciiLetterSpacingEm compute letter-spacing compensation for Courier and wide monospace fonts", () => {
+  // 1. Canvas measurement simulation: Courier (60px per 100px = 0.6em) vs MingLiu (50px per 100px = 0.5em)
+  const courierCanvas = {
+    getContext: () => ({
+      measureText: (str) => ({ width: str.length * 60 }),
+    }),
+  };
+  const mingliuCanvas = {
+    getContext: () => ({
+      measureText: (str) => ({ width: str.length * 50 }),
+    }),
+  };
 
+  assert.equal(getAsciiWidthRatio("Courier, MingLiu", courierCanvas), 0.6);
+  assert.equal(getAsciiLetterSpacingEm("Courier, MingLiu", courierCanvas), -0.1);
 
+  assert.equal(getAsciiWidthRatio("MingLiu, monospace", mingliuCanvas), 0.5);
+  assert.equal(getAsciiLetterSpacingEm("MingLiu, monospace", mingliuCanvas), 0);
+
+  // 2. Fallback heuristic when canvas is unavailable
+  assert.equal(getAsciiWidthRatio("Courier, SymMingLiu, MingLiu", null), 0.6);
+  assert.equal(getAsciiLetterSpacingEm("Courier, SymMingLiu, MingLiu", null), -0.1);
+  assert.equal(getAsciiLetterSpacingEm("'Courier New', MingLiu", null), -0.1);
+  assert.equal(getAsciiLetterSpacingEm("Consolas, MingLiu", null), -0.05);
+  assert.equal(getAsciiLetterSpacingEm("MingLiu, SymMingLiu, monospace", null), 0);
+});
+
+test("wrapAsciiHtml wraps printable ASCII runs outside HTML tags in .term-ascii spans", () => {
+  const input = '<span class="q1 b7"> [好讀模式] </span><span class="q2 b7">(100%) </span>';
+  const output = wrapAsciiHtml(input);
+  assert.equal(
+    output,
+    '<span class="q1 b7"><span class="term-ascii"> [</span>好讀模式<span class="term-ascii">] </span></span><span class="q2 b7"><span class="term-ascii">(100%) </span></span>',
+  );
+});
+
+test("TermView, EasyReading, ColorSegmentBuilder, and main.css prevent Courier width overflow and clipping", () => {
+  const mainCss = fs.readFileSync(path.resolve("src/css/main.css"), "utf-8");
+  const termViewSrc = fs.readFileSync(path.resolve("src/js/term_view.js"), "utf-8");
+  const easyReadingSrc = fs.readFileSync(
+    path.resolve("src/plugins/easy_reading/EasyReading.js"),
+    "utf-8",
+  );
+  const wordBuilderSrc = fs.readFileSync(
+    path.resolve("src/components/Row/WordSegmentBuilder/index.js"),
+    "utf-8",
+  );
+
+  // 1. CSS defines .term-ascii letter-spacing using --term-ascii-ls
+  assert(
+    mainCss.includes(".term-ascii") &&
+      mainCss.includes("letter-spacing: var(--term-ascii-ls, 0px)"),
+    "main.css must define .term-ascii with letter-spacing: var(--term-ascii-ls, 0px)",
+  );
+
+  // 2. WordSegmentBuilder wraps 1-column ASCII runs in .term-ascii spans
+  assert(
+    wordBuilderSrc.includes('className="term-ascii"'),
+    "WordSegmentBuilder must wrap non-DBCS ASCII characters in .term-ascii spans",
+  );
+
+  // 3. TermView sets --term-ascii-ls on termWin and emits asciiLetterSpacing
+  assert(
+    termViewSrc.includes("getAsciiLetterSpacingEm(this.fontFace)") &&
+      termViewSrc.includes("setProperty('--term-ascii-ls', this.asciiLetterSpacing)"),
+    "TermView must calculate asciiLetterSpacing and set --term-ascii-ls on termWin",
+  );
+
+  // 4. EasyReading sets --term-ascii-ls on overlay and scales --term-chw when container is narrow
+  assert(
+    easyReadingSrc.includes("setProperty('--term-ascii-ls', ls)") &&
+      easyReadingSrc.includes("wrapAsciiHtml"),
+    "EasyReading must set --term-ascii-ls on overlay and wrap prompt ASCII runs",
+  );
+
+  // 5. TermView initializes chw/chh/fixedResize in constructor and refreshes on document.fonts ready/loadingdone
+  assert(
+    termViewSrc.includes("this.fixedResize(this.fontSizePx)") &&
+      termViewSrc.includes("document.fonts.ready") &&
+      termViewSrc.includes("loadingdone"),
+    "TermView must initialize fixedResize in constructor and listen to document.fonts for DOM mode",
+  );
+});
+
+test("getAsciiWidthRatio and getAsciiLetterSpacingEm prevent squished text in DOM mode at startup before SymMingLiu webfont loads or with proportional fonts", () => {
+  // 1. Proportional font simulation (e.g. PingFang TC where 'M' is 85px and 'i' is 25px)
+  const pingfangCanvas = {
+    getContext: () => ({
+      measureText: (str) => ({
+        width: str.includes("M") ? str.length * 85 : str.length * 25,
+      }),
+    }),
+  };
+  assert.equal(
+    getAsciiWidthRatio("'PingFang TC', sans-serif", pingfangCanvas),
+    0.5,
+    "Proportional fonts where width('M') !== width('i') must not return 0.85 ratio",
+  );
+  assert.equal(
+    getAsciiLetterSpacingEm("'PingFang TC', sans-serif", pingfangCanvas),
+    0,
+    "Proportional fonts must receive 0 letter-spacing instead of -0.35em squishing",
+  );
+
+  // 2. Browser startup simulation where MingLiu is not installed and SymMingLiu woff2 is not yet loaded in Canvas
+  const origDoc = globalThis.document;
+  try {
+    globalThis.document = {
+      createElement: (tag) => {
+        if (tag === "canvas") {
+          return {
+            getContext: () => ({
+              font: "",
+              measureText(str) {
+                // Simulate macOS without MingLiu: only PingFang TC / monospace are installed in Canvas
+                if (this.font.includes("MingLiu") && !this.font.includes("PingFang")) {
+                  // Uninstalled font falls back to default in isFontAvailable check
+                  return { width: str.length * 50 };
+                }
+                // If Canvas falls back to proportional PingFang TC for M vs i
+                if (str === "MMMMMMMMMM") return { width: 850 };
+                if (str === "iiiiiiiiii") return { width: 250 };
+                return { width: str.length * 50 };
+              },
+            }),
+          };
+        }
+        return null;
+      },
+    };
+
+    const defaultStack =
+      "MingLiu,SymMingLiu,'Noto Sans Mono CJK TC','PingFang TC',monospace";
+    assert.equal(
+      getAsciiWidthRatio(defaultStack),
+      0.5,
+      "Default font stack with SymMingLiu must resolve to 0.5em even before webfont loads in Canvas",
+    );
+    assert.equal(
+      getAsciiLetterSpacingEm(defaultStack),
+      0,
+      "Default font stack must have 0 letter-spacing at startup in DOM mode",
+    );
+  } finally {
+    globalThis.document = origDoc;
+  }
+});
