@@ -11,7 +11,7 @@ import { TouchController } from '../touch/TouchController.js';
 import { setupI18n } from './i18n';
 import { setTimer, parseConnectUrl } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
-import { setTerminalBellEnabled, setWindowFocused, playTerminalBell } from './bell.js';
+import { setTerminalBellEnabled, setWindowFocused, isWindowFocused, playTerminalBell } from './bell.js';
 import { DEFAULT_PREFS, readValuesWithDefault, writeValues } from './pref.js';
 import { applyColorScheme } from './color_schemes.js';
 import AppOverlay from '../components/AppOverlay';
@@ -50,6 +50,9 @@ export class App extends EventEmitter {
     this.titleConn = null;
     this.dynamicTitle = process.env.DYNAMIC_TITLE !== false;
     this.title = this.titleBase;
+    this.hasBellAlert = false;
+    this._bellTitleBlinkState = false;
+    this._bellTitleTimer = null;
     if (typeof document !== 'undefined') {
       document.title = this.title;
     }
@@ -61,6 +64,9 @@ export class App extends EventEmitter {
       playTerminalBell();
       if (this.enableVisualBell) {
         this.view.triggerVisualBell();
+      }
+      if (!isWindowFocused()) {
+        this.triggerBellTabAlert();
       }
     });
     this.buf.on('title', (part) => {
@@ -129,9 +135,23 @@ export class App extends EventEmitter {
       'focus',
       () => {
         setWindowFocused(true);
+        this.clearBellTabAlert();
       },
       false
     );
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener(
+        'visibilitychange',
+        () => {
+          if (!document.hidden) {
+            setWindowFocused(true);
+            this.clearBellTabAlert();
+          }
+        },
+        false
+      );
+    }
 
     window.addEventListener(
       'blur',
@@ -263,6 +283,7 @@ export class App extends EventEmitter {
   }
 
   destroy() {
+    this.clearBellTabAlert();
     if (this.timerEverySec) {
       this.timerEverySec.cancel();
       this.timerEverySec = null;
@@ -466,6 +487,7 @@ export class App extends EventEmitter {
 
   onClose() {
     console.info('app onClose');
+    this.clearBellTabAlert();
     if (this.timerEverySec) {
       this.timerEverySec.cancel();
       this.timerEverySec = null;
@@ -484,6 +506,47 @@ export class App extends EventEmitter {
       },
     });
     this.updateTabIcon('disconnect');
+  }
+
+  updateDocumentTitle() {
+    if (typeof document === 'undefined') return;
+    if (this.hasBellAlert && this._bellTitleBlinkState) {
+      document.title = '🔔 ' + this.title;
+    } else {
+      document.title = this.title;
+    }
+  }
+
+  triggerBellTabAlert() {
+    this.hasBellAlert = true;
+    this._bellTitleBlinkState = true;
+    this.updateDocumentTitle();
+    if (!this._bellTitleTimer) {
+      this._bellTitleTimer = setTimer(
+        true,
+        () => {
+          if (isWindowFocused()) {
+            this.clearBellTabAlert();
+            return;
+          }
+          this._bellTitleBlinkState = !this._bellTitleBlinkState;
+          this.updateDocumentTitle();
+        },
+        1000
+      );
+    }
+  }
+
+  clearBellTabAlert() {
+    if (this._bellTitleTimer) {
+      this._bellTitleTimer.cancel();
+      this._bellTitleTimer = null;
+    }
+    if (this.hasBellAlert || this._bellTitleBlinkState) {
+      this.hasBellAlert = false;
+      this._bellTitleBlinkState = false;
+      this.updateDocumentTitle();
+    }
   }
 
   setTitle(part) {
@@ -505,9 +568,7 @@ export class App extends EventEmitter {
       }
     }
     this.title = title;
-    if (typeof document !== 'undefined') {
-      document.title = title;
-    }
+    this.updateDocumentTitle();
   }
 
   send(data) {

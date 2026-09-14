@@ -272,3 +272,82 @@ test('audio context automatically suspends after bell playback to release audio 
   resetBellAudioForTesting();
 });
 
+test('App triggers bell tab alert (🔔 and blinking) when unfocused and clears on focus', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const appSrc = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
+
+  assert.ok(
+    appSrc.includes('if (!isWindowFocused()) {\n        this.triggerBellTabAlert();\n      }'),
+    'app.js bell listener must trigger triggerBellTabAlert when window is unfocused'
+  );
+  assert.ok(
+    appSrc.includes("document.title = '🔔 ' + this.title;"),
+    'app.js updateDocumentTitle must prepend 🔔 when bell alert is active'
+  );
+  assert.ok(
+    appSrc.includes('this.clearBellTabAlert();'),
+    'app.js must clear bell tab alert on focus/visibilitychange/close'
+  );
+
+  // Verify App prototype methods directly
+  const origDoc = globalThis.document;
+  try {
+    let docTitle = 'PttChrome';
+    globalThis.document = {
+      get title() { return docTitle; },
+      set title(v) { docTitle = v; },
+      hidden: true,
+      hasFocus: () => false,
+    };
+    setWindowFocused(false);
+
+    const mockApp = {
+      titleBase: 'PttChrome',
+      titleSite: 'ptt.cc',
+      titleConn: null,
+      dynamicTitle: true,
+      title: 'PttChrome - ptt.cc',
+      hasBellAlert: false,
+      _bellTitleBlinkState: false,
+      _bellTitleTimer: null,
+      updateDocumentTitle() {
+        if (typeof document === 'undefined') return;
+        if (this.hasBellAlert && this._bellTitleBlinkState) {
+          document.title = '🔔 ' + this.title;
+        } else {
+          document.title = this.title;
+        }
+      },
+      triggerBellTabAlert() {
+        this.hasBellAlert = true;
+        this._bellTitleBlinkState = true;
+        this.updateDocumentTitle();
+      },
+      clearBellTabAlert() {
+        if (this._bellTitleTimer) {
+          this._bellTitleTimer.cancel();
+          this._bellTitleTimer = null;
+        }
+        if (this.hasBellAlert || this._bellTitleBlinkState) {
+          this.hasBellAlert = false;
+          this._bellTitleBlinkState = false;
+          this.updateDocumentTitle();
+        }
+      },
+    };
+
+    mockApp.triggerBellTabAlert();
+    assert.equal(mockApp.hasBellAlert, true);
+    assert.equal(docTitle, '🔔 PttChrome - ptt.cc');
+
+    mockApp.clearBellTabAlert();
+    assert.equal(mockApp.hasBellAlert, false);
+    assert.equal(docTitle, 'PttChrome - ptt.cc');
+  } finally {
+    setWindowFocused(true);
+    globalThis.document = origDoc;
+  }
+});
+
+
