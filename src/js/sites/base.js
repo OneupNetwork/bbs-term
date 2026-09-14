@@ -264,6 +264,11 @@ export class BaseSite extends EventEmitter {
       state = PAGE_STATE.EDITING;
     } else if (this.parseReadingStatus(lastRowText, termBuf)) {
       state = PAGE_STATE.READING;
+    } else if (
+      state === PAGE_STATE.READING &&
+      (this.isPushPrompt?.(termBuf) || this.isReplyPrompt?.(termBuf))
+    ) {
+      state = PAGE_STATE.READING;
     } else if (this.isMenuScreen(termBuf)) {
       state = PAGE_STATE.MENU;
     } else if (this.isListScreen(termBuf)) {
@@ -272,7 +277,11 @@ export class BaseSite extends EventEmitter {
       state = PAGE_STATE.PASS;
     }
 
-    if (state !== PAGE_STATE.MENU && termBuf.isLineEmpty(lastRowNum)) {
+    if (
+      state !== PAGE_STATE.MENU &&
+      termBuf.isLineEmpty(lastRowNum) &&
+      !(state === PAGE_STATE.READING && this.isReplyPrompt?.(termBuf))
+    ) {
       state = PAGE_STATE.NORMAL;
     }
 
@@ -396,6 +405,22 @@ export class BaseSite extends EventEmitter {
   }
 
   /**
+   * Get list of key commands in easy reading mode that should exit to terminal and send the key.
+   * @returns {string[]}
+   */
+  getLeaveToTerminalCommands() {
+    return [];
+  }
+
+  /**
+   * Get list of key commands in easy reading mode that navigate away from the current post.
+   * @returns {string[]}
+   */
+  getLeaveCurrentPostCommands() {
+    return [];
+  }
+
+  /**
    * Handle site-specific keydown event in easy reading mode.
    * @param {EasyReading} easyReading 
    * @param {KeyboardEvent} e 
@@ -407,9 +432,17 @@ export class BaseSite extends EventEmitter {
         case 'q':
         case 'Q':
           easyReading.stopEasyReading();
-          easyReading.hide();
+          easyReading.leaveCurrentPost();
           easyReading.send('\x1b[D');
           return true;
+      }
+      if (this.getLeaveToTerminalCommands().includes(e.key)) {
+        easyReading.leaveToTerminal();
+        return false;
+      }
+      if (this.getLeaveCurrentPostCommands().includes(e.key)) {
+        easyReading.leaveCurrentPost();
+        return false;
       }
     }
     return false;
@@ -536,13 +569,16 @@ export class BaseSite extends EventEmitter {
     if (typeof extra_cmds === 'string') {
       cmdsStr = extra_cmds;
     } else if (Array.isArray(extra_cmds)) {
+      const leaveCmds = this.getLeaveToTerminalCommands();
       cmdsStr = extra_cmds
         .map(cmd => {
           if (Array.isArray(cmd)) {
-            return '<span class="q1 b7">(' + cmd[0] + ')</span><span class="q0 b7">' + cmd[1] + ' </span>';
+            const cmdKey = cmd[2] || leaveCmds.find(k => cmd[0].includes(k)) || cmd[0][0];
+            return '<span data-er-cmd="' + cmdKey + '" style="cursor:pointer"><span class="q1 b7">(' + cmd[0] + ')</span><span class="q0 b7">' + cmd[1] + ' </span></span>';
           }
           if (typeof cmd === 'object' && cmd !== null) {
-            return '<span class="q1 b7">(' + cmd.key + ')</span><span class="q0 b7">' + cmd.label + ' </span>';
+            const cmdKey = cmd.send || leaveCmds.find(k => cmd.key.includes(k)) || cmd.key[0];
+            return '<span data-er-cmd="' + cmdKey + '" style="cursor:pointer"><span class="q1 b7">(' + cmd.key + ')</span><span class="q0 b7">' + cmd.label + ' </span></span>';
           }
           return cmd;
         })
@@ -553,8 +589,8 @@ export class BaseSite extends EventEmitter {
            '<span class="' + cls + ' b7">(' + pctStr + ') </span>' +
            '<span class="q0 b7"> 滾輪/上下鍵捲動，</span>' +
            cmdsStr +
-           '<span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span>' +
-           '<span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span>' +
+           '<span data-er-cmd="Escape" style="cursor:pointer"><span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span></span>' +
+           '<span data-er-cmd="q" style="cursor:pointer"><span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span></span>' +
            '</span>';
   }
 

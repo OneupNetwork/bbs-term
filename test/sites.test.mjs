@@ -2505,13 +2505,12 @@ test('EasyReading fixes: mouse clicks, coordinate/cursor mapping, Escape toggle,
     er.handleMouseClick({ button: 0, clientX: 200, clientY: 200, preventDefault() {} });
     assert.equal(er.isActive(), true, 'Left click must not close EasyReading when MouseBrowsing is disabled');
 
-    // 6. getCursorPos returns 'hide' while reading, and footer coordinates during push/reply prompt
+    // 6. getCursorPos returns 'hide' while reading, and undefined when exited to terminal
     assert.equal(interceptors.getCursorPos(0, 23), 'hide');
-    er.showPushInitText = true;
-    const pushCursorPos = interceptors.getCursorPos(5, 23);
-    assert.ok(Array.isArray(pushCursorPos), 'getCursorPos should return coordinate array when push prompt is active');
-    assert.equal(pushCursorPos[0], 50);
-    er.showPushInitText = false;
+    er.leaveToTerminal();
+    const terminalCursorPos = interceptors.getCursorPos(5, 23);
+    assert.equal(terminalCursorPos, undefined, 'getCursorPos should return undefined when exited to terminal so TermView uses native coordinates');
+    er.show();
 
     // 7. Escape temporarily hides overlay without clearing pageLines; pressing Escape again restores it
     er.pageLines = [buf.lines[0], buf.lines[1]];
@@ -2576,5 +2575,354 @@ test('EasyReading fixes: mouse clicks, coordinate/cursor mapping, Escape toggle,
     globalThis.document = originalDoc;
   }
 });
+
+test('EasyReading exits directly to terminal on y (reply) and X (push) and delegates input natively', () => {
+  const originalDoc = globalThis.document;
+  const mockElements = new Map();
+  const createEl = (tag) => {
+    const el = {
+      tagName: tag.toUpperCase(),
+      style: {
+        display: '',
+        setProperty(k, v) { this[k] = v; },
+        getPropertyValue(k) { return this[k] || ''; },
+      },
+      attributes: {},
+      childNodes: [],
+      innerHTML: '',
+      scrollTop: 0,
+      scrollHeight: 600,
+      clientHeight: 600,
+      offsetHeight: 20,
+      offsetTop: 460,
+      setAttribute(k, v) { this.attributes[k] = v; if (k === 'id') mockElements.set(v, this); },
+      getAttribute(k) { return this.attributes[k]; },
+      appendChild(child) { this.childNodes.push(child); child.parentNode = this; return child; },
+      removeChild(child) {
+        const idx = this.childNodes.indexOf(child);
+        if (idx >= 0) this.childNodes.splice(idx, 1);
+      },
+      get lastChild() {
+        return this.childNodes[this.childNodes.length - 1] || null;
+      },
+      addEventListener() {},
+      removeEventListener() {},
+      contains(target) { return target === this || this.childNodes.includes(target); },
+      getBoundingClientRect() {
+        return { top: 0, left: 0, width: 800, height: 480 };
+      },
+    };
+    return el;
+  };
+
+  globalThis.document = {
+    createElement: createEl,
+    getElementById: (id) => mockElements.get(id) || null,
+  };
+
+  try {
+    const ptt = new PttSite();
+    ptt.pageState = PAGE_STATE.READING;
+    ptt.prevPageState = PAGE_STATE.LIST;
+
+    const createLine = (text, bg = 0, fg = 7) =>
+      Array.from({ length: 80 }, (_, i) => ({
+        ch: text[i] || ' ',
+        getBg: () => bg,
+        getFg: () => fg,
+      }));
+
+    const lines = Array.from({ length: 24 }, (_, r) => createLine(`Article row ${r}`));
+    const statusText = '  瀏覽 第 1/1 頁 (100%)  目前顯示: 第 01~23 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+    lines[23] = createLine(statusText, 4, 7);
+
+    const mockBuf = Object.assign(new EventEmitter(), {
+      cols: 80,
+      rows: 24,
+      cur_x: 79,
+      cur_y: 23,
+      site: ptt,
+      hasFrameSync: true,
+      inSyncUpdate: false,
+      lines,
+      isFrameReady() {
+        return !this.inSyncUpdate;
+      },
+      isLineEmpty(row) {
+        return this.getRowText(row).trim().length === 0;
+      },
+      getRowText(row) {
+        if (!this.lines[row]) return '';
+        return this.lines[row].map((c) => c.ch).join('');
+      },
+    });
+
+    const mockView = {
+      chw: 10,
+      chh: 20,
+      scaleX: 1.35, // Simulate Stretch Font (fontFitWindowWidth)
+      scaleY: 1.0,
+      fontSizePx: 20,
+      termWin: createEl('div'),
+      mainDisplay: { style: { fontSize: '20px', lineHeight: '20px' } },
+      _getGridOrigin: () => [0, 0],
+      convertMN2XYEx: (col, row) => [col * 10 * 1.35, row * 20],
+      updateCursorPos() {},
+      renderSingleRow(target, row) {
+        target.textContent = row.map((c) => c.ch).join('').trim();
+      },
+    };
+
+    const sentData = [];
+    const mockApp = Object.assign(new EventEmitter(), {
+      buf: mockBuf,
+      view: mockView,
+      site: ptt,
+      send(data) { sentData.push(data); },
+      registerInputInterceptor() {},
+      unregisterInputInterceptor() {},
+    });
+
+    const er = new EasyReading();
+    er.init({ app: mockApp, view: mockView, buf: mockBuf });
+    er.setEnabled(true);
+
+    // 1. Initial article load via onScreenUpdate
+    er.onScreenUpdate(lines);
+    assert.equal(er.started, true);
+    assert.equal(er.isActive(), true, 'EasyReading overlay is active');
+    assert.equal(er.getCursorPos(79, 23), 'hide', 'Cursor is hidden while EasyReading overlay is active');
+
+    // 2. User presses 'y' in EasyReading -> exits immediately to terminal and passes key through
+    let keyPrevented = false;
+    const interceptedY = er.handleKeyDown({
+      key: 'y',
+      ctrlKey: false,
+      altKey: false,
+      preventDefault() { keyPrevented = true; },
+    });
+    assert.equal(interceptedY, false, 'handleKeyDown must return false so TermKeyboard sends y to terminal');
+    assert.equal(keyPrevented, false, 'Key event must not be prevented');
+    assert.equal(er.isActive(), false, 'EasyReading overlay immediately hides when y is pressed');
+    assert.equal(er._temporarilyHidden, true, '_temporarilyHidden is true while in terminal mode');
+    assert.equal(
+      er.getCursorPos(52, 22),
+      undefined,
+      'getCursorPos returns undefined when exited to terminal so TermView uses native Stretch Font coordinates'
+    );
+
+    // PTT responds with reply prompt on Row 22 while Row 23 still says 瀏覽
+    const replyPromptText = '▲ 回應至 (F)看板 (M)作者信箱 (B)二者皆是 (Q)取消？[F] ';
+    lines[22] = createLine(replyPromptText);
+    mockBuf.cur_y = 22;
+    mockBuf.cur_x = 52;
+    er.onScreenUpdate([lines[22], lines[23]]);
+    assert.equal(er.isActive(), false, 'EasyReading overlay stays hidden during reply prompt updates');
+    assert.equal(sentData.includes('\x1b[6~'), false, 'Must NEVER send PageDown into PTT getdata() prompt');
+
+    // Subsequent keys (like 'Enter', 'q', '1', typing) pass straight through to terminal and keep overlay hidden
+    const interceptedSubKey = er.handleKeyDown({
+      key: 'Enter',
+      ctrlKey: false,
+      altKey: false,
+      preventDefault() {},
+    });
+    assert.equal(interceptedSubKey, false);
+    assert.equal(er.isActive(), false, 'Overlay stays hidden while typing in terminal');
+
+    // 3. User finishes/cancels prompt and cursor parks back at (23, 79)
+    lines[22] = createLine('Article row 22');
+    mockBuf.cur_y = 23;
+    mockBuf.cur_x = 79;
+    er.onScreenUpdate([lines[22], lines[23]]);
+    assert.equal(er.isActive(), false, 'Stays in terminal view at bottom of article after prompt finishes');
+
+    // Pressing Escape at idle reading screen returns to EasyReading
+    let escPrevented = false;
+    const interceptedEsc = er.handleKeyDown({
+      key: 'Escape',
+      ctrlKey: false,
+      altKey: false,
+      preventDefault() { escPrevented = true; },
+    });
+    assert.equal(interceptedEsc, true, 'Escape at idle terminal reading screen toggles EasyReading back on');
+    assert.equal(escPrevented, true);
+    assert.equal(er.isActive(), true, 'EasyReading overlay is shown again');
+
+    // 4. User presses 'X' in EasyReading -> exits immediately to terminal
+    const interceptedX = er.handleKeyDown({
+      key: 'X',
+      ctrlKey: false,
+      altKey: false,
+      preventDefault() {},
+    });
+    assert.equal(interceptedX, false, 'X passes through to terminal');
+    assert.equal(er.isActive(), false, 'EasyReading overlay immediately hides on X');
+
+    // 5. Leaving article to LIST resets state so next article opens in EasyReading automatically
+    ptt.prevPageState = PAGE_STATE.READING;
+    ptt.pageState = PAGE_STATE.LIST;
+    er.onScreenUpdate(lines);
+    assert.equal(er._temporarilyHidden, false, 'Leaving to LIST resets _temporarilyHidden');
+
+    // Entering next article from LIST opens EasyReading automatically
+    ptt.prevPageState = PAGE_STATE.LIST;
+    ptt.pageState = PAGE_STATE.READING;
+    er.onScreenUpdate(lines);
+    assert.equal(er.isActive(), true, 'Next article opens in EasyReading automatically');
+  } finally {
+    globalThis.document = originalDoc;
+  }
+});
+
+test('EasyReading works without DEC 2026 (hasFrameSync: false) for split TCP chunks and server-triggered prompts', () => {
+  const originalDoc = globalThis.document;
+  const mockElements = new Map();
+  const createEl = (tag) => {
+    const el = {
+      tagName: tag.toUpperCase(),
+      style: {
+        display: '',
+        setProperty(k, v) { this[k] = v; },
+        getPropertyValue(k) { return this[k] || ''; },
+      },
+      attributes: {},
+      childNodes: [],
+      innerHTML: '',
+      scrollTop: 0,
+      scrollHeight: 600,
+      clientHeight: 600,
+      offsetHeight: 20,
+      offsetTop: 460,
+      setAttribute(k, v) { this.attributes[k] = v; if (k === 'id') mockElements.set(v, this); },
+      getAttribute(k) { return this.attributes[k]; },
+      appendChild(child) { this.childNodes.push(child); child.parentNode = this; return child; },
+      removeChild(child) {
+        const idx = this.childNodes.indexOf(child);
+        if (idx >= 0) this.childNodes.splice(idx, 1);
+      },
+      get lastChild() {
+        return this.childNodes[this.childNodes.length - 1] || null;
+      },
+      addEventListener() {},
+      removeEventListener() {},
+      contains(target) { return target === this || this.childNodes.includes(target); },
+      getBoundingClientRect() {
+        return { top: 0, left: 0, width: 800, height: 480 };
+      },
+    };
+    return el;
+  };
+
+  globalThis.document = {
+    createElement: createEl,
+    getElementById: (id) => mockElements.get(id) || null,
+  };
+
+  try {
+    const ptt = new PttSite();
+    ptt.pageState = PAGE_STATE.READING;
+    ptt.prevPageState = PAGE_STATE.LIST;
+
+    const createLine = (text, bg = 0, fg = 7) =>
+      Array.from({ length: 80 }, (_, i) => ({
+        ch: text[i] || ' ',
+        getBg: () => bg,
+        getFg: () => fg,
+      }));
+
+    const lines = Array.from({ length: 24 }, (_, r) => createLine(`Page 1 row ${r}`));
+    const statusPage1 = '  瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~23 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+    lines[23] = createLine(statusPage1, 7, 0);
+
+    const mockBuf = Object.assign(new EventEmitter(), {
+      cols: 80,
+      rows: 24,
+      cur_x: 79,
+      cur_y: 23,
+      site: ptt,
+      hasFrameSync: false,
+      inSyncUpdate: false,
+      lines,
+      isFrameReady() {
+        if (this.hasFrameSync) return !this.inSyncUpdate;
+        return this.site.isCursorParked(this);
+      },
+      isLineEmpty(row) {
+        return this.getRowText(row).trim().length === 0;
+      },
+      getRowText(row) {
+        if (!this.lines[row]) return '';
+        return this.lines[row].map((c) => c.ch).join('');
+      },
+    });
+
+    const mockView = {
+      chw: 10,
+      chh: 20,
+      scaleX: 1,
+      scaleY: 1,
+      fontSizePx: 20,
+      termWin: createEl('div'),
+      mainDisplay: { style: { fontSize: '20px', lineHeight: '20px' } },
+      _getGridOrigin: () => [0, 0],
+      convertMN2XYEx: (col, row) => [col * 10, row * 20],
+      updateCursorPos() {},
+      renderSingleRow(target, row) {
+        target.textContent = row.map((c) => c.ch).join('').trim();
+      },
+    };
+
+    const mockApp = Object.assign(new EventEmitter(), {
+      buf: mockBuf,
+      view: mockView,
+      site: ptt,
+      send() {},
+      registerInputInterceptor() {},
+      unregisterInputInterceptor() {},
+    });
+
+    const er = new EasyReading();
+    er.init({ app: mockApp, view: mockView, buf: mockBuf });
+    er.setEnabled(true);
+
+    // 1. Page 1 arrives complete (cur_x = 79, cur_y = 23)
+    er.onScreenUpdate(lines);
+    assert.equal(er.content.childNodes.length, 23, 'Page 1 appends 23 rows');
+    assert.equal(er._lastEasyReadingPageIndex, 1);
+
+    // 2. Page 2 arrives in split TCP chunks (Chunk 1: status row updated to page 2, but cursor at (10, 40) mid-screen)
+    const statusPage2 = '  瀏覽 第 2/2 頁 (100%)  目前顯示: 第 23~45 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+    lines[23] = createLine(statusPage2, 4, 7);
+    mockBuf.cur_y = 10;
+    mockBuf.cur_x = 40;
+    er.onScreenUpdate(lines);
+    assert.equal(er.content.childNodes.length, 23, 'Must NOT append half-drawn page 2 while cursor is not parked');
+    assert.equal(er._lastEasyReadingPageIndex, 1, 'Must NOT advance _lastEasyReadingPageIndex on incomplete frame');
+
+    // Chunk 2 arrives: cursor parks at (23, 79)
+    for (let r = 0; r < 23; r++) {
+      lines[r] = createLine(`Page 2 row ${r}`);
+    }
+    mockBuf.cur_y = 23;
+    mockBuf.cur_x = 79;
+    er.onScreenUpdate(lines);
+    assert.equal(er._lastEasyReadingPageIndex, 2, 'Advances to page 2 once cursor parks at (23, 79)');
+    assert.ok(er.content.childNodes.length > 23, 'Appends page 2 rows once frame is complete');
+
+    // 3. Even if 'y' or 'X' prompt is triggered via touch/macro without keydown event, _onChanged automatically exits to terminal
+    lines[23] = createLine('您覺得這篇文章 1.推 2.噓 3.→ [1]? ', 4, 7);
+    mockBuf.cur_y = 23;
+    mockBuf.cur_x = 31;
+    er.onScreenUpdate([lines[23]]);
+    assert.equal(er.isActive(), false, 'Automatically exits EasyReading to terminal when push prompt appears');
+    assert.equal(er._temporarilyHidden, true);
+  } finally {
+    globalThis.document = originalDoc;
+  }
+});
+
+
+
 
 

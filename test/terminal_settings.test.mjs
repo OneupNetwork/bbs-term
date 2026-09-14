@@ -1160,7 +1160,7 @@ test('main.css and easy reading use dynamic default background variables', () =>
     '.main must use var(--term-bg, var(--term-color-0, black))'
   );
   assert.ok(
-    mainCss.includes('#easyReadingReplyRow {\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 1.2em;\n  display: none;\n  overflow: hidden;\n  user-select: none;\n  background-color: var(--term-bg, var(--term-color-0, black));'),
+    mainCss.includes('#easyReadingReplyRow {\n  position: absolute;\n  bottom: 1.2em;\n  left: 0;\n  right: 0;\n  height: 1.2em;\n  display: none;\n  overflow: hidden;\n  user-select: none;\n  background-color: var(--term-bg, var(--term-color-0, black));'),
     '#easyReadingReplyRow must use var(--term-bg, var(--term-color-0, black))'
   );
   assert.ok(

@@ -204,7 +204,7 @@ span[data-type="termline"],
   left: 0;
   right: 0;
   height: 1.2em;
-  overflow: hidden;
+  overflow: visible;
   background-color: var(--term-bg, var(--term-color-0, #000000));
   z-index: 11;
   box-sizing: border-box;
@@ -236,7 +236,7 @@ span[data-type="termline"],
 
 #easyReadingReplyRow {
   position: absolute;
-  bottom: 0;
+  bottom: 1.2em;
   left: 0;
   right: 0;
   height: 1.2em;
