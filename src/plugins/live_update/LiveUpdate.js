@@ -215,12 +215,31 @@ export class LiveUpdate extends PluginBase {
         this.stop();
       }
     });
-    this.listenAppWhileEnabled('term:click', () => {
-      if (this.active) {
-        this.stop();
+    this.listenAppWhileEnabled('term:click', (evt) => {
+      if (!this.active) return;
+      const e = evt?.event || evt;
+      if (e?.target?.closest?.('a, button, input, dialog, .nomouse_command')) {
+        return;
       }
+      if (
+        typeof window !== 'undefined' &&
+        window.getSelection &&
+        !window.getSelection()?.isCollapsed
+      ) {
+        return;
+      }
+      const mb = this.app?.getPlugin?.('mouse_browsing');
+      const force = Boolean(evt?.force || e?.force);
+      if (!mb?.enabled && !force) {
+        return;
+      }
+      const cursor = mb?.mouseCursor ?? this.app?.buf?.mouseCursor ?? 0;
+      if (cursor === 5) {
+        return;
+      }
+      this.stop();
     });
-    this.registerInputInterceptorWhileEnabled(this);
+    this.registerInputInterceptor(this);
   }
 
   syncFromPrefs() {
@@ -366,6 +385,10 @@ export class LiveUpdate extends PluginBase {
   start(immediate = true) {
     this.stopTimer();
     this.active = true;
+    const easyReading = this.app?.getPlugin?.('easy_reading');
+    if (easyReading?.isActive?.() || easyReading?.started) {
+      easyReading.leaveToTerminal?.();
+    }
     if (immediate) {
       this.refresh();
     }
@@ -435,6 +458,16 @@ export class LiveUpdate extends PluginBase {
     this.renderUI();
   }
 
+  handleNavCmd(cmd) {
+    if (!this.enabled || !this.active) {
+      return false;
+    }
+    if (cmd && cmd !== 'doEnd') {
+      this.stop();
+    }
+    return false;
+  }
+
   handleKeyDown(e) {
     if (!this.enabled) {
       return false;
@@ -465,8 +498,8 @@ export class LiveUpdate extends PluginBase {
       }
     }
 
-    // Auto-disable auto-refresh if any regular command key is pressed without Alt
-    if (!e.altKey && !e.metaKey && this.active) {
+    // Auto-disable auto-refresh if any regular command key is pressed without Alt/Ctrl/Meta
+    if (!e.ctrlKey && !e.altKey && !e.metaKey && this.active) {
       if (
         e.key !== 'Shift' &&
         e.key !== 'Control' &&
