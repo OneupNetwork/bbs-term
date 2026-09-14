@@ -3099,6 +3099,110 @@ test('EasyReading handles enabling after login, toggling off/on with forced redr
   }
 });
 
+test('Terminal site.filterWheelScroll and EasyReading stop continuous wheel scroll at top/bottom boundaries and jump to prev/next article after pause', () => {
+  const ptt = new PttSite();
+  const createLine = (text, bg = 0, fg = 7) =>
+    Array.from({ length: 80 }, (_, i) => ({
+      ch: text[i] || ' ',
+      getBg: () => bg,
+      getFg: () => fg,
+    }));
+
+  const lines = Array.from({ length: 24 }, (_, r) => createLine(`Row ${r}`));
+  lines[0] = createLine(' 作者  tester (Tester)                                      看板  TestBoard ');
+  lines[1] = createLine(' 標題  [測試] 邊界連續滾動測試                                              ');
+  lines[2] = createLine(' 時間  Mon Sep 14 09:30:00 2026                                             ');
+
+  const mockBuf = {
+    cols: 80,
+    rows: 24,
+    lines,
+    isLineEmpty: () => false,
+    getRowText(row) {
+      if (!this.lines[row]) return '';
+      return this.lines[row].map((c) => c.ch).join('');
+    },
+  };
+
+  // 1. Enter article on Page 1 of 2 (50%, rows 1~23) at t = 1000
+  const statusPage1 = '  瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~23 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+  lines[23] = createLine(statusPage1, 7, 0);
+  ptt.setPageState(mockBuf);
+  ptt._readingEnterTime = 1000;
+
+  // Immediate upward scroll within 400ms of entry is blocked (justEntered)
+  let res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'up',
+    isContinuous: false,
+    cmd: 'doArrowUp',
+    count: 1,
+    now: 1200,
+  });
+  assert.equal(res.prevent, true, 'Reflex upward scroll immediately after entering article at top is blocked');
+
+  // At t = 2000 (> 400ms after entry), continuous upward scroll at top is blocked
+  res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'up',
+    isContinuous: true,
+    cmd: 'doArrowUp',
+    count: 3,
+    now: 2000,
+  });
+  assert.equal(res.prevent, true, 'Continuous upward scroll at article top is blocked');
+
+  // At t = 2500 (paused > 350ms, isContinuous: false), upward scroll at top jumps to previous article
+  res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'up',
+    isContinuous: false,
+    cmd: 'doPageUp',
+    count: 1,
+    now: 2500,
+  });
+  assert.equal(res.prevent, false, 'Paused upward scroll at top is allowed');
+  assert.equal(res.maxSteps, 1, 'Jump allows exactly 1 step');
+  assert.equal(res.overrideCmd, 'doArrowUp', 'PageUp at top overrides to doArrowUp so PTT jumps to previous article');
+
+  // 2. When at row 3 (2 lines away from top), arrow-5 clamps maxSteps to 2 so it lands cleanly on line 1
+  const statusRow3 = '  瀏覽 第 1/2 頁 ( 55%)  目前顯示: 第 03~25 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+  lines[23] = createLine(statusRow3, 7, 0);
+  res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'up',
+    isContinuous: true,
+    cmd: 'doArrowUp',
+    count: 5,
+    now: 3500,
+  });
+  assert.equal(res.prevent, false);
+  assert.equal(res.maxSteps, 2, 'Multi-line upward arrow scroll clamps steps to reach rowIndexStart=1 without overshooting');
+
+  // 3. Scroll down to bottom (100%)
+  const statusEnd = '  瀏覽 第 2/2 頁 (100%)  目前顯示: 第 20~42 行 (y)回應(X%)推文(h)說明 (←/q)離開 ';
+  lines[23] = createLine(statusEnd, 4, 7);
+  ptt._readingEnterTime = 1000;
+
+  // Continuous downward scroll hitting 100% is blocked
+  res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'down',
+    isContinuous: true,
+    cmd: 'doArrowDown',
+    count: 3,
+    now: 4000,
+  });
+  assert.equal(res.prevent, true, 'Continuous downward scroll at 100% is blocked');
+
+  // Paused downward scroll at 100% jumps to next article (maxSteps: 1)
+  res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'down',
+    isContinuous: false,
+    cmd: 'doArrowDown',
+    count: 3,
+    now: 4500,
+  });
+  assert.equal(res.prevent, false, 'Paused downward scroll at 100% is allowed');
+  assert.equal(res.maxSteps, 1, 'Downward jump at 100% clamps to 1 step');
+});
+
+
 
 
 

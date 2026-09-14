@@ -292,8 +292,29 @@ export class BaseSite extends EventEmitter {
       state = PAGE_STATE.NORMAL;
     }
 
-    if (lastRowText && lastRowText.trim()) {
-      console.debug('[setPageState] site=' + this.name + ', state=' + state + ', lastRow=' + JSON.stringify(lastRowText));
+    if (state === PAGE_STATE.READING) {
+      const statusResult = this.parseReadingStatus(lastRowText, termBuf);
+      const isFirstPage =
+        !statusResult ||
+        statusResult.pageIndex === 1 ||
+        (typeof statusResult.rowIndexStart === 'number' && statusResult.rowIndexStart <= 1);
+      if (isFirstPage && termBuf.rows >= 3) {
+        const headerSig =
+          termBuf.getRowText(0, 0, cols) +
+          '\n' +
+          termBuf.getRowText(1, 0, cols) +
+          '\n' +
+          termBuf.getRowText(2, 0, cols);
+        if (this._currentArticleHeaderSig !== headerSig) {
+          this._currentArticleHeaderSig = headerSig;
+          this._readingEnterTime = Date.now();
+        }
+      } else if (this.pageState !== PAGE_STATE.READING) {
+        this._readingEnterTime = Date.now();
+      }
+    } else {
+      this._currentArticleHeaderSig = null;
+      this._readingEnterTime = 0;
     }
 
     this.pageState = state;
@@ -320,6 +341,21 @@ export class BaseSite extends EventEmitter {
   }
 
   /**
+   * Check if the article reading is at the top (first line / first page).
+   * @param {string} lastRowText 
+   * @param {TermBuf} termBuf 
+   * @param {object|null} statusResult 
+   * @returns {boolean}
+   */
+  isArticleTop(lastRowText, termBuf, statusResult) {
+    if (!statusResult) return false;
+    if (typeof statusResult.rowIndexStart === 'number') {
+      return statusResult.rowIndexStart <= 1;
+    }
+    return statusResult.pageIndex === 1;
+  }
+
+  /**
    * Check if the article reading has reached the end.
    * @param {string} lastRowText 
    * @param {TermBuf} termBuf 
@@ -331,6 +367,75 @@ export class BaseSite extends EventEmitter {
       return statusResult.pageIndex === statusResult.pageTotal && statusResult.pagePercent === 100;
     }
     return statusResult && statusResult.pagePercent === 100;
+  }
+
+  /**
+   * Determine whether a wheel/continuous scroll action should be prevented or clamped
+   * at the current screen state (e.g., stopping continuous scroll at article boundaries,
+   * while allowing a deliberate scroll after a pause to jump to the previous/next article).
+   *
+   * @param {TermBuf} termBuf
+   * @param {object} options
+   * @param {'up'|'down'} options.direction - Scroll direction
+   * @param {boolean} options.isContinuous - Whether this event is part of an ongoing continuous scroll gesture
+   * @param {string} options.cmd - Navigation command ('doArrowUp', 'doArrowDown', 'doPageUp', 'doPageDown')
+   * @param {number} [options.count=1] - Number of command steps requested by this wheel event
+   * @param {number} [options.now=Date.now()] - Current timestamp in ms
+   * @returns {{ prevent: boolean, maxSteps: number, overrideCmd?: string }}
+   */
+  filterWheelScroll(termBuf, { direction, isContinuous, cmd, count = 1, now = Date.now() } = {}) {
+    if (!termBuf || this.pageState !== PAGE_STATE.READING) {
+      return { prevent: false, maxSteps: count };
+    }
+    if (this.isPushPrompt?.(termBuf) || this.isReplyPrompt?.(termBuf)) {
+      return { prevent: false, maxSteps: count };
+    }
+    const lastRowNum = this.getLastRowNum(termBuf);
+    const lastRowText = termBuf.getRowText(lastRowNum, 0, termBuf.cols);
+    const statusResult = this.parseReadingStatus(lastRowText, termBuf);
+    if (!statusResult) {
+      return { prevent: false, maxSteps: count };
+    }
+
+    const justEntered = Boolean(
+      this._readingEnterTime && now - this._readingEnterTime < 400
+    );
+
+    if (direction === 'up') {
+      const atTop = this.isArticleTop(lastRowText, termBuf, statusResult);
+      if (atTop) {
+        if (isContinuous || justEntered) {
+          return { prevent: true, maxSteps: 0 };
+        }
+        this._readingEnterTime = now;
+        return { prevent: false, maxSteps: 1, overrideCmd: 'doArrowUp' };
+      }
+      if (
+        cmd === 'doArrowUp' &&
+        typeof statusResult.rowIndexStart === 'number' &&
+        statusResult.rowIndexStart > 1
+      ) {
+        return {
+          prevent: false,
+          maxSteps: Math.min(count, statusResult.rowIndexStart - 1),
+        };
+      }
+      return { prevent: false, maxSteps: count };
+    }
+
+    if (direction === 'down') {
+      const atBottom = this.isArticleEnd(lastRowText, termBuf, statusResult);
+      if (atBottom) {
+        if (isContinuous || justEntered) {
+          return { prevent: true, maxSteps: 0 };
+        }
+        this._readingEnterTime = now;
+        return { prevent: false, maxSteps: 1 };
+      }
+      return { prevent: false, maxSteps: count };
+    }
+
+    return { prevent: false, maxSteps: count };
   }
 
   /**

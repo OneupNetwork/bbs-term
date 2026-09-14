@@ -78,6 +78,12 @@ export class EasyReading extends PluginBase {
     this._needsRefreshAfterPushOrReply = false;
     this._lastPageBeginIndex = 0;
     this._lastPageRowCount = 0;
+    this._articleEnterTime = 0;
+    this._lastWheelGestureTime = 0;
+    this._lastWheelDirection = null;
+    this._gestureHasScrolled = false;
+    this._gestureBlockedAtBoundary = false;
+    this._boundaryDeltaAccum = 0;
 
     this._onBufChanged = (e) => {
       if (this._changeHandled) {
@@ -710,6 +716,10 @@ export class EasyReading extends PluginBase {
       this._easyReadingAppendedEnd = false;
       this._temporarilyHidden = false;
       this._needsRefreshAfterPushOrReply = false;
+      this._articleEnterTime = Date.now();
+      this._gestureHasScrolled = false;
+      this._gestureBlockedAtBoundary = false;
+      this._boundaryDeltaAccum = 0;
       if (site.pageState === PAGE_STATE.READING) {
         const lastRowText = this.buf.getRowText(lastRowNum, 0, this.buf.cols);
         const statusResult = site.parseReadingStatus(lastRowText, this.buf);
@@ -1221,7 +1231,20 @@ export class EasyReading extends PluginBase {
       e.preventDefault();
   }
 
-  handleNavCmd(cmd) {
+  _shouldAllowBoundaryNavJump(context) {
+    if (context?.source === 'wheel') {
+      const now = Date.now();
+      const justEntered = Boolean(
+        this._articleEnterTime && now - this._articleEnterTime < 400
+      );
+      if (context.isContinuous || justEntered) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  handleNavCmd(cmd, context) {
     if (!this.isActive()) return false;
     switch (cmd) {
       case "doLeft":
@@ -1237,21 +1260,45 @@ export class EasyReading extends PluginBase {
         return true;
       case "doArrowUp":
         if (!this._scrollBy(-1)) {
-          this.leaveCurrentPost();
-          this._send('\x1b[D\x1b[A\x1b[C');
+          if (this._shouldAllowBoundaryNavJump(context)) {
+            this._articleEnterTime = Date.now();
+            this.leaveCurrentPost();
+            this._send('\x1b[D\x1b[A\x1b[C');
+          }
         }
         return true;
       case "doArrowDown":
         if (!this._scrollBy(1)) {
-          this.leaveCurrentPost();
-          this._send('\x1b[B');
+          if (
+            this.easyReadingReachedPageEnd &&
+            this._shouldAllowBoundaryNavJump(context)
+          ) {
+            this._articleEnterTime = Date.now();
+            this.leaveCurrentPost();
+            this._send('\x1b[B');
+          }
         }
         return true;
       case "doPageUp":
-        this._scrollBy(-this._turnPageLines);
+        if (!this._scrollBy(-this._turnPageLines)) {
+          if (this._shouldAllowBoundaryNavJump(context)) {
+            this._articleEnterTime = Date.now();
+            this.leaveCurrentPost();
+            this._send('\x1b[D\x1b[A\x1b[C');
+          }
+        }
         return true;
       case "doPageDown":
-        this._scrollBy(this._turnPageLines);
+        if (!this._scrollBy(this._turnPageLines)) {
+          if (
+            this.easyReadingReachedPageEnd &&
+            this._shouldAllowBoundaryNavJump(context)
+          ) {
+            this._articleEnterTime = Date.now();
+            this.leaveCurrentPost();
+            this._send('\x1b[B');
+          }
+        }
         return true;
       case "previousThread": {
         const tCmd = this.site?.getThreadCommand?.("prevThread");
@@ -1327,6 +1374,79 @@ export class EasyReading extends PluginBase {
           return false;
         }
       }
+
+      const deltaY = e?.deltaY || 0;
+      const direction = deltaY < 0 ? 'up' : deltaY > 0 ? 'down' : null;
+      if (direction) {
+        const isNewGesture =
+          !this._lastWheelGestureTime ||
+          now - this._lastWheelGestureTime >= 350 ||
+          this._lastWheelDirection !== direction;
+        if (isNewGesture) {
+          this._gestureHasScrolled = false;
+          this._gestureBlockedAtBoundary = false;
+          this._boundaryDeltaAccum = 0;
+        }
+        this._lastWheelGestureTime = now;
+        this._lastWheelDirection = direction;
+
+        const cont = this.content;
+        const atTop = cont ? cont.scrollTop <= 0 : false;
+        const atBottom = cont
+          ? Boolean(
+              this.easyReadingReachedPageEnd &&
+                cont.scrollTop >= cont.scrollHeight - cont.clientHeight - 2
+            )
+          : false;
+        const justEntered = Boolean(
+          this._articleEnterTime && now - this._articleEnterTime < 400
+        );
+
+        if ((direction === 'up' && atTop) || (direction === 'down' && atBottom)) {
+          if (
+            this._gestureHasScrolled ||
+            this._gestureBlockedAtBoundary ||
+            justEntered
+          ) {
+            this._gestureBlockedAtBoundary = true;
+            this.lastWheelTime = now;
+            this.lastWheelEventTime = now;
+            this._wasTrackpadInActive = isTrackpad;
+            e?.stopPropagation?.();
+            e?.preventDefault?.();
+            return true;
+          }
+
+          this._boundaryDeltaAccum += Math.abs(deltaY);
+          if (
+            isDiscreteMouseWheelEvent(e) ||
+            this._boundaryDeltaAccum >= 20
+          ) {
+            this._articleEnterTime = now;
+            this._gestureHasScrolled = true;
+            this._gestureBlockedAtBoundary = true;
+            this.lastWheelTime = now;
+            this.lastWheelEventTime = now;
+            this._wasTrackpadInActive = isTrackpad;
+            this.leaveCurrentPost();
+            this._send(direction === 'up' ? '\x1b[D\x1b[A\x1b[C' : '\x1b[B');
+            e?.stopPropagation?.();
+            e?.preventDefault?.();
+            return true;
+          }
+
+          this.lastWheelTime = now;
+          this.lastWheelEventTime = now;
+          this._wasTrackpadInActive = isTrackpad;
+          e?.stopPropagation?.();
+          e?.preventDefault?.();
+          return true;
+        }
+
+        this._gestureHasScrolled = true;
+        this._gestureBlockedAtBoundary = false;
+      }
+
       this.lastWheelTime = now;
       this.lastWheelEventTime = now;
       this._wasTrackpadInActive = isTrackpad;
