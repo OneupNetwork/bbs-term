@@ -162,14 +162,11 @@ export class EasyReading extends PluginBase {
       }
     }
     if (this._overlay && this.view) {
-      if (this.view.fontFace) {
-        this._overlay.style.setProperty('--font-face', this.view.fontFace);
-      }
-      if (this.view.mainDisplay?.style?.fontSize) {
-        this._overlay.style.fontSize = this.view.mainDisplay.style.fontSize;
-        this._overlay.style.lineHeight = this.view.mainDisplay.style.lineHeight;
-      }
-      this._updateOverlayPadding();
+      this.onFontUpdate({
+        fontFace: this.view.fontFace,
+        fontSize: this.view.mainDisplay?.style?.fontSize,
+        lineHeight: this.view.mainDisplay?.style?.lineHeight,
+      });
     }
     if (!this._initializing) {
       if (!this._handlingSwitchEvent) {
@@ -361,14 +358,11 @@ export class EasyReading extends PluginBase {
     this._replyRowDiv = replyRowDiv;
     easyReadingFooter.appendChild(replyRowDiv);
 
-    if (this.view?.fontFace) {
-      this._overlay.style.setProperty('--font-face', this.view.fontFace);
-    }
-    if (this.view?.mainDisplay?.style?.fontSize) {
-      this._overlay.style.fontSize = this.view.mainDisplay.style.fontSize;
-      this._overlay.style.lineHeight = this.view.mainDisplay.style.lineHeight;
-    }
-    this._updateOverlayPadding();
+    this.onFontUpdate({
+      fontFace: this.view?.fontFace,
+      fontSize: this.view?.mainDisplay?.style?.fontSize,
+      lineHeight: this.view?.mainDisplay?.style?.lineHeight,
+    });
     this._uiInitialized = true;
   }
 
@@ -424,7 +418,15 @@ export class EasyReading extends PluginBase {
       }
     }
     this._temporarilyHidden = false;
-    this._updateOverlayPadding();
+    if (this.overlay && this.view) {
+      this.onFontUpdate({
+        fontFace: this.view.fontFace,
+        fontSize: this.view.mainDisplay?.style?.fontSize,
+        lineHeight: this.view.mainDisplay?.style?.lineHeight,
+      });
+    } else {
+      this._updateOverlayPadding();
+    }
     if (this.overlay) {
       this.overlay.style.display = 'block';
     }
@@ -1641,7 +1643,10 @@ export class EasyReading extends PluginBase {
 
   onFontUpdate({ fontFace, fontSize, lineHeight } = {}) {
     if (this.overlay) {
-      if (fontFace) this.overlay.style.setProperty('--font-face', fontFace);
+      if (fontFace) {
+        this.overlay.style.setProperty('--font-face', fontFace);
+        this.overlay.style.setProperty('font-family', fontFace, 'important');
+      }
       if (fontSize) {
         this.overlay.style.fontSize = fontSize;
         this.overlay.style.lineHeight = lineHeight || this.view?.mainDisplay?.style?.lineHeight || fontSize;

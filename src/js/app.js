@@ -1020,6 +1020,9 @@ export class App extends EventEmitter {
           let fontFace = value;
           if (!fontFace) fontFace = 'monospace';
           this.view.setFontFace(fontFace);
+          if (!this._batchUpdatingPrefs) {
+            this.view.redraw(true);
+          }
           break;
         }
         case 'termMargin': {
