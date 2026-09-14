@@ -4019,3 +4019,70 @@ test('Canvas mode fontFitWindowWidth renders natively at scaled dimensions witho
   }
 });
 
+test('TouchController list_scroll release on 24th row (bottom status bar) triggers onMouse_click for End action', () => {
+  const listeners = {};
+  const mockTermWin = {
+    style: {},
+    addEventListener(type, fn) {
+      listeners[type] = fn;
+    },
+    setPointerCapture() {},
+    hasPointerCapture() { return true; },
+    releasePointerCapture() {},
+  };
+
+  let clickedCoords = null;
+  const mockApp = {
+    termWin: mockTermWin,
+    site: { pageState: 2 /* PAGE_STATE.LIST */ },
+    buf: { rows: 24, cols: 80 },
+    view: {
+      highlightedRow: -1, // Status bar row 23 does not set highlightedRow
+      clearHighlight() {},
+    },
+    clientToPos(x, y) {
+      // Simulate y=370 landing on row 23 (the 24th row)
+      return { col: 40, row: y >= 360 ? 23 : 10 };
+    },
+    onMouse_move() {},
+    onMouse_click(e) {
+      clickedCoords = { clientX: e.clientX, clientY: e.clientY };
+    },
+    emit() {},
+  };
+
+  new TouchController(mockApp);
+
+  // Start touch at y=350
+  listeners.pointerdown({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 350,
+    preventDefault() {},
+  });
+
+  // Move vertically > 8px onto row 23 (y=375)
+  listeners.pointermove({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 375,
+    preventDefault() {},
+  });
+
+  // Release on row 23
+  listeners.pointerup({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 375,
+    preventDefault() {},
+  });
+
+  assert.deepEqual(
+    clickedCoords,
+    { clientX: 200, clientY: 375 },
+    'Releasing list_scroll gesture on 24th row (row 23) must trigger onMouse_click'
+  );
+});
