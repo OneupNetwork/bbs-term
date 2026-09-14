@@ -1,4 +1,3 @@
-
 export const LOWER_BLOCK_MAP = {
   "\uff3f": 0.03, // ＿ fullwidth low line
   "\u02cd": 0.07, // ˍ modifier letter low line
@@ -137,7 +136,7 @@ export class SmoothAnsiArt {
       return true;
     }
     if (cell.type === "\u2588" || cell.type === "\u25a0") {
-      const stepCol = cell.w > chw ? 2 : 1;
+      const stepCol = cell.span || (chw && cell.w > chw ? 2 : 1);
       if (cell.fgIndex === rightColor && cell.bgIndex === leftColor) {
         const leftNeighbor =
           cell.c > 0 ? grid[cell.r * cols + cell.c - 1] : null;
@@ -158,20 +157,21 @@ export class SmoothAnsiArt {
     const { type, x, y, w, h } = item;
 
     if (type === "\u2588" || type === "\u25a0") {
-      if (this.drawLowerBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
-        return;
+      if (grid) {
+        if (this.drawLowerBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
+          return;
+        }
+        if (this.drawUpperBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
+          return;
+        }
+        if (this.drawLeftBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
+          return;
+        }
+        if (this.drawRightBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
+          return;
+        }
       }
-      if (this.drawUpperBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
-        return;
-      }
-      if (this.drawLeftBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
-        return;
-      }
-      if (this.drawRightBlockRamp(ctx, item, grid, cols, rows, chw, chh)) {
-        return;
-      }
-      const xR = this.getAdjustedRightX(item, grid, cols, chw);
-      ctx.rect(x, y, xR - x, h);
+      ctx.rect(x, y, w, h);
       return;
     }
 
@@ -218,8 +218,7 @@ export class SmoothAnsiArt {
         break;
 
       default: {
-        const xR = this.getAdjustedRightX(item, grid, cols, chw);
-        ctx.rect(x, y, xR - x, h);
+        ctx.rect(x, y, w, h);
         break;
       }
     }
@@ -231,15 +230,16 @@ export class SmoothAnsiArt {
     if (curH === undefined) return false;
 
     const leftCol = c - 1;
-    const leftCell = leftCol >= 0 ? grid[r * cols + leftCol] : null;
+    const leftCell = grid && leftCol >= 0 ? grid[r * cols + leftCol] : null;
     const isSameLeft =
       leftCell &&
       leftCell.fgIndex === fgIndex &&
       LOWER_BLOCK_MAP[leftCell.type] !== undefined;
 
-    const stepCol = w > chw ? 2 : 1;
+    const stepCol = item.span || (chw && w > chw ? 2 : 1);
     const rightCol = c + stepCol;
-    const rightCell = rightCol < cols ? grid[r * cols + rightCol] : null;
+    const rightCell =
+      grid && rightCol < cols ? grid[r * cols + rightCol] : null;
     const isSameRight =
       rightCell &&
       rightCell.fgIndex === fgIndex &&
@@ -278,12 +278,18 @@ export class SmoothAnsiArt {
       hR = curH;
     }
 
-    const xR = isSameRight ? x + w + 0.5 : x + w;
-
     const isPeak =
       leftH !== null && rightH !== null && curH > leftH && curH > rightH;
     const isValley =
       leftH !== null && rightH !== null && curH < leftH && curH < rightH;
+
+    if (hL === hR && !isPeak && !isValley && h >= 4) {
+      const topY = y + h - Math.round(hL * h);
+      ctx.rect(x, topY, w, y + h - topY);
+      return true;
+    }
+
+    const xR = x + w;
 
     ctx.moveTo(x, y + h - hL * h);
     if (isPeak || isValley) {
@@ -302,15 +308,16 @@ export class SmoothAnsiArt {
     if (curH === undefined) return false;
 
     const leftCol = c - 1;
-    const leftCell = leftCol >= 0 ? grid[r * cols + leftCol] : null;
+    const leftCell = grid && leftCol >= 0 ? grid[r * cols + leftCol] : null;
     const isSameLeft =
       leftCell &&
       leftCell.fgIndex === fgIndex &&
       UPPER_BLOCK_MAP[leftCell.type] !== undefined;
 
-    const stepCol = w > chw ? 2 : 1;
+    const stepCol = item.span || (chw && w > chw ? 2 : 1);
     const rightCol = c + stepCol;
-    const rightCell = rightCol < cols ? grid[r * cols + rightCol] : null;
+    const rightCell =
+      grid && rightCol < cols ? grid[r * cols + rightCol] : null;
     const isSameRight =
       rightCell &&
       rightCell.fgIndex === fgIndex &&
@@ -347,16 +354,22 @@ export class SmoothAnsiArt {
       hR = curH;
     }
 
-    const xR = isSameRight ? x + w + 0.5 : x + w;
-
-    ctx.moveTo(x, y);
-    ctx.lineTo(xR, y);
-    ctx.lineTo(xR, y + hR * h);
-
     const isPeak =
       leftH !== null && rightH !== null && curH > leftH && curH > rightH;
     const isValley =
       leftH !== null && rightH !== null && curH < leftH && curH < rightH;
+
+    if (hL === hR && !isPeak && !isValley && h >= 4) {
+      const bottomY = y + Math.round(hL * h);
+      ctx.rect(x, y, w, bottomY - y);
+      return true;
+    }
+
+    const xR = x + w;
+
+    ctx.moveTo(x, y);
+    ctx.lineTo(xR, y);
+    ctx.lineTo(xR, y + hR * h);
 
     if (isPeak || isValley) {
       ctx.lineTo(x + w / 2, y + curH * h);
@@ -374,7 +387,7 @@ export class SmoothAnsiArt {
 
     const L = fgIndex;
     const R = bgIndex;
-    const stepCol = w > chw ? 2 : 1;
+    const stepCol = item.span || (chw && w > chw ? 2 : 1);
 
     const topCell = r > 0 && grid ? grid[(r - 1) * cols + c] : null;
     const bottomCell = r + 1 < rows && grid ? grid[(r + 1) * cols + c] : null;
@@ -556,12 +569,6 @@ export class SmoothAnsiArt {
       wB = curW;
     }
 
-    const isSameBottom =
-      pinnedWB === null && bottomCell && bottomCell.fgIndex === fgIndex;
-
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + wT * w, y);
-
     const isPeak =
       topW !== null &&
       bottomW !== null &&
@@ -577,17 +584,21 @@ export class SmoothAnsiArt {
       curW < topW &&
       curW < bottomW;
 
+    if (wT === wB && !isPeak && !isValley && w >= 4) {
+      const rightX = x + Math.round(wT * w);
+      ctx.rect(x, y, rightX - x, h);
+      return true;
+    }
+
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + wT * w, y);
+
     if (isPeak || isValley) {
       ctx.lineTo(x + curW * w, y + h / 2);
     }
 
     ctx.lineTo(x + wB * w, y + h);
-    if (isSameBottom) {
-      ctx.lineTo(x + wB * w, y + h + 0.5);
-      ctx.lineTo(x, y + h + 0.5);
-    } else {
-      ctx.lineTo(x, y + h);
-    }
+    ctx.lineTo(x, y + h);
     ctx.closePath();
     return true;
   }
@@ -600,7 +611,7 @@ export class SmoothAnsiArt {
     const R = fgIndex;
     const L = bgIndex;
     const curX = 1.0 - curRightW;
-    const stepCol = w > chw ? 2 : 1;
+    const stepCol = item.span || (chw && w > chw ? 2 : 1);
 
     const topCell = r > 0 && grid ? grid[(r - 1) * cols + c] : null;
     const bottomCell = r + 1 < rows && grid ? grid[(r + 1) * cols + c] : null;
@@ -687,36 +698,29 @@ export class SmoothAnsiArt {
       xB = curX;
     }
 
-    const xR = this.getAdjustedRightX(item, grid, cols, chw);
-    const isSameBottom =
-      pinnedXB === null && bottomCell && bottomCell.fgIndex === fgIndex;
+    if (xT === xB && w >= 4) {
+      const leftX = x + Math.round(xT * w);
+      ctx.rect(leftX, y, x + w - leftX, h);
+      return true;
+    }
+
+    const xR = x + w;
 
     ctx.moveTo(x + xT * w, y);
     ctx.lineTo(xR, y);
-    if (isSameBottom) {
-      ctx.lineTo(xR, y + h + 0.5);
-      ctx.lineTo(x + xB * w, y + h + 0.5);
-    } else {
-      ctx.lineTo(xR, y + h);
-    }
+    ctx.lineTo(xR, y + h);
     ctx.lineTo(x + xB * w, y + h);
     ctx.closePath();
     return true;
   }
 
   static getAdjustedRightX(item, grid, cols, chw) {
-    const { x, w, r, c, fgIndex } = item;
-    const stepCol = w > chw ? 2 : 1;
-    const rightCol = c + stepCol;
-    const rightCell =
-      rightCol < cols && grid ? grid[r * cols + rightCol] : null;
-    const isSameRight = rightCell && rightCell.fgIndex === fgIndex;
-    return isSameRight ? x + w + 0.5 : x + w;
+    return item.x + item.w;
   }
 
   static drawTriangle(ctx, item, grid, cols, chw, type = item.type) {
-    const { x, y, h } = item;
-    const xR = this.getAdjustedRightX(item, grid, cols, chw);
+    const { x, y, w, h } = item;
+    const xR = x + w;
     switch (type) {
       case "\u25e2": // ◢ lower right
         ctx.moveTo(xR, y);

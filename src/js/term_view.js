@@ -376,6 +376,9 @@ export class TermView extends EventEmitter {
 
   setUseCanvasEngine(enabled) {
     this.useCanvasEngine = !!enabled;
+    if (this.chw && this.chh) {
+      this.setTermFontSize(this.chw, this.chh, this.fontSizePx);
+    }
     this.redraw(true);
   }
 
@@ -484,6 +487,8 @@ export class TermView extends EventEmitter {
           rows: this.buf.rows,
           chw: this.chw,
           chh: this.chh,
+          scaleX: this.scaleX,
+          scaleY: this.scaleY,
           fontSize: currentFontSize,
           fontFace: this.fontFace,
           highlightBG: this.highlightBG,
@@ -620,7 +625,6 @@ export class TermView extends EventEmitter {
     this.mainDisplay.style.width = mainWidth;
     this.mainDisplay.style.height = (this.chh * this.buf.rows) + 'px';
 
-    this.updateMainDisplayMargin();
     if (this.fontFitWindowWidth) {
       this.scaleX = Math.floor(innerBounds.width / (this.chw*this.buf.cols+10) * 100)/100;
       this.scaleY = Math.floor(innerBounds.height / (this.chh*this.buf.rows) * 100)/100;
@@ -629,9 +633,16 @@ export class TermView extends EventEmitter {
       this.scaleY = 1;
     }
 
+    if (this.useCanvasEngine && (this.scaleX != 1 || this.scaleY != 1)) {
+      this.mainDisplay.style.width = ((this.chw * this.buf.cols + 10) * this.scaleX) + 'px';
+      this.mainDisplay.style.height = (this.chh * this.buf.rows * this.scaleY) + 'px';
+    }
+
+    this.updateMainDisplayMargin();
+
     this.mainDisplay.style.transformOrigin = 'center';
     let scaleCss = 'none';
-    if (this.scaleX != 1 || this.scaleY != 1) {
+    if (!this.useCanvasEngine && (this.scaleX != 1 || this.scaleY != 1)) {
       scaleCss = 'scale(' + this.scaleX + ',' + this.scaleY + ')';
     }
     this.mainDisplay.style.transform = scaleCss;
@@ -688,7 +699,8 @@ export class TermView extends EventEmitter {
   updateMainDisplayMargin() {
     if (!this.mainDisplay) return;
     const innerBounds = this.innerBounds || { width: 0, height: 0 };
-    const totalHeight = this.chh * this.buf.rows;
+    const effectiveScaleY = this.useCanvasEngine ? (this.scaleY || 1) : 1;
+    const totalHeight = this.chh * this.buf.rows * effectiveScaleY;
     let baseMarginTop = this.viewMargin || 0;
     if (totalHeight < innerBounds.height) {
       baseMarginTop =
@@ -726,8 +738,8 @@ export class TermView extends EventEmitter {
   }
   updateReverseScaleCss() {
     if (this.termWin && this.termWin.style) {
-      const revScaleX = Math.floor((1 / this.scaleX) * 100) / 100;
-      const revScaleY = Math.floor((1 / this.scaleY) * 100) / 100;
+      const revScaleX = this.useCanvasEngine ? 1 : Math.floor((1 / this.scaleX) * 100) / 100;
+      const revScaleY = this.useCanvasEngine ? 1 : Math.floor((1 / this.scaleY) * 100) / 100;
       this.termWin.style.setProperty('--preview-scale-x', revScaleX);
       this.termWin.style.setProperty('--preview-scale-y', revScaleY);
     }
@@ -889,7 +901,7 @@ export class TermView extends EventEmitter {
       this.cursor.style.transform = 'none';
     } else {
       const scaleCss = 'scale('+this.scaleX+','+this.scaleY+')';
-      this.mainDisplay.style.transform = scaleCss;
+      this.mainDisplay.style.transform = this.useCanvasEngine ? 'none' : scaleCss;
       this.cursor.style.transform = scaleCss;
       this.cursor.style.transformOrigin = 'left top';
     }

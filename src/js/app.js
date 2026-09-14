@@ -697,10 +697,12 @@ export class App extends EventEmitter {
           this.resizer();
         } else {
           this.view.fontResize();
+          this.view.redraw(true);
         }
       }, 500);
     } else {
       this.view.fontResize();
+      this.view.redraw(true);
     }
   }
 
@@ -965,6 +967,9 @@ export class App extends EventEmitter {
           break;
         case 'useCanvasEngine':
           this.view.useCanvasEngine = !!value;
+          if (this.view.chw && this.view.chh) {
+            this.view.setTermFontSize(this.view.chw, this.view.chh, this.view.fontSizePx);
+          }
           if (!this._batchUpdatingPrefs) {
             this.view.redraw(true);
           }

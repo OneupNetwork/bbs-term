@@ -1,5 +1,17 @@
-import { termColors, termDefaultBg, termDefaultFg, termDefaultLink, getContrastColor } from "../../js/color_schemes.js";
-import { SmoothAnsiArt, ANSI_BLOCK_SET, hasAnsiArt } from "./SmoothAnsiArt.js";
+import {
+  termColors,
+  termDefaultBg,
+  termDefaultFg,
+  termDefaultLink,
+  getContrastColor,
+} from "../../js/color_schemes.js";
+import {
+  SmoothAnsiArt,
+  ANSI_BLOCK_SET,
+  LOWER_BLOCK_MAP,
+  UPPER_BLOCK_MAP,
+  hasAnsiArt,
+} from "./SmoothAnsiArt.js";
 import { CanvasSelection } from "./CanvasSelection.js";
 
 // URL underline color matches DOM mode's URL underline (#ff6600)
@@ -39,10 +51,19 @@ export class CanvasRenderer {
     this.markDirty();
   }
 
-  getTextItem(text, x, y, isDBCS, clip = null, bgIndex = 0) {
+  getTextItem(
+    text,
+    x,
+    y,
+    isDBCS,
+    clip = null,
+    bgIndex = 0,
+    devX = x,
+    devY = y
+  ) {
     let item = this.textPool[this.textPoolIndex];
     if (!item) {
-      item = { text, x, y, isDBCS, clip, bgIndex };
+      item = { text, x, y, isDBCS, clip, bgIndex, devX, devY };
       this.textPool[this.textPoolIndex] = item;
     } else {
       item.text = text;
@@ -51,15 +72,29 @@ export class CanvasRenderer {
       item.isDBCS = isDBCS;
       item.clip = clip;
       item.bgIndex = bgIndex;
+      item.devX = devX;
+      item.devY = devY;
     }
     this.textPoolIndex++;
     return item;
   }
 
-  getBlockItem(type, r, c, x, y, w, h, fgIndex, bgIndex = 0) {
+  getBlockItem(
+    type,
+    r,
+    c,
+    x,
+    y,
+    w,
+    h,
+    fgIndex,
+    bgIndex = 0,
+    clip = null,
+    span = 1
+  ) {
     let item = this.blockPool[this.blockPoolIndex];
     if (!item) {
-      item = { type, r, c, x, y, w, h, fgIndex, bgIndex };
+      item = { type, r, c, x, y, w, h, fgIndex, bgIndex, clip, span };
       this.blockPool[this.blockPoolIndex] = item;
     } else {
       item.type = type;
@@ -71,114 +106,11 @@ export class CanvasRenderer {
       item.h = h;
       item.fgIndex = fgIndex;
       item.bgIndex = bgIndex;
+      item.clip = clip;
+      item.span = span;
     }
     this.blockPoolIndex++;
     return item;
-  }
-
-  tryRegisterSolidBg(
-    blockGrid,
-    cols,
-    r,
-    c,
-    y,
-    chw,
-    chh,
-    fgIndex,
-    bgIndex,
-    charStr,
-    isWide = false,
-    trailBgIndex = bgIndex
-  ) {
-    if (isWide && bgIndex !== trailBgIndex) return false;
-    const isSolid =
-      fgIndex === bgIndex ||
-      (isWide
-        ? charStr === "\u3000"
-        : charStr === " " || charStr === "" || charStr === "\x00");
-    if (!isSolid) return false;
-
-    const w = isWide ? chw * 2 : chw;
-    const blockItem = this.getBlockItem(
-      "\u2588",
-      r,
-      c,
-      c * chw,
-      y,
-      w,
-      chh,
-      bgIndex
-    );
-    blockGrid[r * cols + c] = blockItem;
-    if (isWide) {
-      blockGrid[r * cols + c + 1] = blockItem;
-    }
-    return true;
-  }
-
-  registerAnsiOrText({
-    charStr,
-    r,
-    c,
-    y,
-    chw,
-    chh,
-    cols,
-    fgIndex,
-    bgIndex,
-    trailBgIndex = bgIndex,
-    isWide = false,
-    smoothAnsiArt,
-    blockGrid,
-    ansiBlockBuckets,
-    textBuckets,
-  }) {
-    if (
-      smoothAnsiArt &&
-      this.tryRegisterSolidBg(
-        blockGrid,
-        cols,
-        r,
-        c,
-        y,
-        chw,
-        chh,
-        fgIndex,
-        bgIndex,
-        charStr,
-        isWide,
-        trailBgIndex
-      )
-    ) {
-      return;
-    }
-    if (!charStr || charStr === " " || charStr === "\x00") {
-      return;
-    }
-    const width = isWide ? chw * 2 : chw;
-    if (smoothAnsiArt && ANSI_BLOCK_SET.has(charStr)) {
-      const blockItem = this.getBlockItem(
-        charStr,
-        r,
-        c,
-        c * chw,
-        y,
-        width,
-        chh,
-        fgIndex,
-        bgIndex
-      );
-      ansiBlockBuckets[fgIndex].push(blockItem);
-      blockGrid[r * cols + c] = blockItem;
-      if (isWide) {
-        blockGrid[r * cols + c + 1] = blockItem;
-      }
-    } else {
-      const textX = isWide ? c * chw + chw : c * chw + chw / 2;
-      textBuckets[fgIndex].push(
-        this.getTextItem(charStr, textX, y + chh / 2, isWide, null, bgIndex)
-      );
-    }
   }
 
   getCharMetrics(ctx, text, isDBCS, chw) {
@@ -209,12 +141,18 @@ export class CanvasRenderer {
     if (!ctx) return;
 
     const { cols, rows, chw, chh, selStart, selEnd } = options;
+    const scaleX = options.scaleX || 1;
+    const scaleY = options.scaleY || 1;
     const width = cols * chw;
     const height = rows * chh;
+    const cssWidth = width * scaleX;
+    const cssHeight = height * scaleY;
 
     const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
-    const targetWidth = Math.round(width * dpr);
-    const targetHeight = Math.round(height * dpr);
+    const targetWidth = Math.round(cssWidth * dpr);
+    const targetHeight = Math.round(cssHeight * dpr);
+    const effScaleX = width > 0 ? targetWidth / width : dpr * scaleX;
+    const effScaleY = height > 0 ? targetHeight / height : dpr * scaleY;
 
     const canvasResized =
       canvas.width !== targetWidth || canvas.height !== targetHeight;
@@ -268,7 +206,11 @@ export class CanvasRenderer {
         dpr,
         bufferResized || canvasResized,
         dirtyRows,
-        options
+        {
+          ...options,
+          effScaleX,
+          effScaleY,
+        }
       );
       this.contentDirty = false;
       this.dirtyRows = null;
@@ -279,9 +221,12 @@ export class CanvasRenderer {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(this.bufferCanvas, 0, 0);
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
 
-    CanvasSelection.drawSelection(ctx, selStart, selEnd, cols, chw, chh);
+    CanvasSelection.drawSelection(ctx, selStart, selEnd, cols, chw, chh, {
+      effScaleX,
+      effScaleY,
+    });
 
     if (t0 > 0) {
       const durationMs = performance.now() - t0;
@@ -302,12 +247,21 @@ export class CanvasRenderer {
     dirtyRows,
     options
   ) {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const effScaleX =
+      options?.effScaleX || (options?.scaleX ? options.scaleX * dpr : dpr);
+    const effScaleY =
+      options?.effScaleY || (options?.scaleY ? options.scaleY * dpr : dpr);
+    const colX = (c) => Math.round(c * chw * effScaleX);
+    const rowY = (r) => Math.round(r * chh * effScaleY);
+    const targetWidth = colX(cols);
+    const targetHeight = rowY(rows);
+
+    ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
 
     const fontFace = options.fontFace || "MingLiu, monospace";
     const fontSize = options.fontSize || (chw ? chw * 2 : chh);
     const fontString = `${fontSize}px ${fontFace}`;
-    const fontKey = `${fontSize}px ${fontFace}:${chw}`;
+    const fontKey = `${fontSize}px ${fontFace}:${chw}:${effScaleX}:${effScaleY}`;
 
     if (this.lastFontKey !== fontKey) {
       this.metricsCache.clear();
@@ -329,8 +283,8 @@ export class CanvasRenderer {
       options.currentHighlighted !== undefined
         ? options.currentHighlighted
         : options.nowHighlight !== undefined
-        ? options.nowHighlight
-        : -1;
+          ? options.nowHighlight
+          : -1;
     const hlColor =
       termColors[options.highlightBG !== undefined ? options.highlightBG : 2] ||
       "#008000";
@@ -339,11 +293,13 @@ export class CanvasRenderer {
     this.blockPoolIndex = 0;
 
     const textBuckets = this.textBuckets;
+    const ansiBlockBuckets = this.ansiBlockBuckets;
     const bgBuckets = this.bgBuckets;
     const underlineBuckets = this.underlineBuckets;
     const urlUnderlineRuns = this.urlUnderlineRuns;
     for (let i = 0; i < 16; ++i) {
       textBuckets[i].length = 0;
+      ansiBlockBuckets[i].length = 0;
       underlineBuckets[i].length = 0;
     }
     for (let i = 0; i < 17; ++i) {
@@ -352,12 +308,8 @@ export class CanvasRenderer {
     urlUnderlineRuns.length = 0;
 
     const smoothAnsiArt = !!options.smoothAnsiArt && !dirtyRows;
-    const ansiBlockBuckets = this.ansiBlockBuckets;
     let blockGrid = null;
     if (smoothAnsiArt) {
-      for (let i = 0; i < 16; ++i) {
-        ansiBlockBuckets[i].length = 0;
-      }
       if (!this.blockGrid || this.blockGrid.length !== rows * cols) {
         this.blockGrid = new Array(rows * cols).fill(null);
       } else {
@@ -371,12 +323,12 @@ export class CanvasRenderer {
     const rowCount = targetRows
       ? targetRows.length
       : lines
-      ? Math.min(rows, lines.length)
-      : 0;
+        ? Math.min(rows, lines.length)
+        : 0;
 
     if (lines) {
-      const isCharsetUtf8 = options.charset === "UTF-8";
       let hasBlink = false;
+      const underlineH = Math.max(1, Math.round(effScaleY));
 
       for (let idx = 0; idx < rowCount; ++idx) {
         const r = targetRows ? targetRows[idx] : idx;
@@ -384,13 +336,17 @@ export class CanvasRenderer {
         const line = lines[r];
         if (!line) continue;
         const isLineHighlighted = r === currentHl;
-        const y = r * chh;
+        const y0 = rowY(r);
+        const y1 = rowY(r + 1);
+        const h = y1 - y0;
+        const urlUnderlineY =
+          y0 + Math.min(h - underlineH, Math.round((h - underlineH) * 0.9));
+        const textUnderlineY = y1 - underlineH;
 
         let runBgIdx = 0;
         let runStartCol = 0;
         let runLength = 0;
         let urlStartCol = -1;
-        const urlUnderlineY = y + Math.round((chh - 1) * 0.9);
 
         for (let c = 0; c < cols; ++c) {
           const ch = line[c];
@@ -403,7 +359,9 @@ export class CanvasRenderer {
             runLength++;
           } else {
             if (runBgIdx !== 0) {
-              bgBuckets[runBgIdx].push(runStartCol * chw, y, runLength * chw);
+              const rx0 = colX(runStartCol);
+              const rx1 = colX(runStartCol + runLength);
+              bgBuckets[runBgIdx].push(rx0, y0, rx1 - rx0, h);
             }
             runBgIdx = bgIdx;
             runStartCol = c;
@@ -416,26 +374,22 @@ export class CanvasRenderer {
               urlStartCol = c;
             }
           } else if (urlStartCol !== -1) {
-            urlUnderlineRuns.push(
-              urlStartCol * chw,
-              urlUnderlineY,
-              (c - urlStartCol) * chw,
-              1
-            );
+            const ux0 = colX(urlStartCol);
+            const ux1 = colX(c);
+            urlUnderlineRuns.push(ux0, urlUnderlineY, ux1 - ux0, underlineH);
             urlStartCol = -1;
           }
         }
 
         if (runBgIdx !== 0) {
-          bgBuckets[runBgIdx].push(runStartCol * chw, y, runLength * chw);
+          const rx0 = colX(runStartCol);
+          const rx1 = colX(runStartCol + runLength);
+          bgBuckets[runBgIdx].push(rx0, y0, rx1 - rx0, h);
         }
         if (urlStartCol !== -1) {
-          urlUnderlineRuns.push(
-            urlStartCol * chw,
-            urlUnderlineY,
-            (cols - urlStartCol) * chw,
-            1
-          );
+          const ux0 = colX(urlStartCol);
+          const ux1 = colX(cols);
+          urlUnderlineRuns.push(ux0, urlUnderlineY, ux1 - ux0, underlineH);
         }
 
         for (let c = 0; c < cols; ++c) {
@@ -446,7 +400,7 @@ export class CanvasRenderer {
           if (
             c + 1 < cols &&
             line[c + 1] &&
-            (line[c + 1].isDBCSTrail || line[c + 1].ch === '') &&
+            (line[c + 1].isDBCSTrail || line[c + 1].ch === "") &&
             ch.isDBCSLead
           ) {
             const trailCh = line[c + 1];
@@ -455,110 +409,311 @@ export class CanvasRenderer {
             }
             const isLeadHidden = ch.blink && isBlinkHidden;
             const isTrailHidden = trailCh.blink && isBlinkHidden;
-            if (!isLeadHidden || !isTrailHidden) {
-              const leadFgIndex = ch.getFg() !== undefined ? ch.getFg() : 7;
-              const trailFgIndex =
-                trailCh.getFg() !== undefined ? trailCh.getFg() : 7;
-              const rawLeadBg = ch.getBg() !== undefined ? ch.getBg() : 0;
-              const rawTrailBg =
-                trailCh.getBg() !== undefined ? trailCh.getBg() : 0;
-              const leadBgIndex = isLineHighlighted && rawLeadBg === 0 ? 16 : rawLeadBg;
-              const trailBgIndex = isLineHighlighted && rawTrailBg === 0 ? 16 : rawTrailBg;
+            const leadFgIndex = ch.getFg() !== undefined ? ch.getFg() : 7;
+            const trailFgIndex =
+              trailCh.getFg() !== undefined ? trailCh.getFg() : 7;
+            const rawLeadBg = ch.getBg() !== undefined ? ch.getBg() : 0;
+            const rawTrailBg =
+              trailCh.getBg() !== undefined ? trailCh.getBg() : 0;
+            const leadBgIndex =
+              isLineHighlighted && rawLeadBg === 0 ? 16 : rawLeadBg;
+            const trailBgIndex =
+              isLineHighlighted && rawTrailBg === 0 ? 16 : rawTrailBg;
 
-              if (leadFgIndex === trailFgIndex && !isLeadHidden && !isTrailHidden) {
-                this.registerAnsiOrText({
-                  charStr: ch.ch,
+            const xL = colX(c);
+            const xM = colX(c + 1);
+            const xR = colX(c + 2);
+            const wL = xM - xL;
+            const wR = xR - xM;
+            const wFull = xR - xL;
+
+            const isEmptyChar =
+              !ch.ch || ch.ch === " " || ch.ch === "\u3000" || ch.ch === "\x00";
+            const isLeadSolid =
+              isLeadHidden || isEmptyChar || leadFgIndex === leadBgIndex;
+            const isTrailSolid =
+              isTrailHidden || isEmptyChar || trailFgIndex === trailBgIndex;
+
+            if (blockGrid) {
+              if (isLeadSolid) {
+                blockGrid[r * cols + c] = this.getBlockItem(
+                  "\u2588",
                   r,
                   c,
-                  y,
-                  chw,
-                  chh,
-                  cols,
-                  fgIndex: leadFgIndex,
-                  bgIndex: leadBgIndex,
+                  xL,
+                  y0,
+                  wL,
+                  h,
+                  leadBgIndex,
+                  leadBgIndex,
+                  null,
+                  1
+                );
+              }
+              if (isTrailSolid) {
+                blockGrid[r * cols + c + 1] = this.getBlockItem(
+                  "\u2588",
+                  r,
+                  c + 1,
+                  xM,
+                  y0,
+                  wR,
+                  h,
                   trailBgIndex,
-                  isWide: true,
-                  smoothAnsiArt,
-                  blockGrid,
-                  ansiBlockBuckets,
-                  textBuckets,
-                });
-              } else {
-                if (!isLeadHidden) {
-                  textBuckets[leadFgIndex].push(
-                    this.getTextItem(ch.ch, c * chw + chw, y + chh / 2, true, {
-                      x: c * chw,
-                      y,
-                      w: chw,
-                      h: chh,
-                    }, leadBgIndex)
-                  );
-                }
-                if (!isTrailHidden) {
-                  textBuckets[trailFgIndex].push(
-                    this.getTextItem(ch.ch, c * chw + chw, y + chh / 2, true, {
-                      x: (c + 1) * chw,
-                      y,
-                      w: chw,
-                      h: chh,
-                    }, trailBgIndex)
-                  );
-                }
+                  trailBgIndex,
+                  null,
+                  1
+                );
               }
+            }
 
-              if (ch.underLine && !isLeadHidden) {
-                underlineBuckets[leadFgIndex].push(
-                  c * chw,
-                  y + chh - 2,
-                  chw,
-                  1
-                );
+            if (!isLeadSolid || !isTrailSolid) {
+              if (ANSI_BLOCK_SET.has(ch.ch)) {
+                if (
+                  !isLeadSolid &&
+                  !isTrailSolid &&
+                  leadFgIndex === trailFgIndex &&
+                  leadBgIndex === trailBgIndex
+                ) {
+                  const item = this.getBlockItem(
+                    ch.ch,
+                    r,
+                    c,
+                    xL,
+                    y0,
+                    wFull,
+                    h,
+                    leadFgIndex,
+                    leadBgIndex,
+                    null,
+                    2
+                  );
+                  ansiBlockBuckets[leadFgIndex].push(item);
+                  if (blockGrid) {
+                    blockGrid[r * cols + c] = item;
+                    blockGrid[r * cols + c + 1] = item;
+                  }
+                } else if (
+                  ch.ch === "\u2588" ||
+                  ch.ch === "\u25a0" ||
+                  LOWER_BLOCK_MAP[ch.ch] !== undefined ||
+                  UPPER_BLOCK_MAP[ch.ch] !== undefined
+                ) {
+                  if (!isLeadSolid) {
+                    const itemL = this.getBlockItem(
+                      ch.ch,
+                      r,
+                      c,
+                      xL,
+                      y0,
+                      wL,
+                      h,
+                      leadFgIndex,
+                      leadBgIndex,
+                      null,
+                      1
+                    );
+                    ansiBlockBuckets[leadFgIndex].push(itemL);
+                    if (blockGrid) blockGrid[r * cols + c] = itemL;
+                  }
+                  if (!isTrailSolid) {
+                    const itemR = this.getBlockItem(
+                      ch.ch,
+                      r,
+                      c + 1,
+                      xM,
+                      y0,
+                      wR,
+                      h,
+                      trailFgIndex,
+                      trailBgIndex,
+                      null,
+                      1
+                    );
+                    ansiBlockBuckets[trailFgIndex].push(itemR);
+                    if (blockGrid) blockGrid[r * cols + c + 1] = itemR;
+                  }
+                } else {
+                  if (!isLeadSolid) {
+                    const itemL = this.getBlockItem(
+                      ch.ch,
+                      r,
+                      c,
+                      xL,
+                      y0,
+                      wFull,
+                      h,
+                      leadFgIndex,
+                      leadBgIndex,
+                      { x: xL, y: y0, w: wL, h },
+                      2
+                    );
+                    ansiBlockBuckets[leadFgIndex].push(itemL);
+                    if (blockGrid) blockGrid[r * cols + c] = itemL;
+                  }
+                  if (!isTrailSolid) {
+                    const itemR = this.getBlockItem(
+                      ch.ch,
+                      r,
+                      c,
+                      xL,
+                      y0,
+                      wFull,
+                      h,
+                      trailFgIndex,
+                      trailBgIndex,
+                      { x: xM, y: y0, w: wR, h },
+                      2
+                    );
+                    ansiBlockBuckets[trailFgIndex].push(itemR);
+                    if (blockGrid) blockGrid[r * cols + c + 1] = itemR;
+                  }
+                }
+              } else {
+                const devCenterX = xL + wFull / 2;
+                const devCenterY = y0 + h / 2;
+                const logX = devCenterX / effScaleX;
+                const logY = devCenterY / effScaleY;
+                if (
+                  !isLeadSolid &&
+                  !isTrailSolid &&
+                  leadFgIndex === trailFgIndex &&
+                  leadBgIndex === trailBgIndex
+                ) {
+                  textBuckets[leadFgIndex].push(
+                    this.getTextItem(
+                      ch.ch,
+                      logX,
+                      logY,
+                      true,
+                      null,
+                      leadBgIndex,
+                      devCenterX,
+                      devCenterY
+                    )
+                  );
+                } else {
+                  if (!isLeadSolid) {
+                    textBuckets[leadFgIndex].push(
+                      this.getTextItem(
+                        ch.ch,
+                        logX,
+                        logY,
+                        true,
+                        { x: xL, y: y0, w: wL, h },
+                        leadBgIndex,
+                        devCenterX,
+                        devCenterY
+                      )
+                    );
+                  }
+                  if (!isTrailSolid) {
+                    textBuckets[trailFgIndex].push(
+                      this.getTextItem(
+                        ch.ch,
+                        logX,
+                        logY,
+                        true,
+                        { x: xM, y: y0, w: wR, h },
+                        trailBgIndex,
+                        devCenterX,
+                        devCenterY
+                      )
+                    );
+                  }
+                }
               }
-              if (trailCh.underLine && !isTrailHidden) {
-                underlineBuckets[trailFgIndex].push(
-                  (c + 1) * chw,
-                  y + chh - 2,
-                  chw,
-                  1
-                );
-              }
+            }
+
+            if (ch.underLine && !isLeadHidden) {
+              underlineBuckets[leadFgIndex].push(
+                xL,
+                textUnderlineY,
+                wL,
+                underlineH
+              );
+            }
+            if (trailCh.underLine && !isTrailHidden) {
+              underlineBuckets[trailFgIndex].push(
+                xM,
+                textUnderlineY,
+                wR,
+                underlineH
+              );
             }
             c++;
             continue;
           }
 
-          if (ch.isDBCSTrail || ch.ch === '') {
+          if (ch.isDBCSTrail || ch.ch === "") {
             continue;
           }
 
           if (ch.blink) {
             hasBlink = true;
           }
-          if (ch.blink && isBlinkHidden) continue;
+          const isHidden = ch.blink && isBlinkHidden;
           const charStr = ch.ch;
           const fgIndex = ch.getFg() !== undefined ? ch.getFg() : 7;
           const rawBg = ch.getBg() !== undefined ? ch.getBg() : 0;
           const bgIndex = isLineHighlighted && rawBg === 0 ? 16 : rawBg;
+          const x0 = colX(c);
+          const x1 = colX(c + 1);
+          const w = x1 - x0;
+          const isEmptyChar = !charStr || charStr === " " || charStr === "\x00";
+          const isSolid = isHidden || isEmptyChar || fgIndex === bgIndex;
 
-          this.registerAnsiOrText({
-            charStr,
-            r,
-            c,
-            y,
-            chw,
-            chh,
-            cols,
-            fgIndex,
-            bgIndex,
-            isWide: false,
-            smoothAnsiArt,
-            blockGrid,
-            ansiBlockBuckets,
-            textBuckets,
-          });
+          if (isSolid) {
+            if (blockGrid) {
+              blockGrid[r * cols + c] = this.getBlockItem(
+                "\u2588",
+                r,
+                c,
+                x0,
+                y0,
+                w,
+                h,
+                bgIndex,
+                bgIndex,
+                null,
+                1
+              );
+            }
+          } else if (ANSI_BLOCK_SET.has(charStr)) {
+            const item = this.getBlockItem(
+              charStr,
+              r,
+              c,
+              x0,
+              y0,
+              w,
+              h,
+              fgIndex,
+              bgIndex,
+              null,
+              1
+            );
+            ansiBlockBuckets[fgIndex].push(item);
+            if (blockGrid) blockGrid[r * cols + c] = item;
+          } else {
+            const devCenterX = x0 + w / 2;
+            const devCenterY = y0 + h / 2;
+            textBuckets[fgIndex].push(
+              this.getTextItem(
+                charStr,
+                devCenterX / effScaleX,
+                devCenterY / effScaleY,
+                false,
+                null,
+                bgIndex,
+                devCenterX,
+                devCenterY
+              )
+            );
+          }
 
-          if (ch.underLine) {
-            underlineBuckets[fgIndex].push(c * chw, y + chh - 2, chw, 1);
+          if (ch.underLine && !isHidden) {
+            underlineBuckets[fgIndex].push(x0, textUnderlineY, w, underlineH);
           }
         }
       }
@@ -576,27 +731,30 @@ export class CanvasRenderer {
     const defaultFg =
       termColors.defaultFg || termDefaultFg || termColors[7] || "#c0c0c0";
 
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (targetRows) {
       ctx.save();
       ctx.beginPath();
       for (let i = 0; i < targetRows.length; ++i) {
         const r = targetRows[i];
-        ctx.rect(0, r * chh, width, chh);
+        const ry0 = rowY(r);
+        ctx.rect(0, ry0, targetWidth, rowY(r + 1) - ry0);
       }
       ctx.clip();
 
       ctx.fillStyle = defaultBg;
       for (let i = 0; i < targetRows.length; ++i) {
         const r = targetRows[i];
-        ctx.fillRect(0, r * chh, width, chh);
+        const ry0 = rowY(r);
+        ctx.fillRect(0, ry0, targetWidth, rowY(r + 1) - ry0);
       }
     } else {
       ctx.fillStyle = defaultBg;
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
     }
 
     const isPlain = !!termColors.forcePlainText;
-    const minContrast = isPlain ? 0 : (termColors.minimumContrast || 0);
+    const minContrast = isPlain ? 0 : termColors.minimumContrast || 0;
     const getBgHex = (bgIdx) => {
       if (bgIdx === 16) return hlColor;
       if (bgIdx === 0) return defaultBg;
@@ -608,58 +766,98 @@ export class CanvasRenderer {
       const runs = bgBuckets[bgIdx];
       if (runs.length === 0) continue;
       ctx.fillStyle = bgIdx === 16 ? hlColor : termColors[bgIdx];
-      for (let i = 0; i < runs.length; i += 3) {
-        ctx.fillRect(runs[i], runs[i + 1], runs[i + 2], chh);
-      }
-    }
-
-    if (smoothAnsiArt) {
-      for (let cIdx = 0; cIdx < 16; ++cIdx) {
-        const bucket = ansiBlockBuckets[cIdx];
-        if (bucket.length === 0) continue;
-        const baseFg = (isPlain || cIdx === 7) ? defaultFg : termColors[cIdx];
-        if (minContrast <= 0) {
-          ctx.fillStyle = baseFg;
-          ctx.beginPath();
-          for (let i = 0; i < bucket.length; ++i) {
-            SmoothAnsiArt.drawBlock(ctx, bucket[i], blockGrid, cols, rows, chw, chh);
-          }
-          ctx.fill();
-        } else {
-          let currentFill = null;
-          ctx.beginPath();
-          for (let i = 0; i < bucket.length; ++i) {
-            const item = bucket[i];
-            const color = getContrastColor(baseFg, getBgHex(item.bgIndex || 0), minContrast);
-            if (color !== currentFill) {
-              if (currentFill !== null) {
-                ctx.fill();
-                ctx.beginPath();
-              }
-              currentFill = color;
-              ctx.fillStyle = currentFill;
-            }
-            SmoothAnsiArt.drawBlock(ctx, item, blockGrid, cols, rows, chw, chh);
-          }
-          if (currentFill !== null) {
-            ctx.fill();
-          }
-        }
+      for (let i = 0; i < runs.length; i += 4) {
+        ctx.fillRect(runs[i], runs[i + 1], runs[i + 2], runs[i + 3]);
       }
     }
 
     for (let cIdx = 0; cIdx < 16; ++cIdx) {
+      const bucket = ansiBlockBuckets[cIdx];
+      if (bucket.length === 0) continue;
+      const baseFg = isPlain || cIdx === 7 ? defaultFg : termColors[cIdx];
+      let currentFill = null;
+      let hasOpenPath = false;
+
+      for (let i = 0; i < bucket.length; ++i) {
+        const item = bucket[i];
+        const color =
+          minContrast > 0
+            ? getContrastColor(baseFg, getBgHex(item.bgIndex || 0), minContrast)
+            : baseFg;
+
+        if (item.clip) {
+          if (hasOpenPath) {
+            ctx.fill();
+            hasOpenPath = false;
+          }
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(item.clip.x, item.clip.y, item.clip.w, item.clip.h);
+          ctx.clip();
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          SmoothAnsiArt.drawBlock(
+            ctx,
+            item,
+            smoothAnsiArt ? blockGrid : null,
+            cols,
+            rows,
+            chw,
+            chh
+          );
+          ctx.fill();
+          ctx.restore();
+          currentFill = null;
+          continue;
+        }
+
+        if (color !== currentFill) {
+          if (hasOpenPath) {
+            ctx.fill();
+          }
+          currentFill = color;
+          ctx.fillStyle = currentFill;
+          ctx.beginPath();
+          hasOpenPath = true;
+        } else if (!hasOpenPath) {
+          ctx.fillStyle = currentFill;
+          ctx.beginPath();
+          hasOpenPath = true;
+        }
+
+        SmoothAnsiArt.drawBlock(
+          ctx,
+          item,
+          smoothAnsiArt ? blockGrid : null,
+          cols,
+          rows,
+          chw,
+          chh
+        );
+      }
+      if (hasOpenPath) {
+        ctx.fill();
+      }
+    }
+
+    ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
+    for (let cIdx = 0; cIdx < 16; ++cIdx) {
       const bucket = textBuckets[cIdx];
       if (bucket.length === 0) continue;
-      const baseFg = (isPlain || cIdx === 7) ? defaultFg : termColors[cIdx];
-      let currentFill = minContrast > 0
-        ? getContrastColor(baseFg, defaultBg, minContrast)
-        : baseFg;
+      const baseFg = isPlain || cIdx === 7 ? defaultFg : termColors[cIdx];
+      let currentFill =
+        minContrast > 0
+          ? getContrastColor(baseFg, defaultBg, minContrast)
+          : baseFg;
       ctx.fillStyle = currentFill;
       for (let i = 0; i < bucket.length; ++i) {
         const item = bucket[i];
         if (minContrast > 0) {
-          const itemColor = getContrastColor(baseFg, getBgHex(item.bgIndex || 0), minContrast);
+          const itemColor = getContrastColor(
+            baseFg,
+            getBgHex(item.bgIndex || 0),
+            minContrast
+          );
           if (itemColor !== currentFill) {
             currentFill = itemColor;
             ctx.fillStyle = currentFill;
@@ -667,17 +865,26 @@ export class CanvasRenderer {
         }
         if (item.clip) {
           ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.beginPath();
           ctx.rect(item.clip.x, item.clip.y, item.clip.w, item.clip.h);
           ctx.clip();
+          ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
         }
         const scale = this.getCharMetrics(ctx, item.text, item.isDBCS, chw);
         if (scale === 1) {
           ctx.fillText(item.text, item.x, item.y);
         } else {
-          ctx.setTransform(dpr * scale, 0, 0, dpr, dpr * item.x, dpr * item.y);
+          ctx.setTransform(
+            effScaleX * scale,
+            0,
+            0,
+            effScaleY,
+            item.devX,
+            item.devY
+          );
           ctx.fillText(item.text, 0, 0);
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.setTransform(effScaleX, 0, 0, effScaleY, 0, 0);
         }
         if (item.clip) {
           ctx.restore();
@@ -685,13 +892,15 @@ export class CanvasRenderer {
       }
     }
 
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     for (let uIdx = 0; uIdx < 16; ++uIdx) {
       const uRuns = underlineBuckets[uIdx];
       if (uRuns.length === 0) continue;
-      const baseFg = (isPlain || uIdx === 7) ? defaultFg : termColors[uIdx];
-      ctx.fillStyle = minContrast > 0
-        ? getContrastColor(baseFg, defaultBg, minContrast)
-        : baseFg;
+      const baseFg = isPlain || uIdx === 7 ? defaultFg : termColors[uIdx];
+      ctx.fillStyle =
+        minContrast > 0
+          ? getContrastColor(baseFg, defaultBg, minContrast)
+          : baseFg;
       for (let i = 0; i < uRuns.length; i += 4) {
         ctx.fillRect(uRuns[i], uRuns[i + 1], uRuns[i + 2], uRuns[i + 3]);
       }

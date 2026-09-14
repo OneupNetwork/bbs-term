@@ -135,7 +135,10 @@ test('CanvasRenderer registers solid bgIndex === 0 cells in blockGrid when smoot
   assert.equal(blockGrid[0].bgIndex, 7);
 
   // Col 2 is space with bgIndex === 0
-  assert.ok(blockGrid[2], 'col 2 (bgIndex === 0 space) must be registered in blockGrid');
+  assert.ok(
+    blockGrid[2],
+    'col 2 (bgIndex === 0 space) must be registered in blockGrid'
+  );
   assert.equal(blockGrid[2].type, '█');
   assert.equal(blockGrid[2].fgIndex, 0);
   assert.equal(blockGrid[2].bgIndex, 0);
@@ -231,15 +234,176 @@ test('SmoothAnsiArt smooths inverted fractional blocks and multi-column diagonal
 });
 
 test('SmoothAnsiArt does not falsely convert 90-degree corners of rectangular boxes into diagonal triangles', () => {
-  const boxLines = [
-    '  ██████  ',
-    '  █    █  ',
-    '  ██████  ',
-  ];
+  const boxLines = ['  ██████  ', '  █    █  ', '  ██████  '];
   const lines = parseAnsiGrid(boxLines, 10);
   const { paths, rects } = renderToPaths(lines, 10, 3);
 
   // All full blocks in a rectangular box should be drawn as rectangles, not diagonal triangles
   assert.equal(paths.length, 0, 'Rectangular box should have 0 sloped paths');
-  assert.ok(rects.length > 0, 'Rectangular box blocks should be drawn as rects');
+  assert.ok(
+    rects.length > 0,
+    'Rectangular box blocks should be drawn as rects'
+  );
+});
+
+test('CanvasRenderer snaps background runs and ANSI blocks to exact integer device pixels under non-integer scaleX/scaleY without gaps or overlaps', () => {
+  const renderer = new CanvasRenderer();
+  const fillRects = [];
+  const blockRects = [];
+  const fillTexts = [];
+
+  const mockCtx = {
+    fillStyle: '',
+    setTransform() {},
+    save() {},
+    restore() {},
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    clip() {},
+    rect(x, y, w, h) {
+      blockRects.push({ fillStyle: this.fillStyle, x, y, w, h });
+    },
+    fill() {},
+    fillRect(x, y, w, h) {
+      fillRects.push({ fillStyle: this.fillStyle, x, y, w, h });
+    },
+    fillText(text, x, y) {
+      fillTexts.push({ text, x, y });
+    },
+    measureText() {
+      return { width: 10 };
+    },
+  };
+
+  // Create 2 rows x 4 cols with non-integer scaling (chw=9, chh=17, scaleX=1.27, scaleY=1.13, dpr=1.25)
+  const lines = parseAnsiGrid(
+    ['\x1b[31;44m▀\x1b[32;44m▄', '\x1b[33;41m█\x1b[34;42m█'],
+    4
+  );
+
+  const chw = 9;
+  const chh = 17;
+  const effScaleX = 1.27 * 1.25;
+  const effScaleY = 1.13 * 1.25;
+
+  renderer.drawContent(
+    mockCtx,
+    4,
+    2,
+    chw,
+    chh,
+    4 * chw,
+    2 * chh,
+    1.25,
+    true,
+    null,
+    {
+      lines,
+      smoothAnsiArt: true,
+      effScaleX,
+      effScaleY,
+    }
+  );
+
+  // Every background fillRect and block rect coordinate must be an exact integer
+  for (const r of fillRects) {
+    assert.equal(r.x, Math.round(r.x), `fillRect x (${r.x}) must be integer`);
+    assert.equal(r.y, Math.round(r.y), `fillRect y (${r.y}) must be integer`);
+    assert.equal(r.w, Math.round(r.w), `fillRect w (${r.w}) must be integer`);
+    assert.equal(r.h, Math.round(r.h), `fillRect h (${r.h}) must be integer`);
+  }
+  for (const r of blockRects) {
+    assert.equal(r.x, Math.round(r.x), `block rect x (${r.x}) must be integer`);
+    assert.equal(r.y, Math.round(r.y), `block rect y (${r.y}) must be integer`);
+    assert.equal(r.w, Math.round(r.w), `block rect w (${r.w}) must be integer`);
+    assert.equal(r.h, Math.round(r.h), `block rect h (${r.h}) must be integer`);
+  }
+
+  // Verify upper half block ▀ and lower half block ▄ in row 0 share the exact same integer split Y
+  const row0Y0 = Math.round(0 * chh * effScaleY);
+  const row0Y1 = Math.round(1 * chh * effScaleY);
+  const row0H = row0Y1 - row0Y0;
+  const expectedMidY = row0Y0 + Math.round(0.5 * row0H);
+
+  const upperBlock = blockRects.find(
+    (r) => r.y === row0Y0 && r.h === expectedMidY - row0Y0
+  );
+  const lowerBlock = blockRects.find(
+    (r) => r.y === expectedMidY && r.h === row0Y1 - expectedMidY
+  );
+  assert.ok(upperBlock, 'Upper half block ▀ should end at exact integer midY');
+  assert.ok(
+    lowerBlock,
+    'Lower half block ▄ should start at exact integer midY'
+  );
+  assert.equal(
+    upperBlock.y + upperBlock.h,
+    lowerBlock.y,
+    '▀ and ▄ must meet with zero gap and zero overlap'
+  );
+  assert.equal(
+    fillTexts.length,
+    0,
+    'No ANSI block character should fall back to fillText'
+  );
+});
+
+test('Dual-color DBCS block characters render as geometric blocks without falling back to fillText', () => {
+  const renderer = new CanvasRenderer();
+  const blockRects = [];
+  const clipRects = [];
+  const fillTexts = [];
+
+  const mockCtx = {
+    fillStyle: '',
+    setTransform() {},
+    save() {},
+    restore() {},
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    clip() {},
+    rect(x, y, w, h) {
+      blockRects.push({ x, y, w, h });
+    },
+    fill() {},
+    fillRect() {},
+    fillText(text) {
+      fillTexts.push(text);
+    },
+    measureText() {
+      return { width: 10 };
+    },
+  };
+
+  // Create a 2-column DBCS full block █ with lead fg=1 (Red) and trail fg=4 (Blue)
+  const row = [new MockChar('█', 1, 0), new MockChar('', 4, 0)];
+  row[0].isDBCSLead = true;
+  row[1].isDBCSTrail = true;
+
+  renderer.drawContent(mockCtx, 2, 1, 10, 20, 20, 20, 1, true, null, {
+    lines: [row],
+    smoothAnsiArt: true,
+    effScaleX: 1.3,
+    effScaleY: 1.3,
+  });
+
+  assert.equal(
+    fillTexts.length,
+    0,
+    'Dual-color DBCS block █ must NOT be drawn via fillText font glyph'
+  );
+  assert.equal(
+    blockRects.length,
+    2,
+    'Dual-color DBCS block █ must be split into two integer-aligned geometric block rects'
+  );
+  assert.equal(
+    blockRects[0].x + blockRects[0].w,
+    blockRects[1].x,
+    'Left half and right half of dual-color block must share exact integer boundary'
+  );
 });

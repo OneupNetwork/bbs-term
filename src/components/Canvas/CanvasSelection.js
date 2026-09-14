@@ -51,10 +51,22 @@ export class CanvasSelection {
       if (!line) continue;
       let sc = r === start.row ? start.col : 0;
       let ec = r === end.row ? end.col + 1 : cols;
-      if (sc > 0 && line[sc] && (line[sc].isDBCSTrail || line[sc].ch === "") && line[sc - 1] && line[sc - 1].isDBCSLead) {
+      if (
+        sc > 0 &&
+        line[sc] &&
+        (line[sc].isDBCSTrail || line[sc].ch === "") &&
+        line[sc - 1] &&
+        line[sc - 1].isDBCSLead
+      ) {
         sc--;
       }
-      if (ec < line.length && line[ec] && (line[ec].isDBCSTrail || line[ec].ch === "") && line[ec - 1] && line[ec - 1].isDBCSLead) {
+      if (
+        ec < line.length &&
+        line[ec] &&
+        (line[ec].isDBCSTrail || line[ec].ch === "") &&
+        line[ec - 1] &&
+        line[ec - 1].isDBCSLead
+      ) {
         ec++;
       }
       let rowText = "";
@@ -104,18 +116,30 @@ export class CanvasSelection {
     };
   }
 
-  static drawSelection(ctx, selStart, selEnd, cols, chw, chh) {
+  static drawSelection(ctx, selStart, selEnd, cols, chw, chh, options = {}) {
     const sel = CanvasSelection.getNormalizedSelection(selStart, selEnd);
     if (!sel) return;
     const { start, end } = sel;
+    const effScaleX = options.effScaleX || 1;
+    const effScaleY = options.effScaleY || 1;
+    const colX = (c) => Math.round(c * chw * effScaleX);
+    const rowY = (r) => Math.round(r * chh * effScaleY);
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "rgba(100, 150, 255, 0.4)";
     for (let row = start.row; row <= end.row; ++row) {
       const sc = row === start.row ? start.col : 0;
       const ec = row === end.row ? end.col : cols - 1;
       if (sc <= ec) {
-        ctx.fillRect(sc * chw, row * chh, (ec - sc + 1) * chw, chh);
+        const x0 = colX(sc);
+        const x1 = colX(ec + 1);
+        const y0 = rowY(row);
+        const y1 = rowY(row + 1);
+        ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
       }
     }
+    ctx.restore();
   }
 }
 

@@ -74,12 +74,12 @@ export class CanvasScreen extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (
       (this.props.lines !== prevProps.lines ||
-        (prevProps.enableLinkHoverPreview && !this.props.enableLinkHoverPreview)) &&
+        (prevProps.enableLinkHoverPreview &&
+          !this.props.enableLinkHoverPreview)) &&
       this.state.currentImagePreview
     ) {
       const resetState =
-        this.props.resetHyperlinkPreviewState ||
-        resetImagePreviewState;
+        this.props.resetHyperlinkPreviewState || resetImagePreviewState;
       this.setState(resetState());
     }
 
@@ -90,6 +90,8 @@ export class CanvasScreen extends React.Component {
       this.props.fontFace !== prevProps.fontFace ||
       this.props.chw !== prevProps.chw ||
       this.props.chh !== prevProps.chh ||
+      this.props.scaleX !== prevProps.scaleX ||
+      this.props.scaleY !== prevProps.scaleY ||
       this.props.fontSize !== prevProps.fontSize ||
       this.props.cols !== prevProps.cols ||
       this.props.rows !== prevProps.rows ||
@@ -155,6 +157,14 @@ export class CanvasScreen extends React.Component {
 
   getChh() {
     return this.props.chh || this.props.forceWidth || 24;
+  }
+
+  getScaleX() {
+    return this.props.scaleX || 1;
+  }
+
+  getScaleY() {
+    return this.props.scaleY || 1;
   }
 
   getGridPos = (e) => {
@@ -344,7 +354,9 @@ export class CanvasScreen extends React.Component {
 
   handleHyperLinkMouseOver = (e) => {
     const href = e && e.currentTarget ? e.currentTarget.href : undefined;
-    const propHandled = this.props.onHyperlinkHover?.(e, href, { screen: this });
+    const propHandled = this.props.onHyperlinkHover?.(e, href, {
+      screen: this,
+    });
 
     if (propHandled === false) {
       return;
@@ -384,8 +396,7 @@ export class CanvasScreen extends React.Component {
     }
 
     const resetState =
-      this.props.resetHyperlinkPreviewState ||
-      resetImagePreviewState;
+      this.props.resetHyperlinkPreviewState || resetImagePreviewState;
     this.setState(resetState());
   };
 
@@ -393,8 +404,8 @@ export class CanvasScreen extends React.Component {
     const { lines } = this.props;
     if (!lines) return null;
     const cols = this.getCols();
-    const chw = this.getChw();
-    const chh = this.getChh();
+    const chw = this.getChw() * this.getScaleX();
+    const chh = this.getChh() * this.getScaleY();
     const links = [];
 
     for (let r = 0; r < lines.length; ++r) {
@@ -453,6 +464,8 @@ export class CanvasScreen extends React.Component {
       rows: this.getRows(),
       chw: this.getChw(),
       chh: this.getChh(),
+      scaleX: this.getScaleX(),
+      scaleY: this.getScaleY(),
       fontSize: this.props.fontSize,
       lines: this.props.lines,
       charset: this.props.charset,
@@ -485,8 +498,10 @@ export class CanvasScreen extends React.Component {
     const rows = this.getRows();
     const chw = this.getChw();
     const chh = this.getChh();
-    const width = cols * chw;
-    const height = rows * chh;
+    const scaleX = this.getScaleX();
+    const scaleY = this.getScaleY();
+    const width = cols * chw * scaleX;
+    const height = rows * chh * scaleY;
 
     return (
       <div
