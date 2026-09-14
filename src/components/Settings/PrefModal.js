@@ -1607,6 +1607,30 @@ export class PrefModal extends React.Component {
                   <label>
                     <input
                       type="checkbox"
+                      name="enableBackNavigation"
+                      checked={values.enableBackNavigation ?? true}
+                      onChange={this.handleCheckboxChange}
+                    />
+                    {_("options_enableBackNavigation")}
+                  </label>
+                </div>
+                <span
+                  className="help-block"
+                  style={{
+                    fontSize: "12px",
+                    opacity: 0.7,
+                    marginTop: "-4px",
+                    marginLeft: "24px",
+                    marginBottom: "10px",
+                    display: "block",
+                  }}
+                >
+                  {_("options_enableBackNavigation_desc")}
+                </span>
+                <div className="checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
                       name="copyOnSelect"
                       checked={values.copyOnSelect}
                       onChange={this.handleCheckboxChange}

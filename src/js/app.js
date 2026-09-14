@@ -20,6 +20,7 @@ import { EventEmitter } from './event';
 import { InputInterceptors } from './input_interceptors.js';
 import { ClipboardManager } from './clipboard.js';
 import { MouseController } from './mouse_controller.js';
+import { BackNavigationController } from './back_navigation.js';
 import { PluginManager } from './plugin_manager.js';
 import iconLogo from 'Icon/logo.png';
 import iconLogoConnect from 'Icon/logo_connect.png';
@@ -119,8 +120,10 @@ export class App extends EventEmitter {
     this.mouseWheelRightAction = DEFAULT_PREFS.mouseWheelRightAction;
     this.mouseWheelLeftAction = DEFAULT_PREFS.mouseWheelLeftAction;
     this.mouseWheelTrackpadMode = DEFAULT_PREFS.mouseWheelTrackpadMode;
+    this.enableBackNavigation = DEFAULT_PREFS.enableBackNavigation;
 
     this.mouse = new MouseController(this);
+    this.backNav = new BackNavigationController(this);
 
     window.addEventListener(
       'focus',
@@ -894,6 +897,10 @@ export class App extends EventEmitter {
           break;
         case 'mouseWheelTrackpadMode':
           this.mouseWheelTrackpadMode = !!value;
+          break;
+        case 'enableBackNavigation':
+          this.enableBackNavigation = !!value;
+          this.backNav?.syncOverscrollStyle?.();
           break;
         case 'warnBeforeClose':
           this.warnBeforeClose = !!value;

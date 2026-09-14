@@ -426,6 +426,12 @@
   "options_mouseWheelTrackpadMode_desc": {
     "message": "Smooth out trackpad scrolling and absorb momentum to prevent over-scrolling. Leave unchecked for standard mouse wheels."
   },
+  "options_enableBackNavigation": {
+    "message": "Map browser Back & trackpad left swipe to Left Arrow"
+  },
+  "options_enableBackNavigation_desc": {
+    "message": "Intercept browser back navigation (trackpad two-finger left swipe, mouse back button) as Left Arrow key instead of leaving the page."
+  },
   "options_mouseWheelAction_arrow1": {
     "message": "Arrow Up / Down - 1 line (Simulate 1 Up / Down key press)"
   },
