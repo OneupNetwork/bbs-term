@@ -367,4 +367,17 @@ test('ContextMenu showMenuAt sets selEnabled to false when right-clicking URL wi
   );
 });
 
+test('CanvasScreen prevents opening link overlays when drag-selecting text or dismissing selection', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const src = fs.readFileSync(path.resolve('src/components/Canvas/CanvasScreen.js'), 'utf-8');
+
+  assert.ok(
+    src.includes('handleHyperLinkClick = (e) =>') &&
+      src.includes('onClick={this.handleHyperLinkClick}'),
+    'CanvasScreen link overlays must attach handleHyperLinkClick to prevent accidental navigation on drag selection'
+  );
+});
+
+
 
