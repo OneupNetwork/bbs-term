@@ -46,8 +46,23 @@ export class LoginModal extends React.Component {
     }
     this.focusTimer = setTimeout(() => {
       this.focusTimer = null;
-      const u = (this.state.username || this.usernameInputRef.current?.value || "").trim();
-      const p = this.state.password || this.passwordInputRef.current?.value || "";
+      const domU = this.usernameInputRef.current?.value || "";
+      const domP = this.passwordInputRef.current?.value || "";
+      if (
+        (domU && domU !== this.state.username) ||
+        (domP && domP !== this.state.password)
+      ) {
+        this.setState(
+          {
+            username: domU || this.state.username,
+            password: domP || this.state.password,
+          },
+          () => this.focusAppropriateField()
+        );
+        return;
+      }
+      const u = (this.state.username || domU).trim();
+      const p = this.state.password || domP;
       if (u && p && this.submitBtnRef.current) {
         this.submitBtnRef.current.focus();
       } else if (u && this.passwordInputRef.current) {
@@ -101,11 +116,33 @@ export class LoginModal extends React.Component {
   };
 
   handleUsernameChange = (e) => {
-    this.setState({ username: e.target.value });
+    const val = e.target.value;
+    const domPw = this.passwordInputRef.current?.value || "";
+    this.setState((prev) => ({
+      username: val,
+      password: prev.password || domPw,
+    }));
   };
 
   handlePasswordChange = (e) => {
-    this.setState({ password: e.target.value });
+    const val = e.target.value;
+    const domUser = this.usernameInputRef.current?.value || "";
+    this.setState(
+      (prev) => ({
+        password: val,
+        username: prev.username || domUser,
+      }),
+      () => {
+        if (
+          val &&
+          typeof document !== "undefined" &&
+          document.activeElement !== this.passwordInputRef.current &&
+          (this.state.username || this.usernameInputRef.current?.value || "").trim()
+        ) {
+          this.focusAppropriateField();
+        }
+      }
+    );
   };
 
   handleSubmit = (e) => {
@@ -154,6 +191,17 @@ export class LoginModal extends React.Component {
         }
         navigator.credentials.store(cred).catch(() => {});
       } catch (err) {}
+    }
+
+    // Redirect native iframe submission to about:blank after DOMFormBeforeSubmit / PasswordCredential
+    // capture so credentials are never transmitted over HTTP POST to the static web host.
+    if (this.formRef.current) {
+      this.formRef.current.action = "about:blank";
+      setTimeout(() => {
+        if (this.formRef.current) {
+          this.formRef.current.action = "#";
+        }
+      }, 0);
     }
 
     if (this.props.onLogin) {
@@ -205,7 +253,7 @@ export class LoginModal extends React.Component {
           ref={this.formRef}
           className="LoginModal__Form"
           method="post"
-          action="about:blank"
+          action="#"
           target="site_auth_target_frame"
           onSubmit={this.handleSubmit}
           autoComplete="on"
@@ -265,15 +313,20 @@ export class LoginModal extends React.Component {
                 onChange={this.handleUsernameChange}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    e.preventDefault();
-                    this.passwordInputRef.current?.focus();
+                    const hasPw = Boolean(
+                      this.state.password || this.passwordInputRef.current?.value
+                    );
+                    if (!hasPw) {
+                      e.preventDefault();
+                      this.passwordInputRef.current?.focus();
+                    }
                   }
                 }}
                 onClick={() => {
                   if (!this.state.username) this.attemptAutoRetrieve(true);
                 }}
                 required
-                disabled={submitted}
+                readOnly={submitted}
               />
             </div>
 
@@ -297,7 +350,7 @@ export class LoginModal extends React.Component {
                   if (!this.state.username) this.attemptAutoRetrieve(true);
                 }}
                 required
-                disabled={submitted}
+                readOnly={submitted}
               />
             </div>
           </div>

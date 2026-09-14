@@ -3854,9 +3854,10 @@ test('IME composition styling applies across all browsers and initial focus succ
   assert.ok(canvasScreenSource.includes('document.activeElement.blur()'), 'CanvasScreen handleMouseDown must blur #t on mousedown when not composing');
   assert.ok(canvasScreenSource.includes('this.props.setInputAreaFocus(true)'), 'CanvasScreen handleGlobalMouseUp must call setInputAreaFocus(true)');
 
-  // 5. LoginModal must use about:blank for target iframe and form action to prevent loading second app instance
+  // 5. LoginModal must use about:blank for target iframe src and action="#" on form so Firefox LoginManager gets a valid formActionOrigin
   const loginModalSource = fs.readFileSync(path.resolve('src/plugins/auto_login/LoginModal.js'), 'utf-8');
-  assert.ok(loginModalSource.includes('action="about:blank"'), 'LoginModal form action must be about:blank');
+  assert.ok(loginModalSource.includes('action="#"'), 'LoginModal form action must be "#" (same-origin) so Firefox LoginManager can save and autofill');
+  assert.ok(!loginModalSource.includes('action="about:blank"'), 'LoginModal form action must not be about:blank which breaks Firefox formActionOrigin');
   assert.ok(loginModalSource.includes('src="about:blank"'), 'LoginModal iframe src must be about:blank');
   assert.ok(mainSource.includes("window.name === 'site_auth_target_frame'"), 'main.js must guard startApp against running inside site_auth_target_frame');
 
