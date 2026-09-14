@@ -84,7 +84,20 @@ export class CanvasRenderer {
   ) {
     let item = this.blockPool[this.blockPoolIndex];
     if (!item) {
-      item = { type, r, c, x, y, w, h, fgIndex, bgIndex, clip, span };
+      item = {
+        type,
+        r,
+        c,
+        x,
+        y,
+        w,
+        h,
+        fgIndex,
+        bgIndex,
+        clip,
+        span,
+        isSolidWedge: null,
+      };
       this.blockPool[this.blockPoolIndex] = item;
     } else {
       item.type = type;
@@ -98,6 +111,7 @@ export class CanvasRenderer {
       item.bgIndex = bgIndex;
       item.clip = clip;
       item.span = span;
+      item.isSolidWedge = null;
     }
     this.blockPoolIndex++;
     return item;
@@ -694,6 +708,28 @@ export class CanvasRenderer {
             underlineBuckets[fgIndex].push(x0, textUnderlineY, w, underlineH);
           }
         }
+      }
+      if (smoothAnsiArt && blockGrid) {
+        SmoothAnsiArt.collectSolidRampWedges(
+          blockGrid,
+          cols,
+          rows,
+          ansiBlockBuckets,
+          (type, r, c, x, y, w, h, fgIndex, bgIndex, clip, span) =>
+            this.getBlockItem(
+              type,
+              r,
+              c,
+              x,
+              y,
+              w,
+              h,
+              fgIndex,
+              bgIndex,
+              clip,
+              span
+            )
+        );
       }
       if (!targetRows) {
         this.hasBlink = hasBlink;
