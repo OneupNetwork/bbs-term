@@ -638,6 +638,18 @@
   "options_fontList_selectThenAdd": {
     "message": "選擇字型後新增"
   },
+  "options_fontList_customOption": {
+    "message": "手動輸入字型名稱..."
+  },
+  "options_fontList_customPlaceholder": {
+    "message": "輸入字型名稱 (例如: Cubic 11)"
+  },
+  "options_fontList_backToSelect": {
+    "message": "返回選單"
+  },
+  "options_fontList_notFound": {
+    "message": "找不到此字型：$1"
+  },
   "options_fontList_presetGroup": {
     "message": "常用推薦字型"
   },
@@ -648,7 +660,7 @@
     "message": "+ 新增"
   },
   "options_fontList_preview": {
-    "message": "細明中英 123 Term"
+    "message": "等寬排版預覽 1234567890\nThe quick brown fox jumps over the lazy dog"
   },
   "options_fontList_moveUp": {
     "message": "上移"

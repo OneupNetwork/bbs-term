@@ -35,8 +35,8 @@
   border: 1px solid #d2d2d7;
   border-radius: 8px;
   background: #f8f8fa;
-  height: 252px;
-  max-height: 252px;
+  height: 264px;
+  max-height: 264px;
   overflow-y: auto;
   padding: 6px;
   margin-bottom: 8px;
@@ -59,9 +59,9 @@
 .FontManager__Item {
   display: flex;
   align-items: center;
-  height: 44px;
-  min-height: 44px;
-  max-height: 44px;
+  height: 58px;
+  min-height: 58px;
+  max-height: 58px;
   padding: 4px 10px;
   background: #ffffff;
   border: 1px solid #e5e5ea;
@@ -73,6 +73,7 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
 }
 
 .FontManager__Item:hover {
@@ -109,7 +110,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
 }
 
 .FontManager__Item__Name {
@@ -124,17 +125,22 @@
 
 .FontManager__Item__Preview {
   font-size: 11px;
-  line-height: 1.2;
+  line-height: 1.3;
   color: #6e6e73;
+  background: #f2f2f7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #e5e5ea;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.FontManager__Item__PreviewLine {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: #f2f2f7;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid #e5e5ea;
-  width: fit-content;
-  max-width: 100%;
 }
 
 .FontManager__Item__Controls {
@@ -181,6 +187,7 @@
 }
 
 .PrefModal__Grid__Col--right__Fieldset .FontManager__AddBox select,
+.PrefModal__Grid__Col--right__Fieldset .FontManager__AddBox input.FontManager__AddBox__Input,
 .FontManager__AddBox .FontManager__AddBox__Button {
   height: 30px !important;
   margin: 0 !important;
@@ -192,15 +199,23 @@
   vertical-align: middle !important;
 }
 
-.PrefModal__Grid__Col--right__Fieldset .FontManager__AddBox select {
+.PrefModal__Grid__Col--right__Fieldset .FontManager__AddBox select,
+.PrefModal__Grid__Col--right__Fieldset .FontManager__AddBox input.FontManager__AddBox__Input {
   width: auto !important;
   flex-grow: 1;
   min-width: 150px;
   max-width: 100%;
   padding-left: 10px !important;
-  padding-right: 28px !important;
   border-radius: 6px !important;
   border: 1px solid #d2d2d7 !important;
+}
+
+.PrefModal__Grid__Col--right__Fieldset .FontManager__AddBox select {
+  padding-right: 28px !important;
+}
+
+.PrefModal__Grid__Col--right__Fieldset .FontManager__AddBox input.FontManager__AddBox__Input {
+  padding-right: 10px !important;
 }
 
 .FontManager__AddBox .FontManager__AddBox__Button {
