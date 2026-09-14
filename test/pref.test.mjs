@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   DEFAULT_PREFS,
   PREF_STORAGE_KEY,
+  getDefaultFontSize,
   getDefaultPrefs,
   parseDefaultPlugins,
   parseDefaultPrefs,
@@ -418,3 +421,142 @@ test('readValuesWithDefault and DEFAULT_PLUGINS migrate legacy enableAutoLogin a
   }
 });
 
+test('getDefaultFontSize and getDefaultPrefs calculate dual orientation defaults (fontSize for landscape, fontSizePortrait for portrait)', () => {
+  const originalWindow = globalThis.window;
+  const origUA = Object.getOwnPropertyDescriptor(globalThis.navigator, 'userAgent');
+  const setUA = (ua) => {
+    Object.defineProperty(globalThis.navigator, 'userAgent', {
+      value: ua,
+      configurable: true,
+    });
+  };
+  try {
+    setUA('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
+
+    // 1. Desktop large window (1280x800) -> landscape 24, portrait 19
+    globalThis.window = { innerWidth: 1280, innerHeight: 800 };
+    assert.equal(getDefaultFontSize(), 24);
+    assert.equal(getDefaultFontSize(false), 24);
+    assert.equal(getDefaultFontSize(true), 19);
+    assert.equal(getDefaultPrefs().fontSize, 24);
+    assert.equal(getDefaultPrefs().fontSizePortrait, 19);
+
+    // 2. Mobile portrait screen (390x844) -> current 9, landscape default 16, portrait default 9
+    globalThis.window = { innerWidth: 390, innerHeight: 844 };
+    assert.equal(getDefaultFontSize(), 9);
+    assert.equal(getDefaultPrefs().fontSize, 16);
+    assert.equal(getDefaultPrefs().fontSizePortrait, 9);
+
+    // 3. Mobile landscape screen (844x390) -> current 16, landscape default 16, portrait default 9
+    globalThis.window = { innerWidth: 844, innerHeight: 390 };
+    assert.equal(getDefaultFontSize(), 16);
+    assert.equal(getDefaultPrefs().fontSize, 16);
+    assert.equal(getDefaultPrefs().fontSizePortrait, 9);
+
+    // 4. Legacy single-fontSize profile migration on mobile screen
+    const mockStorage = new MockLocalStorage();
+    globalThis.window = { innerWidth: 390, innerHeight: 844, localStorage: mockStorage };
+    mockStorage.setItem(
+      PREF_STORAGE_KEY,
+      JSON.stringify({
+        values: {
+          fontSize: 24,
+        },
+      })
+    );
+    const mobilePrefs = readValuesWithDefault();
+    assert.equal(mobilePrefs.fontSize, 16, 'Legacy hardcoded 24 on mobile must migrate landscape fontSize to 16');
+    assert.equal(mobilePrefs.fontSizePortrait, 9, 'Legacy profile must populate fontSizePortrait to 9');
+  } finally {
+    globalThis.window = originalWindow;
+    if (origUA) {
+      Object.defineProperty(globalThis.navigator, 'userAgent', origUA);
+    }
+  }
+});
+
+test('TermView applyTermSizeMode switches between fontSizePortrait and fontSize when viewport orientation changes', () => {
+  const termViewSrc = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  const applyMatch = termViewSrc.match(/applyTermSizeMode\(values, \{ isMobile = false, onResizeTerm \} = \{\}\) \{[\s\S]*?\n  \}/);
+  const calcTermMatch = termViewSrc.match(/calcTermSizeFromFont\(fontSizePx\) \{[\s\S]*?\n  \}/);
+  assert.ok(applyMatch, 'applyTermSizeMode must exist in TermView');
+
+  let lastResizedFont = null;
+  const mockView = {
+    buf: {
+      cols: 80,
+      rows: 24,
+      site: { clampTermSize: (cols, rows) => ({ cols, rows }) },
+    },
+    termWidth: 0,
+    termHeight: 0,
+    innerBounds: { width: 390, height: 844 },
+    lineHeight: 1.0,
+    getWindowInnerBounds() {
+      return this.innerBounds;
+    },
+    fixedResize(fontSizePx) {
+      lastResizedFont = fontSizePx;
+    },
+    fontResize() {},
+    redraw() {},
+    setTransFix() {},
+  };
+
+  mockView.calcTermSizeFromFont = new Function(
+    'fontSizePx',
+    calcTermMatch[0].replace(/^calcTermSizeFromFont\(fontSizePx\)\s*\{/, '').replace(/\}$/, '')
+  ).bind(mockView);
+  mockView.applyTermSizeMode = new Function(
+    'DEFAULT_PREFS',
+    `return function ${applyMatch[0]}`
+  )(DEFAULT_PREFS).bind(mockView);
+
+  const prefs = {
+    termSizeMode: 'fixed-term-size',
+    fontSize: 16,
+    fontSizePortrait: 10,
+  };
+
+  // 1. Portrait viewport (390x844) -> uses fontSizePortrait (10px)
+  mockView.innerBounds = { width: 390, height: 844 };
+  mockView.applyTermSizeMode(prefs, { isMobile: true });
+  assert.equal(lastResizedFont, 10);
+
+  // 2. Rotate to Landscape viewport (844x390) -> resizer switches to fontSize (16px)
+  mockView.innerBounds = { width: 844, height: 390 };
+  mockView.resizer();
+  assert.equal(lastResizedFont, 16);
+
+  // 3. Rotate back to Portrait viewport (390x844) -> resizer switches back to fontSizePortrait (10px)
+  mockView.innerBounds = { width: 390, height: 844 };
+  mockView.resizer();
+  assert.equal(lastResizedFont, 10);
+});
+
+test('TermView fontResize scales beyond 24px in fixed-term-size mode on large viewports', () => {
+  const termViewSrc = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  const fontResizeMatch = termViewSrc.match(/fontResize\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(fontResizeMatch, 'fontResize must exist in TermView');
+
+  let lastResizedFont = null;
+  const mockView = {
+    buf: { cols: 80, rows: 24 },
+    termWidth: 0,
+    termHeight: 0,
+    innerBounds: { width: 1920, height: 1080 },
+    lineHeight: 1.0,
+    chw: 12,
+    chh: 24,
+    fixedResize(fontSizePx) {
+      lastResizedFont = fontSizePx;
+    },
+  };
+
+  mockView.fontResize = new Function(
+    fontResizeMatch[0].replace(/^fontResize\(\)\s*\{/, '').replace(/\}$/, '')
+  ).bind(mockView);
+
+  mockView.fontResize();
+  assert.equal(lastResizedFont, 44, 'fontResize on 1920x1080 must scale to 44px and not be capped at 24px');
+});

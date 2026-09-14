@@ -9,7 +9,7 @@ import { _ } from './i18n';
 import { setTimer } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
 import { stringWidth } from './string_util';
-import { DEFAULT_PREFS } from './pref.js';
+import { DEFAULT_PREFS, getDefaultFontSize } from './pref.js';
 
 const DEFINE_INPUT_BUFFER_SIZE = 12;
 
@@ -70,7 +70,7 @@ export class TermView extends EventEmitter {
   this.termWin = document.getElementById('TermWindow');
   this.cursorStyle = DEFAULT_PREFS.cursorStyle;
   this.lineHeight = DEFAULT_PREFS.lineHeight;
-  this.fontSizePx = DEFAULT_PREFS.fontSize;
+  this.fontSizePx = getDefaultFontSize();
   this.enableLinkHoverPreview = true;
   this.renderHyperlinkPreview = null;
   this.scaleX = 1;
@@ -1123,11 +1123,19 @@ export class TermView extends EventEmitter {
       }
       case 'fixed-font-size': {
         this.fontFitWindowWidth = false;
-        const fontSize = values.fontSize || DEFAULT_PREFS.fontSize;
         this.resizer = () => {
-          const size = this.calcTermSizeFromFont(fontSize);
+          this.innerBounds = this.getWindowInnerBounds();
+          const isPortrait =
+            this.innerBounds.width > 0 &&
+            this.innerBounds.height > 0 &&
+            this.innerBounds.width < this.innerBounds.height;
+          const activeFontSize =
+            (isPortrait && values.fontSizePortrait) ||
+            values.fontSize ||
+            DEFAULT_PREFS.fontSize;
+          const size = this.calcTermSizeFromFont(activeFontSize);
           resizeTerm(size.cols, size.rows);
-          this.fixedResize(fontSize);
+          this.fixedResize(activeFontSize);
           this.redraw(true);
         };
         this.resizer();
@@ -1142,26 +1150,26 @@ export class TermView extends EventEmitter {
     const cols = this.buf.cols;
     const rows = this.buf.rows;
 
-    {
-      let width = this.termWidth ? this.termWidth : this.innerBounds.width;
-      let height = this.termHeight ? this.termHeight : this.innerBounds.height;
-      if (width === 0 || height === 0) return; // errors for openning in a new window
-      width -= 10; // for scroll bar
+    let width = this.termWidth ? this.termWidth : this.innerBounds.width;
+    let height = this.termHeight ? this.termHeight : this.innerBounds.height;
+    if (width === 0 || height === 0) return; // errors for opening in a new window
+    width -= 10; // for scroll bar
 
-      let o_h, o_w, i = 4;
-      let nowchh = this.chh;
-      let nowchw = this.chw;
-      do {
-        ++i;
-        nowchh = Math.round(i * 2 * (this.lineHeight || 1.0));
-        nowchw = i;
-        o_h = (nowchh) * rows;
-        o_w = nowchw * cols;
-      } while (o_h <= height && o_w <= width);
-      --i;
+    let o_h,
+      o_w,
+      i = 4;
+    let nowchh = this.chh;
+    let nowchw = this.chw;
+    do {
+      ++i;
+      nowchh = Math.round(i * 2 * (this.lineHeight || 1.0));
       nowchw = i;
-      this.fixedResize(i * 2);
-    }
+      o_h = nowchh * rows;
+      o_w = nowchw * cols;
+    } while (o_h <= height && o_w <= width);
+    --i;
+    nowchw = i;
+    this.fixedResize(i * 2);
   }
 
   fixedResize(fontSizePx) {
