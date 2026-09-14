@@ -186,6 +186,15 @@
   "options_picPreviewWhitelistOnly": {
     "message": "Only preview images from trusted image hosts (Security & Privacy)"
   },
+  "options_trustedDomains_title": {
+    "message": "Allowed Image Host Domains"
+  },
+  "options_trustedDomains_placeholder": {
+    "message": "Enter domain (e.g. imgur.com)"
+  },
+  "options_trustedDomains_empty": {
+    "message": "No trusted image host domains configured."
+  },
   "imagePreview_loading": {
     "message": "Loading image..."
   },

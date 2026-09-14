@@ -186,6 +186,15 @@
   "options_picPreviewWhitelistOnly": {
     "message": "僅預覽受信任圖床的圖片 (建議開啟，維護隱私與安全)"
   },
+  "options_trustedDomains_title": {
+    "message": "允許的圖床網域白名單"
+  },
+  "options_trustedDomains_placeholder": {
+    "message": "輸入圖床網域 (例如: imgur.com)"
+  },
+  "options_trustedDomains_empty": {
+    "message": "尚未設定任何受信任圖床網域。"
+  },
   "imagePreview_loading": {
     "message": "載入圖片中..."
   },

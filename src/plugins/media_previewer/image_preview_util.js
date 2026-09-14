@@ -1,4 +1,4 @@
-export const TRUSTED_IMAGE_DOMAINS = [
+export const INITIAL_TRUSTED_IMAGE_DOMAINS = [
   "imgur.com",
   "imgtok.com",
   "meee.com.tw",
@@ -11,15 +11,87 @@ export const TRUSTED_IMAGE_DOMAINS = [
   "gyazo.com",
 ];
 
-export function isTrustedImageDomain(hostname) {
+export const TRUSTED_IMAGE_DOMAINS = [...INITIAL_TRUSTED_IMAGE_DOMAINS];
+
+export function normalizeDomain(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  let s = raw.trim().toLowerCase();
+  if (!s) return "";
+  try {
+    if (s.includes("://")) {
+      const u = new URL(s);
+      s = u.hostname.toLowerCase();
+    } else {
+      s = s.split("/")[0].split(":")[0].trim();
+    }
+  } catch (e) {
+    s = s.split("/")[0].split(":")[0].trim();
+  }
+  return s.replace(/^\.+|\.+$/g, "");
+}
+
+export function parseTrustedDomains(raw) {
+  if (raw === undefined || raw === null) {
+    return [...TRUSTED_IMAGE_DOMAINS];
+  }
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(/[\s,]+/)
+      : [];
+  const result = [];
+  const seen = new Set();
+  for (const item of list) {
+    const d = normalizeDomain(item);
+    if (d && !seen.has(d)) {
+      seen.add(d);
+      result.push(d);
+    }
+  }
+  return result;
+}
+
+export function mergeTrustedDomainsWithNewDefaults(
+  savedDomains,
+  savedKnownDefaults,
+  currentDefaults = TRUSTED_IMAGE_DOMAINS,
+) {
+  const currentList = parseTrustedDomains(savedDomains);
+  const knownDefaultsList =
+    savedKnownDefaults !== undefined && savedKnownDefaults !== null
+      ? parseTrustedDomains(savedKnownDefaults)
+      : INITIAL_TRUSTED_IMAGE_DOMAINS;
+  const knownSet = new Set(knownDefaultsList);
+  const targetDefaults = parseTrustedDomains(currentDefaults);
+
+  for (const domain of targetDefaults) {
+    if (!knownSet.has(domain) && !currentList.includes(domain)) {
+      currentList.push(domain);
+    }
+  }
+
+  return currentList;
+}
+
+export function isTrustedImageDomain(
+  hostname,
+  trustedDomains = TRUSTED_IMAGE_DOMAINS,
+) {
   if (!hostname) return false;
   const host = hostname.toLowerCase();
-  return TRUSTED_IMAGE_DOMAINS.some(
+  const list = Array.isArray(trustedDomains)
+    ? trustedDomains
+    : parseTrustedDomains(trustedDomains);
+  return list.some(
     (domain) => host === domain || host.endsWith("." + domain),
   );
 }
 
-export function resolveImageUrl(href, whitelistOnly = true) {
+export function resolveImageUrl(
+  href,
+  whitelistOnly = true,
+  trustedDomains = TRUSTED_IMAGE_DOMAINS,
+) {
   if (!href || typeof href !== "string") return null;
 
   let url;
@@ -34,7 +106,7 @@ export function resolveImageUrl(href, whitelistOnly = true) {
   }
 
   const hostname = url.hostname.toLowerCase();
-  const isTrusted = isTrustedImageDomain(hostname);
+  const isTrusted = isTrustedImageDomain(hostname, trustedDomains);
 
   if (whitelistOnly && !isTrusted) {
     return null;
