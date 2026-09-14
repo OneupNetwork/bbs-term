@@ -2085,7 +2085,7 @@ export class TouchKeyboard extends React.Component {
       aria-label="Enlarge Toolbar"
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => this.handleToolbarZoom(1, e)}
-      onClick={(e) => this.handleToolbarZoom(1, e)}
+      onClick={(e) => e.preventDefault()}
     >
       <svg
         width="15"
@@ -2112,7 +2112,7 @@ export class TouchKeyboard extends React.Component {
       aria-label="Shrink Toolbar"
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => this.handleToolbarZoom(-1, e)}
-      onClick={(e) => this.handleToolbarZoom(-1, e)}
+      onClick={(e) => e.preventDefault()}
     >
       <svg
         width="15"
@@ -2138,7 +2138,7 @@ export class TouchKeyboard extends React.Component {
       aria-label="Increase Terminal Font"
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => this.handleTermFontZoom(1, e)}
-      onClick={(e) => this.handleTermFontZoom(1, e)}
+      onClick={(e) => e.preventDefault()}
     >
       A+
     </button>
@@ -2152,7 +2152,7 @@ export class TouchKeyboard extends React.Component {
       aria-label="Decrease Terminal Font"
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => this.handleTermFontZoom(-1, e)}
-      onClick={(e) => this.handleTermFontZoom(-1, e)}
+      onClick={(e) => e.preventDefault()}
     >
       A-
     </button>
@@ -2250,8 +2250,9 @@ export class TouchKeyboard extends React.Component {
           : "收合工具列 (Collapse Toolbar)"
       }
       aria-label={isExpandIcon ? "Expand Terminal Keys" : "Collapse Toolbar"}
+      onMouseDown={(e) => e.preventDefault()}
       onPointerDown={this.handleToggleToolbarCollapse}
-      onClick={this.handleToggleToolbarCollapse}
+      onClick={(e) => e.preventDefault()}
     >
       <svg
         width="14"
@@ -2278,8 +2279,9 @@ export class TouchKeyboard extends React.Component {
       className="TouchFloatingToolbar__Btn TouchFloatingToolbar__Btn--system TouchFloatingToolbar__Btn--qwert-nav-return"
       title="返回方向鍵 (Return to Direction Keys)"
       aria-label="Return to Direction Keys"
+      onMouseDown={(e) => e.preventDefault()}
       onPointerDown={this.handleReturnToNormalPad}
-      onClick={this.handleReturnToNormalPad}
+      onClick={(e) => e.preventDefault()}
     >
       <svg
         width="15"
@@ -2320,8 +2322,9 @@ export class TouchKeyboard extends React.Component {
             : "Ctrl 鍵 (Toggle Ctrl Mode)"
         }
         aria-label="Ctrl"
+        onMouseDown={(e) => e.preventDefault()}
         onPointerDown={this.handleToggleCtrlMode}
-        onClick={this.handleToggleCtrlMode}
+        onClick={(e) => e.preventDefault()}
       >
         Ctrl
       </button>
@@ -2336,7 +2339,7 @@ export class TouchKeyboard extends React.Component {
       aria-label="Back to Main Toolbar"
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={this.handleToggleCtrlMode}
-      onClick={this.handleToggleCtrlMode}
+      onClick={(e) => e.preventDefault()}
     >
       <svg
         width="14"
@@ -2387,8 +2390,9 @@ export class TouchKeyboard extends React.Component {
             : "英文字母盤面 (Toggle Letter Keypad)"
         }
         aria-label="a"
+        onMouseDown={(e) => e.preventDefault()}
         onPointerDown={this.handleToggleAlphaMode}
-        onClick={this.handleToggleAlphaMode}
+        onClick={(e) => e.preventDefault()}
       >
         a
       </button>
