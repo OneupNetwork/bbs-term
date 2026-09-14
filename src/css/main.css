@@ -73,8 +73,14 @@ img.hyperLinkPreview {
 }
 
 .main {
-  font-family:
-    MingLiu, SymMingLiu, "Noto Sans Mono CJK TC", "PingFang TC", monospace;
+  font-family: var(
+    --font-face,
+    MingLiu,
+    SymMingLiu,
+    "Noto Sans Mono CJK TC",
+    "PingFang TC",
+    monospace
+  );
   font-size: 26px;
   line-height: 100%;
   margin-top: 0px;
@@ -162,8 +168,14 @@ span[data-type="termline"],
   background-color: var(--term-bg, var(--term-color-0, #000000));
   display: none;
   text-align: left;
-  font-family:
-    MingLiu, SymMingLiu, "Noto Sans Mono CJK TC", "PingFang TC", monospace;
+  font-family: var(
+    --font-face,
+    MingLiu,
+    SymMingLiu,
+    "Noto Sans Mono CJK TC",
+    "PingFang TC",
+    monospace
+  );
 }
 
 #easyReadingOverlay * {
@@ -279,7 +291,7 @@ span[data-type="termline"],
 }
 
 .terminal_display {
-  font-family: MingLiu, monospace;
+  font-family: var(--font-face, MingLiu, monospace);
   font-size: 26px;
   line-height: 26px;
   white-space: pre;

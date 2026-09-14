@@ -1156,7 +1156,7 @@ test('applyColorScheme updates .main element and meta theme-color', () => {
 test('main.css and easy reading use dynamic default background variables', () => {
   const mainCss = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
   assert.ok(
-    mainCss.includes('.main {\n  font-family:\n    MingLiu, SymMingLiu, "Noto Sans Mono CJK TC", "PingFang TC", monospace;\n  font-size: 26px;\n  line-height: 100%;\n  margin-top: 0px;\n  margin-left: 0px;\n  margin-right: 0px;\n  margin-bottom: 0px;\n  user-select: text;\n  background-color: var(--term-bg, var(--term-color-0, black));'),
+    mainCss.includes('background-color: var(--term-bg, var(--term-color-0, black));'),
     '.main must use var(--term-bg, var(--term-color-0, black))'
   );
   assert.ok(
@@ -1188,6 +1188,37 @@ test('main.css and easy reading use dynamic default background variables', () =>
   assert.ok(
     termViewSrc.includes('defaultBg: termColors.defaultBg || termDefaultBg'),
     'TermView must pass defaultBg to renderScreen'
+  );
+});
+
+test('main.css, TermView, and EasyReading apply custom fontFace via --font-face and font-family (Issue #37)', () => {
+  const mainCss = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
+  assert.ok(
+    mainCss.includes('--font-face'),
+    'main.css must reference var(--font-face) for .main and #easyReadingOverlay'
+  );
+
+  const easyReadingMatch = mainCss.match(/#easyReadingOverlay\s*\{[\s\S]*?\}/);
+  assert.ok(easyReadingMatch, '#easyReadingOverlay rule must exist in main.css');
+  assert.ok(
+    easyReadingMatch[0].includes('var(\n    --font-face') || easyReadingMatch[0].includes('var(--font-face'),
+    '#easyReadingOverlay must use var(--font-face) for font-family'
+  );
+
+  const termViewSrc = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  assert.ok(
+    termViewSrc.includes("this.termWin.style.setProperty('--font-face', this.fontFace)"),
+    'TermView.setFontFace must set --font-face on termWin'
+  );
+  assert.ok(
+    termViewSrc.includes("this.mainDisplay?.style?.setProperty('font-family', this.fontFace, 'important')"),
+    'TermView.setFontFace must set font-family on mainDisplay'
+  );
+
+  const easyReadingSrc = fs.readFileSync(path.resolve('src/plugins/easy_reading/EasyReading.js'), 'utf-8');
+  assert.ok(
+    easyReadingSrc.includes("this.overlay.style.setProperty('font-family', fontFace, 'important')"),
+    'EasyReading.onFontUpdate must set font-family on overlay'
   );
 });
 

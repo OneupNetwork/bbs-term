@@ -102,7 +102,7 @@ export class TermView extends EventEmitter {
   this.screenContainer = screenContainer;
 
   this.mainDisplay.style.border = '0px';
-  this.setFontFace('MingLiu,monospace');
+  this.setFontFace(DEFAULT_PREFS.fontFace);
 
   this._keyboard = new TermKeyboard((data) => this._send(data));
   this._keyboard.on('term:key', (detail) => {
@@ -370,7 +370,12 @@ export class TermView extends EventEmitter {
 
   setFontFace(fontFace) {
     this.fontFace = fontFace;
-    this.input.style.setProperty('font-family', this.fontFace, 'important');
+    if (this.termWin?.style) {
+      this.termWin.style.setProperty('--font-face', this.fontFace);
+    }
+    this.input?.style?.setProperty('font-family', this.fontFace, 'important');
+    this.mainDisplay?.style?.setProperty('font-family', this.fontFace, 'important');
+    this.cursor?.style?.setProperty('font-family', this.fontFace, 'important');
     this.app?.emit?.('term:font-update', { fontFace: this.fontFace });
   }
 
