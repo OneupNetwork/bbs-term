@@ -7,6 +7,10 @@ export class Maple3Site extends BaseSite {
     this.max_rows = 24;
   }
 
+  get supportNavKeys() {
+    return true;
+  }
+
   isListScreen(termBuf) {
     let cols = termBuf.cols;
     let row1Text = termBuf.getRowText(1, 0, cols);

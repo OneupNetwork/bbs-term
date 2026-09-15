@@ -64,6 +64,11 @@ export class AutoSite extends BaseSite {
     return this.detectedSite || this.pttSite;
   }
 
+  get supportNavKeys() {
+    const active = this.getActiveSite();
+    return active && active !== this ? Boolean(active.supportNavKeys) : true;
+  }
+
   get pageState() {
     const active = this.getActiveSite();
     return active && active !== this ? active.pageState : this._pageState ?? 0;

@@ -51,8 +51,8 @@ export const DEFAULT_PREFS = {
   enableMouseBrowsing: false,
   mouseBrowsingHighlight: true,
   mouseBrowsingHighlightColor: 2,
-  mouseLeftFunction: 0,
-  mouseMiddleFunction: 0,
+  mouseLeftFunction: "none",
+  mouseMiddleFunction: "none",
 
   // displays
   colorScheme: 'default',
@@ -433,10 +433,74 @@ export const readValuesWithDefault = () => {
       delete prefs.mouseWheelFunction2;
       delete prefs.mouseWheelFunction3;
     }
+    prefs.mouseLeftFunction = normalizeMouseButtonAction(
+      prefs.mouseLeftFunction,
+      "left"
+    );
+    prefs.mouseMiddleFunction = normalizeMouseButtonAction(
+      prefs.mouseMiddleFunction,
+      "middle"
+    );
+    prefs.rightClickAction = normalizeMouseButtonAction(
+      prefs.rightClickAction,
+      "right"
+    );
     return prefs;
   } catch (e) {
     return getDefaultPrefs();
   }
+};
+
+export const MOUSE_NAV_KEYS = [
+  "enter",
+  "left",
+  "right",
+  "up",
+  "down",
+  "pageup",
+  "pagedown",
+  "esc",
+];
+
+export const normalizeMouseButtonAction = (val, buttonType = "left") => {
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed !== "") {
+      const num = Number(trimmed);
+      if (!Number.isNaN(num)) {
+        val = num;
+      } else {
+        return trimmed;
+      }
+    }
+  }
+  if (typeof val === "boolean") {
+    return val ? "enter" : "none";
+  }
+  if (typeof val === "number") {
+    if (buttonType === "middle") {
+      switch (val) {
+        case 1:
+          return "enter";
+        case 2:
+          return "left";
+        case 3:
+          return "paste";
+        default:
+          return "none";
+      }
+    } else {
+      switch (val) {
+        case 1:
+          return "enter";
+        case 2:
+          return "right";
+        default:
+          return "none";
+      }
+    }
+  }
+  return buttonType === "right" ? "menu" : "none";
 };
 
 export const writeValues = (values) => {

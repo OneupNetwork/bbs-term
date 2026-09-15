@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { COLOR_SCHEMES, applyColorScheme, getContrastColor } from '../src/js/color_schemes.js';
 import { termColors } from '../src/js/color_schemes.js';
-import { DEFAULT_PREFS, readValuesWithDefault, parseOptionText } from '../src/js/pref.js';
+import { DEFAULT_PREFS, readValuesWithDefault, parseOptionText, normalizeMouseButtonAction, MOUSE_NAV_KEYS } from '../src/js/pref.js';
+import { BaseSite, PttSite, Maple3Site, AutoSite } from '../src/js/sites/index.js';
 import { TermKeyboard } from '../src/js/term_keyboard.js';
 import { MouseController } from '../src/js/mouse_controller.js';
 import { getAvailablePlugins, groupPlugins, PLUGIN_GROUPS } from '../src/plugins/index.js';
@@ -1553,3 +1554,94 @@ test('TermView applyTermSizeMode fixed-font-size keeps font size fixed and adjus
   );
   assert.equal(mobileView.lastFixedFontSize, 24, 'Mobile mode keeps exact fixed font size');
 });
+
+test('Mouse button verb mapping, legacy migration, site supportNavKeys, and core execution without MouseBrowsing (Issue #40)', () => {
+  // 1. Site supportNavKeys flag
+  const baseSite = new BaseSite();
+  const pttSite = new PttSite();
+  const maple3Site = new Maple3Site();
+  const autoSite = new AutoSite();
+  assert.equal(baseSite.supportNavKeys, false, 'BaseSite must have supportNavKeys = false');
+  assert.equal(pttSite.supportNavKeys, true, 'PttSite must have supportNavKeys = true');
+  assert.equal(maple3Site.supportNavKeys, true, 'Maple3Site must have supportNavKeys = true');
+  assert.equal(autoSite.supportNavKeys, true, 'AutoSite defaults to PTT and has supportNavKeys = true');
+  assert.deepEqual(
+    MOUSE_NAV_KEYS,
+    ['enter', 'left', 'right', 'up', 'down', 'pageup', 'pagedown', 'esc'],
+    'MOUSE_NAV_KEYS defines predefined navigation verbs'
+  );
+
+  // 2. Legacy number and boolean normalization
+  assert.equal(normalizeMouseButtonAction(0, 'left'), 'none');
+  assert.equal(normalizeMouseButtonAction(1, 'left'), 'enter');
+  assert.equal(normalizeMouseButtonAction(2, 'left'), 'right');
+  assert.equal(normalizeMouseButtonAction(true, 'left'), 'enter');
+  assert.equal(normalizeMouseButtonAction(false, 'left'), 'none');
+  assert.equal(normalizeMouseButtonAction(0, 'middle'), 'none');
+  assert.equal(normalizeMouseButtonAction(1, 'middle'), 'enter');
+  assert.equal(normalizeMouseButtonAction(2, 'middle'), 'left');
+  assert.equal(normalizeMouseButtonAction(3, 'middle'), 'paste');
+
+  // Verb strings pass through
+  for (const verb of ['none', 'paste', 'menu', ...MOUSE_NAV_KEYS]) {
+    assert.equal(normalizeMouseButtonAction(verb, 'left'), verb);
+  }
+
+  // 3. MouseController executes left/middle button actions directly in core even when MouseBrowsing is disabled
+  const navCmds = [];
+  let pasted = 0;
+  const mockApp = {
+    modalShown: false,
+    contextMenuShown: false,
+    skipMouseClick: false,
+    mouseLeftFunction: 'none',
+    mouseMiddleFunction: 'none',
+    view: { useCanvasEngine: true },
+    site: {
+      handleCustomLink: () => false,
+      handlePassScreenClick: () => false,
+    },
+    buf: { locator: { isActive: () => false } },
+    isDialogOrExcludedTarget: () => false,
+    isSelectionCollapsed: () => true,
+    onMouse_click: () => false, // MouseBrowsing disabled
+    onMouse_move: () => {},
+    setInputAreaFocus: () => {},
+    setNavCmd: (cmd) => navCmds.push(cmd),
+    doPaste: () => { pasted++; },
+  };
+
+  const controller = new MouseController(mockApp, { attachDOM: false });
+
+  // Default 'none': left click does not send any command
+  controller.onClick({ button: 0, clientX: 50, clientY: 50, preventDefault() {} });
+  assert.deepEqual(navCmds, [], 'Default mouseLeftFunction="none" must not send any nav command');
+
+  // 'enter' (or legacy 1): left click sends doEnter without MouseBrowsing enabled
+  mockApp.mouseLeftFunction = 'enter';
+  controller.onClick({ button: 0, clientX: 50, clientY: 50, preventDefault() {} });
+  assert.deepEqual(navCmds, ['doEnter']);
+  navCmds.length = 0;
+
+  // 'left': user who wants left click to exit article
+  mockApp.mouseLeftFunction = 'left';
+  controller.onClick({ button: 0, clientX: 50, clientY: 50, preventDefault() {} });
+  assert.deepEqual(navCmds, ['doLeft']);
+  navCmds.length = 0;
+
+  // 'esc': left click sends doEsc
+  mockApp.mouseLeftFunction = 'esc';
+  controller.onClick({ button: 0, clientX: 50, clientY: 50, preventDefault() {} });
+  assert.deepEqual(navCmds, ['doEsc']);
+  navCmds.length = 0;
+
+  // Middle click paste and nav keys without MouseBrowsing
+  mockApp.mouseMiddleFunction = 'paste';
+  controller.onMouseDown({ button: 1, preventDefault() {} });
+  assert.equal(pasted, 1, 'Middle click paste works in core without MouseBrowsing');
+
+  mockApp.mouseMiddleFunction = 'left';
+  controller.onMouseDown({ button: 1, preventDefault() {} });
+  assert.deepEqual(navCmds, ['doLeft']);
+});
+

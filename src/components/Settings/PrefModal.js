@@ -7,6 +7,8 @@ import "./PrefModal.css";
 import {
   DEFAULT_PREFS,
   PREF_STORAGE_KEY,
+  MOUSE_NAV_KEYS,
+  normalizeMouseButtonAction,
   getDefaultPrefs,
   readValuesWithDefault,
   writeValues,
@@ -530,6 +532,37 @@ const renderWheelActionOptions = () => (
     </option>
   </>
 );
+
+const MOUSE_BUTTON_I18N_MAP = {
+  none: "options_none",
+  menu: "options_rightClickAction_menu",
+  paste: "options_doPaste",
+  enter: "options_enterKey",
+  left: "options_leftKey",
+  right: "options_rightKey",
+  up: "options_upKey",
+  down: "options_downKey",
+  pageup: "options_pageUpKey",
+  pagedown: "options_pageDownKey",
+  esc: "options_escKey",
+};
+
+const renderMouseButtonOptions = (baseActions, supportNavKeys = true) => {
+  const actions = supportNavKeys
+    ? [...baseActions, ...MOUSE_NAV_KEYS]
+    : [...baseActions];
+  return actions.map((action) => {
+    const i18nKey =
+      action === "paste" && baseActions.includes("menu")
+        ? "options_rightClickAction_paste"
+        : MOUSE_BUTTON_I18N_MAP[action] || "options_none";
+    return (
+      <option key={action} value={action}>
+        {parseOptionText(_(i18nKey)).label}
+      </option>
+    );
+  });
+};
 
 const SelectOptionGroup = ({
   controlId,
@@ -1513,6 +1546,68 @@ export class PrefModal extends React.Component {
                   onCloseClick={this.handleCloseClick}
                 />
                 <div className="PrefModal__TabBody">
+                  <div className="form-group" id="mouseLeftFunction">
+                    <label className="control-label">
+                      {_("options_mouseLeftFunction")}
+                    </label>
+                    <select
+                      className="form-control"
+                      name="mouseLeftFunction"
+                      value={normalizeMouseButtonAction(
+                        values.mouseLeftFunction,
+                        "left"
+                      )}
+                      onChange={this.handleTextInputChange}
+                    >
+                      {renderMouseButtonOptions(
+                        ["none"],
+                        this.props.app?.site
+                          ? Boolean(this.props.app.site.supportNavKeys)
+                          : true
+                      )}
+                    </select>
+                    {renderOptionDesc(
+                      _(
+                        MOUSE_BUTTON_I18N_MAP[
+                          normalizeMouseButtonAction(
+                            values.mouseLeftFunction,
+                            "left"
+                          )
+                        ] || "options_none"
+                      )
+                    )}
+                  </div>
+                  <div className="form-group" id="mouseMiddleFunction">
+                    <label className="control-label">
+                      {_("options_mouseMiddleFunction")}
+                    </label>
+                    <select
+                      className="form-control"
+                      name="mouseMiddleFunction"
+                      value={normalizeMouseButtonAction(
+                        values.mouseMiddleFunction,
+                        "middle"
+                      )}
+                      onChange={this.handleTextInputChange}
+                    >
+                      {renderMouseButtonOptions(
+                        ["none", "paste"],
+                        this.props.app?.site
+                          ? Boolean(this.props.app.site.supportNavKeys)
+                          : true
+                      )}
+                    </select>
+                    {renderOptionDesc(
+                      _(
+                        MOUSE_BUTTON_I18N_MAP[
+                          normalizeMouseButtonAction(
+                            values.mouseMiddleFunction,
+                            "middle"
+                          )
+                        ] || "options_none"
+                      )
+                    )}
+                  </div>
                   <div className="form-group" id="rightClickAction">
                   <label className="control-label">
                     {_("options_rightClickAction")}
@@ -1520,20 +1615,26 @@ export class PrefModal extends React.Component {
                   <select
                     className="form-control"
                     name="rightClickAction"
-                    value={values.rightClickAction || "menu"}
+                    value={normalizeMouseButtonAction(
+                      values.rightClickAction,
+                      "right"
+                    )}
                     onChange={this.handleTextInputChange}
                   >
-                    <option value="menu">
-                      {parseOptionText(_("options_rightClickAction_menu")).label}
-                    </option>
-                    <option value="paste">
-                      {parseOptionText(_("options_rightClickAction_paste")).label}
-                    </option>
+                    {renderMouseButtonOptions(
+                      ["menu", "paste", "none"],
+                      this.props.app?.site
+                        ? Boolean(this.props.app.site.supportNavKeys)
+                        : true
+                    )}
                   </select>
                   {renderOptionDesc(
-                    (values.rightClickAction || "menu") === "paste"
-                      ? _("options_rightClickAction_paste")
-                      : _("options_rightClickAction_menu")
+                    normalizeMouseButtonAction(
+                      values.rightClickAction,
+                      "right"
+                    ) === "menu"
+                      ? _("options_rightClickAction_menu")
+                      : _("options_rightClickAction_paste")
                   )}
                 </div>
                 <div className="form-group" id="mouseWheelAction">

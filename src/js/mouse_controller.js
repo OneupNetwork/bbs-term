@@ -1,4 +1,5 @@
 import { setTimer } from './util.js';
+import { normalizeMouseButtonAction } from './pref.js';
 
 export function isDiscreteMouseWheelEvent(e) {
   if (!e) return false;
@@ -160,6 +161,45 @@ export class MouseController {
     }
   }
 
+  executeMouseButtonAction(rawAction, buttonType = 'left') {
+    const app = this.app;
+    if (!app) return false;
+    const action = normalizeMouseButtonAction(rawAction, buttonType);
+    switch (action) {
+      case 'paste':
+        app.doPaste?.();
+        return true;
+      case 'enter':
+        app.setNavCmd('doEnter');
+        return true;
+      case 'left':
+        app.setNavCmd('doLeft');
+        return true;
+      case 'right':
+        app.setNavCmd('doRight');
+        return true;
+      case 'up':
+        app.setNavCmd('doArrowUp');
+        return true;
+      case 'down':
+        app.setNavCmd('doArrowDown');
+        return true;
+      case 'pageup':
+        app.setNavCmd('doPageUp');
+        return true;
+      case 'pagedown':
+        app.setNavCmd('doPageDown');
+        return true;
+      case 'esc':
+        app.setNavCmd('doEsc');
+        return true;
+      case 'none':
+      case 'menu':
+      default:
+        return false;
+    }
+  }
+
   onClick(e) {
     const app = this.app;
     if (
@@ -209,6 +249,9 @@ export class MouseController {
       } else if (app.onMouse_click(e)) {
         e.preventDefault();
         app.setInputAreaFocus(forceFocus);
+      } else if (this.executeMouseButtonAction(app.mouseLeftFunction, 'left')) {
+        e.preventDefault();
+        app.setInputAreaFocus(forceFocus);
       }
     }
   }
@@ -232,6 +275,14 @@ export class MouseController {
     //0=left button, 1=middle button, 2=right button
     if (e.button === 0) {
       if (!app.isSelectionCollapsed()) app.skipMouseClick = true;
+    } else if (e.button === 1) {
+      if (e.target && typeof e.target.closest === 'function' && e.target.closest('a')) {
+        return;
+      }
+      if (this.executeMouseButtonAction(app.mouseMiddleFunction, 'middle')) {
+        e.preventDefault?.();
+        return;
+      }
     } else if (e.button == 2) {
       const colRow = app.view?.snapshotDomSelection?.();
       if (colRow) {

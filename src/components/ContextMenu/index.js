@@ -1,7 +1,7 @@
 import cx from "classnames";
 import React from "react";
 import { _ } from "../../js/i18n";
-import { readValuesWithDefault, writeValues } from "../../js/pref";
+import { normalizeMouseButtonAction, readValuesWithDefault, writeValues } from "../../js/pref";
 import DropdownMenu from "./DropdownMenu";
 import PrefModal from "../Settings/PrefModal";
 
@@ -420,8 +420,16 @@ export class ContextMenu extends React.Component {
     if (anyModalShown) {
       return;
     }
-    if (app && app.rightClickAction === "paste" && !event.shiftKey) {
-      app.doPaste();
+    const rightAction = normalizeMouseButtonAction(
+      app?.rightClickAction,
+      "right"
+    );
+    if (app && rightAction !== "menu" && !event.shiftKey) {
+      if (rightAction === "paste" || app.rightClickAction === "paste") {
+        app.doPaste();
+      } else if (rightAction !== "none") {
+        app.mouse?.executeMouseButtonAction?.(rightAction, "right");
+      }
       return;
     }
     this.showMenuAt(event.pageX, event.pageY, event.target);
