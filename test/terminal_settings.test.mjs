@@ -1645,3 +1645,56 @@ test('Mouse button verb mapping, legacy migration, site supportNavKeys, and core
   assert.deepEqual(navCmds, ['doLeft']);
 });
 
+test('MouseBrowsing renders interactive hotzone guide diagram with list/reading tabs and i18n keys', () => {
+  const mbSrc = fs.readFileSync(
+    path.resolve('src/plugins/mouse_browsing/MouseBrowsing.js'),
+    'utf-8'
+  );
+  const zhTW = JSON.parse(fs.readFileSync(path.resolve('src/_locales/zh_TW/messages.json'), 'utf-8'));
+  const enUS = JSON.parse(fs.readFileSync(path.resolve('src/_locales/en/messages.json'), 'utf-8'));
+
+  // 1. Source contains MouseBrowsingOptions component with toggle and tabs
+  assert.ok(
+    mbSrc.includes('function MouseBrowsingOptions('),
+    'MouseBrowsing.js must define MouseBrowsingOptions component'
+  );
+  assert.ok(
+    mbSrc.includes('options_mouseBrowsingGuide_toggle') &&
+      mbSrc.includes('options_mouseBrowsingGuide_tabList') &&
+      mbSrc.includes('options_mouseBrowsingGuide_tabReading'),
+    'MouseBrowsingOptions must render toggle button and list/reading tabs'
+  );
+  assert.ok(
+    mbSrc.includes('cursorHome') &&
+      mbSrc.includes('cursorEnd') &&
+      mbSrc.includes('cursorPageup') &&
+      mbSrc.includes('cursorPagedown') &&
+      mbSrc.includes('cursorBack'),
+    'MouseBrowsingOptions diagram must render embedded cursor icons'
+  );
+
+  // 2. All guide i18n keys exist in both zh_TW and en
+  const guideKeys = [
+    'options_mouseBrowsingGuide_toggle',
+    'options_mouseBrowsingGuide_hide',
+    'options_mouseBrowsingGuide_tabList',
+    'options_mouseBrowsingGuide_tabReading',
+    'options_mouseBrowsingGuide_home',
+    'options_mouseBrowsingGuide_end',
+    'options_mouseBrowsingGuide_pageUp',
+    'options_mouseBrowsingGuide_pageDown',
+    'options_mouseBrowsingGuide_back',
+    'options_mouseBrowsingGuide_enter',
+    'options_mouseBrowsingGuide_firstThread',
+    'options_mouseBrowsingGuide_prevThread',
+    'options_mouseBrowsingGuide_nextThread',
+    'options_mouseBrowsingGuide_lastThread',
+    'options_mouseBrowsingGuide_refresh',
+  ];
+
+  for (const key of guideKeys) {
+    assert.ok(zhTW[key]?.message, `zh_TW must define ${key}`);
+    assert.ok(enUS[key]?.message, `en must define ${key}`);
+  }
+});
+

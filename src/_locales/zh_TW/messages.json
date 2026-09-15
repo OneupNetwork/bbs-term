@@ -465,6 +465,51 @@
   "options_mouseBrowsingHighlight": {
     "message": "啟用滑鼠瀏覽的底色效果"
   },
+  "options_mouseBrowsingGuide_toggle": {
+    "message": "查看滑鼠瀏覽熱區圖解"
+  },
+  "options_mouseBrowsingGuide_hide": {
+    "message": "隱藏滑鼠瀏覽熱區圖解"
+  },
+  "options_mouseBrowsingGuide_tabList": {
+    "message": "看板 / 文章列表"
+  },
+  "options_mouseBrowsingGuide_tabReading": {
+    "message": "閱讀文章內容"
+  },
+  "options_mouseBrowsingGuide_home": {
+    "message": "Home (第一頁)"
+  },
+  "options_mouseBrowsingGuide_end": {
+    "message": "End (最後一頁)"
+  },
+  "options_mouseBrowsingGuide_pageUp": {
+    "message": "Page Up (上一頁)"
+  },
+  "options_mouseBrowsingGuide_pageDown": {
+    "message": "Page Down (下一頁)"
+  },
+  "options_mouseBrowsingGuide_back": {
+    "message": "方向鍵左 (返回上一層)"
+  },
+  "options_mouseBrowsingGuide_enter": {
+    "message": "Enter (進入看板 / 閱讀文章)"
+  },
+  "options_mouseBrowsingGuide_firstThread": {
+    "message": "= (同主題首篇)"
+  },
+  "options_mouseBrowsingGuide_prevThread": {
+    "message": "[ (同主題上篇)"
+  },
+  "options_mouseBrowsingGuide_nextThread": {
+    "message": "] (同主題下篇)"
+  },
+  "options_mouseBrowsingGuide_lastThread": {
+    "message": "同主題最後一篇"
+  },
+  "options_mouseBrowsingGuide_refresh": {
+    "message": "重新整理推文"
+  },
   "options_supportMouseReporting": {
     "message": "支援滑鼠定位協議"
   },
