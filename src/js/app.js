@@ -174,6 +174,11 @@ export class App extends EventEmitter {
     window.onresize = () => {
       this.onWindowResize();
     };
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => this.onWindowResize(), 50);
+      });
+    }
 
     window.addEventListener('beforeunload', (e) => {
       if (
@@ -799,7 +804,12 @@ export class App extends EventEmitter {
       this._lastIsPortrait !== undefined && this._lastIsPortrait !== isPortrait;
     this._lastIsPortrait = isPortrait;
 
-    if (orientationChanged) {
+    const safeAreaLeft = this.view.getTermWinOffset?.().left || 0;
+    const safeAreaChanged =
+      this._lastSafeAreaLeft !== undefined && this._lastSafeAreaLeft !== safeAreaLeft;
+    this._lastSafeAreaLeft = safeAreaLeft;
+
+    if (orientationChanged || safeAreaChanged) {
       if (this.resizeTimeout) {
         clearTimeout(this.resizeTimeout);
         this.resizeTimeout = null;

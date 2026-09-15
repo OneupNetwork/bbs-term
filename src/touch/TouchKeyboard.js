@@ -822,10 +822,14 @@ export class TouchKeyboard extends React.Component {
     let nextRight = this.dragState.startRight - dx;
     let nextBottom = this.dragState.startBottom - dy;
 
+    const safeAreaLeft =
+      (typeof document !== "undefined" &&
+        document.getElementById("TermWindow")?.getBoundingClientRect?.().left) ||
+      0;
     const minRight = 4;
     const maxRight = Math.max(
       minRight,
-      viewportWidth - this.dragState.padWidth - 4
+      viewportWidth - this.dragState.padWidth - Math.max(4, safeAreaLeft + 4)
     );
     const minBottom = 4;
     const maxBottom = Math.max(
@@ -3014,12 +3018,16 @@ export class TouchKeyboard extends React.Component {
           )
         : halfBtnY;
 
+    const safeAreaLeft =
+      (typeof document !== "undefined" &&
+        document.getElementById("TermWindow")?.getBoundingClientRect?.().left) ||
+      0;
     const effectiveRight =
       this.state.toolbarCustomRight != null
         ? Math.min(
             this.state.toolbarCustomRight,
             activeStackedWidth && viewportWidth > 0
-              ? Math.max(4, viewportWidth - activeStackedWidth - 6)
+              ? Math.max(4, viewportWidth - activeStackedWidth - Math.max(6, safeAreaLeft + 6))
               : this.state.toolbarCustomRight
           )
         : initialRight;

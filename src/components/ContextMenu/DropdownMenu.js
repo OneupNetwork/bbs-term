@@ -13,14 +13,25 @@ const top = (mouseHeight, menuHeight) => {
   return mouseHeight;
 };
 
+const getSafeAreaLeft = () => {
+  if (typeof document !== "undefined") {
+    const termWin = document.getElementById("TermWindow");
+    if (termWin && typeof termWin.getBoundingClientRect === "function") {
+      return termWin.getBoundingClientRect().left || 0;
+    }
+  }
+  return 0;
+};
+
 const left = (mouseWidth, menuWidth) => {
   const pageWidth = typeof window !== "undefined" ? window.innerWidth : 800;
+  const minLeft = getSafeAreaLeft();
 
   // opening menu would pass the side of the page
   if (mouseWidth + menuWidth > pageWidth && menuWidth < mouseWidth) {
-    return mouseWidth - menuWidth;
+    return Math.max(minLeft, mouseWidth - menuWidth);
   }
-  return mouseWidth;
+  return Math.max(minLeft, mouseWidth);
 };
 
 const normalizeSelectedText = (selectedText) => {
@@ -110,8 +121,9 @@ export const DropdownMenu = ({
           );
           el.style.top = `${menuTop}px`;
         }
+        const minLeft = Math.max(8, getSafeAreaLeft() + 8);
         const menuLeft = Math.max(
-          8,
+          minLeft,
           Math.min(
             pageWidth - el.clientWidth - 8,
             anchorRect.right - el.clientWidth
