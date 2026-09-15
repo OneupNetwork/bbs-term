@@ -8,9 +8,9 @@ import { renderRowHtml, renderScreen } from './term_ui';
 import { _ } from './i18n';
 import { setTimer } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
-import { stringWidth } from './string_util';
+import { wcwidth, wcswidth, stringWidth } from './string_util';
 import { DEFAULT_PREFS, getDefaultFontSize } from './pref.js';
-import { getAsciiLetterSpacingEm } from './font_util.js';
+import { getAsciiLetterSpacingEm, getAsciiWidthRatio } from './font_util.js';
 
 const DEFINE_INPUT_BUFFER_SIZE = 12;
 
@@ -366,6 +366,8 @@ export class TermView extends EventEmitter {
     if (this.termWin && this.termWin.style) {
       this.termWin.style.display = '';
     }
+    this.innerBounds = this.getWindowInnerBounds();
+    this.firstGridOffset = this.getFirstGridOffsets();
   }
 
   setCursor(cursorStyle) {
@@ -1040,12 +1042,18 @@ export class TermView extends EventEmitter {
       fgHex = getContrastColor(fgHex, bgHex, minContrast);
 
       const borderSize = 3;
+      const padX = 2;
+      const effectiveChw = (this.chw || Math.max(8, this.chh / 2)) * (this.scaleX || 1);
+      const effectiveChh = this.chh * (this.scaleY || 1);
+      const cjkAdvance = effectiveChw * 2;
+      const letterSpacing = cjkAdvance - effectiveChh;
+
       this.input.style.zIndex = '13';
       this.input.style.forcedColorAdjust = 'none';
       this.input.style.opacity = '1';
       this.input.style.border = `${borderSize}px double ${fgHex}`;
       this.input.style.outline = 'none';
-      this.input.style.padding = '0 2px';
+      this.input.style.padding = `0 ${padX}px`;
       this.input.style.margin = '0px';
       this.input.style.boxSizing = 'content-box';
       // Workaround for Safari / All Browsers: Text inside input element #t is transparent by default.
@@ -1054,16 +1062,18 @@ export class TermView extends EventEmitter {
       this.input.style.background = bgHex;
       this.input.style.backgroundColor = bgHex;
       this.input.style.caretColor = fgHex;
-      this.input.style.fontSize = (this.chh - 2) + 'px';
-      this.input.style.lineHeight = this.chh + 'px';
-      this.input.style.height = this.chh + 'px';
+      this.input.style.fontSize = effectiveChh + 'px';
+      this.input.style.letterSpacing = letterSpacing ? `${letterSpacing}px` : '0px';
+      this.input.style.lineHeight = effectiveChh + 'px';
+      this.input.style.height = effectiveChh + 'px';
+      this.updateInputBufferWidth?.();
 
       const innerBounds = this.innerBounds;
       const termwinheight = innerBounds.height;
       const termwinwidth = innerBounds.width;
-      const boxWidth = parseFloat(this.input.style.width) || ((this.chw || Math.max(8, this.chh / 2)) * 2);
-      const totalHeight = this.chh + borderSize * 2;
-      const totalWidth = boxWidth + borderSize * 2 + 4;
+      const boxWidth = parseFloat(this.input.style.width) || effectiveChw;
+      const totalHeight = effectiveChh + borderSize * 2;
+      const totalWidth = boxWidth + (borderSize + padX) * 2;
 
       let topPos = pos[1] - borderSize;
       if (topPos + totalHeight > termwinheight) {
@@ -1073,7 +1083,7 @@ export class TermView extends EventEmitter {
       }
       this.input.style.top = topPos + 'px';
 
-      let leftPos = pos[0] - borderSize;
+      let leftPos = pos[0] - borderSize - padX;
       if (leftPos + totalWidth > termwinwidth) {
         leftPos = Math.max(0, termwinwidth - totalWidth);
       } else if (leftPos < 0) {
@@ -1093,17 +1103,57 @@ export class TermView extends EventEmitter {
   }
 
   updateInputBufferWidth() {
-    // change width according to input
-    const wordCounts = stringWidth(this.input.value);
-    const colWidth = this.chw || Math.max(8, this.chh / 2);
-    // Provide min-width so single-character composition caret and box aren't clipped
-    const minWidth = colWidth * 2;
-    const width = Math.max(colWidth * wordCounts + colWidth, minWidth);
+    if (!this.input) return;
+    const val = this.input.value || '';
+    const cols = wcswidth(val);
+    const effectiveChw = (this.chw || Math.max(8, this.chh / 2)) * (this.scaleX || 1);
+    const effectiveChh = (this.chh || 16) * (this.scaleY || 1);
+
+    let charCount = 0;
+    let naturalWidth = 0;
+    const asciiRatio = getAsciiWidthRatio(this.fontFace);
+    for (let i = 0; i < val.length; i++) {
+      const code = val.codePointAt(i);
+      const w = wcwidth(code);
+      if (w > 0) {
+        charCount++;
+        naturalWidth += (w === 2) ? effectiveChh : (asciiRatio * effectiveChh);
+      }
+      if (code > 0xffff) i++;
+    }
+
+    if (val && typeof document !== 'undefined' && document.createElement) {
+      if (!this._measureCtx) {
+        const c = document.createElement('canvas');
+        this._measureCtx = c && typeof c.getContext === 'function' ? c.getContext('2d') : null;
+      }
+      if (this._measureCtx) {
+        this._measureCtx.font = `${effectiveChh}px ${this.fontFace || 'monospace'}`;
+        const measured = this._measureCtx.measureText(val).width;
+        if (measured > 0) {
+          naturalWidth = measured;
+        }
+      }
+    }
+
+    const targetTextWidth = cols * effectiveChw;
+    if (charCount > 0) {
+      const ls = (targetTextWidth - naturalWidth) / charCount;
+      this.input.style.letterSpacing = Math.abs(ls) > 0.01 ? `${Number(ls.toFixed(2))}px` : '0px';
+    } else {
+      const defaultLs = (effectiveChw * 2) - effectiveChh;
+      this.input.style.letterSpacing = defaultLs ? `${defaultLs}px` : '0px';
+    }
+
+    const minWidth = effectiveChw;
+    const width = Math.max(targetTextWidth, minWidth);
     this.input.style.width = width + 'px';
     const bounds = this.innerBounds;
-    const borderAndPad = 10; // 3px border * 2 + 2px padding * 2
-    if (parseFloat(this.input.style.left) + width + borderAndPad > bounds.width) {
-      this.input.style.left = Math.max(0, bounds.width - width - borderAndPad) + 'px';
+    if (bounds) {
+      const borderAndPad = 10; // 3px border * 2 + 2px padding * 2
+      if (parseFloat(this.input.style.left) + width + borderAndPad > bounds.width) {
+        this.input.style.left = Math.max(0, bounds.width - width - borderAndPad) + 'px';
+      }
     }
   }
 
@@ -1111,8 +1161,8 @@ export class TermView extends EventEmitter {
     //this.input.disabled="";
     this.input.setAttribute('bshow', '1');
     this.input.style.pointerEvents = 'auto';
-    const colWidth = this.chw || Math.max(8, this.chh / 2);
-    this.input.style.minWidth = (colWidth * 2) + 'px';
+    const colWidth = (this.chw || Math.max(8, this.chh / 2)) * (this.scaleX || 1);
+    this.input.style.minWidth = colWidth + 'px';
     // Workaround for WebKit IME: Lock Delay pattern for composition candidate window
     if (this.hasWebKitImeQuirk) {
       this._isComposingSafe = true;
@@ -1138,6 +1188,7 @@ export class TermView extends EventEmitter {
     this.input.style.background = 'transparent';
     this.input.style.backgroundColor = 'transparent';
     this.input.style.caretColor = 'transparent';
+    this.input.style.letterSpacing = '';
     this.input.style.minWidth = '';
     // Workaround for WebKit IME: activate Lock Delay for trailing keydown
     if (this.hasWebKitImeQuirk) {
