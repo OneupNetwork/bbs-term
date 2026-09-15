@@ -270,6 +270,7 @@ export class TermBuf extends EventEmitter {
     }
     if (this.cur_x >= cols) this.cur_x = cols - 1;
     if (this.cur_y >= rows) this.cur_y = rows - 1;
+    this.emit('resize', { cols, rows });
   }
 
   get site() {

@@ -4430,4 +4430,32 @@ test('iOS landscape Dynamic Island safe area left inset is respected by #TermWin
   );
 });
 
+test('EasyReading horizontal padding respects non-80 terminal column widths (e.g. 100x24) and aligns with TermView (Issue #42)', () => {
+  const mainCssSource = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
+  const termViewSource = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  const easyReadingSource = fs.readFileSync(path.resolve('src/plugins/easy_reading/EasyReading.js'), 'utf-8');
 
+  // 1. main.css must not hardcode * 80 for #easyReadingContent, #easyReadingLastRow, or #easyReadingReplyRow
+  assert.ok(
+    !mainCssSource.includes('var(--term-chw, 13px) * 80'),
+    'main.css must use var(--term-cols, 80) instead of hardcoded * 80'
+  );
+  assert.ok(
+    mainCssSource.includes('var(--term-chw, 13px) * var(--term-cols, 80)'),
+    'main.css must compute horizontal padding using var(--term-cols, 80)'
+  );
+
+  // 2. TermView setTermFontSize sets --term-cols and --term-rows on termWin
+  assert.ok(
+    termViewSource.includes("setProperty('--term-cols'") &&
+      termViewSource.includes("setProperty('--term-rows'"),
+    'TermView.setTermFontSize must set --term-cols and --term-rows on termWin'
+  );
+
+  // 3. EasyReading._updateOverlayPadding sets --term-cols and --term-rows on overlay
+  assert.ok(
+    easyReadingSource.includes("setProperty?.('--term-cols', `${cols}`)") &&
+      easyReadingSource.includes("setProperty?.('--term-rows', `${rows}`)"),
+    'EasyReading._updateOverlayPadding must set --term-cols and --term-rows on overlay'
+  );
+});
