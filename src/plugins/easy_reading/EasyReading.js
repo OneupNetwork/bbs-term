@@ -123,12 +123,19 @@ export class EasyReading extends PluginBase {
       this.onFontUpdate(e?.detail || e);
     });
 
+    this._onBufResize = () => {
+      this._updateOverlayPadding();
+    };
     const buf = this.buf || this.app?.buf;
     if (buf) {
       this.buf = buf;
       this.listenWhileEnabled(buf, 'change', this._onBufChanged);
       this.listenWhileEnabled(buf, 'viewUpdate', this._onBufViewUpdated);
       this.listenWhileEnabled(buf, 'cursor-move', this._onBufCursorMove);
+      this.listenWhileEnabled(buf, 'resize', this._onBufResize);
+    }
+    if (typeof window !== 'undefined') {
+      this.listenWhileEnabled(window, 'resize', this._onBufResize);
     }
 
     if (this.enabled && typeof document !== 'undefined' && !this._uiInitialized) {
@@ -258,6 +265,9 @@ export class EasyReading extends PluginBase {
     const termWinWidth =
       this.view.innerBounds?.width || this._overlay.clientWidth || 0;
     const cols = this.buf?.cols || 80;
+    const rows = this.buf?.rows || 24;
+    this._overlay.style?.setProperty?.('--term-cols', `${cols}`);
+    this._overlay.style?.setProperty?.('--term-rows', `${rows}`);
     const baseChw = this.view.chw || 13;
     const baseFontSize = this.view.fontSizePx || baseChw * 2;
     const baseChh = this.view.chh || baseFontSize;
@@ -284,7 +294,7 @@ export class EasyReading extends PluginBase {
       this._overlay.style?.setProperty?.('--term-chh', `${baseChh}px`);
     }
 
-    const rowsHeight = effectiveChh * (this.buf?.rows || 24);
+    const rowsHeight = effectiveChh * rows;
     const padTop = Math.max(0, Math.floor((termWinHeight - rowsHeight) / 2));
     this._overlay.style?.setProperty?.('--easy-reading-pad-top', `${padTop}px`);
   }

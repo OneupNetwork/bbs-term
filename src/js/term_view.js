@@ -669,6 +669,8 @@ export class TermView extends EventEmitter {
       this.termWin.style.setProperty('--term-chw', this.chw + 'px');
       this.termWin.style.setProperty('--term-chh', this.chh + 'px');
       this.termWin.style.setProperty('--term-line-height', lineHeight);
+      this.termWin.style.setProperty('--term-cols', String(this.buf?.cols || 80));
+      this.termWin.style.setProperty('--term-rows', String(this.buf?.rows || 24));
       if (this.asciiLetterSpacing !== undefined) {
         this.termWin.style.setProperty('--term-ascii-ls', this.asciiLetterSpacing);
       }
