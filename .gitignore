@@ -2,6 +2,11 @@ node_modules
 **/*.concat.*
 
 js/constants_local.js
+
+# Per-site build config (.env.<mode>) is committed; local overrides are not.
+.env.local
+.env.*.local
+
 dist/*
 !dist/.gitkeep
 
