@@ -465,6 +465,51 @@
   "options_mouseBrowsingHighlight": {
     "message": "Mouse browsing highlight effect"
   },
+  "options_mouseBrowsingGuide_toggle": {
+    "message": "View Mouse Browsing Hotzone Guide"
+  },
+  "options_mouseBrowsingGuide_hide": {
+    "message": "Hide Mouse Browsing Hotzone Guide"
+  },
+  "options_mouseBrowsingGuide_tabList": {
+    "message": "Board / Article List"
+  },
+  "options_mouseBrowsingGuide_tabReading": {
+    "message": "Reading Article"
+  },
+  "options_mouseBrowsingGuide_home": {
+    "message": "Home (First Page)"
+  },
+  "options_mouseBrowsingGuide_end": {
+    "message": "End (Last Page)"
+  },
+  "options_mouseBrowsingGuide_pageUp": {
+    "message": "Page Up (Previous Page)"
+  },
+  "options_mouseBrowsingGuide_pageDown": {
+    "message": "Page Down (Next Page)"
+  },
+  "options_mouseBrowsingGuide_back": {
+    "message": "Arrow Left (Back)"
+  },
+  "options_mouseBrowsingGuide_enter": {
+    "message": "Enter (Open Board / Article)"
+  },
+  "options_mouseBrowsingGuide_firstThread": {
+    "message": "= (First Post in Thread)"
+  },
+  "options_mouseBrowsingGuide_prevThread": {
+    "message": "[ (Previous Post in Thread)"
+  },
+  "options_mouseBrowsingGuide_nextThread": {
+    "message": "] (Next Post in Thread)"
+  },
+  "options_mouseBrowsingGuide_lastThread": {
+    "message": "Last Post in Thread"
+  },
+  "options_mouseBrowsingGuide_refresh": {
+    "message": "Refresh Pushed Texts"
+  },
   "options_supportMouseReporting": {
     "message": "Support Mouse Reporting"
   },

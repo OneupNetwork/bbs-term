@@ -32,6 +32,398 @@ export const MOUSE_CURSOR_MAP = [
   `url(${cursorLast}) 0 0,auto`, // 14
 ];
 
+function renderZoneBox(style, iconUrl, label, title) {
+  return React.createElement(
+    "div",
+    {
+      title: title || label,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "4px",
+        padding: "2px 4px",
+        boxSizing: "border-box",
+        textAlign: "center",
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+        ...style,
+      },
+    },
+    iconUrl
+      ? React.createElement("img", {
+          src: iconUrl,
+          alt: "",
+          style: { width: "14px", height: "14px", flexShrink: 0 },
+        })
+      : null,
+    label ? React.createElement("span", null, label) : null
+  );
+}
+
+function renderLegendItem(color, text) {
+  return React.createElement(
+    "div",
+    {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        fontSize: "12px",
+        lineHeight: "1.4",
+      },
+    },
+    React.createElement("span", {
+      style: {
+        display: "inline-block",
+        width: "12px",
+        height: "12px",
+        borderRadius: "3px",
+        backgroundColor: color,
+        flexShrink: 0,
+        border: "1px solid rgba(255,255,255,0.25)",
+      },
+    }),
+    React.createElement("span", null, text)
+  );
+}
+
+function MouseBrowsingOptions({
+  values = {},
+  handleCheckboxChange,
+  handleNumberInputChange,
+}) {
+  const [showGuide, setShowGuide] = React.useState(false);
+  const [guideTab, setGuideTab] = React.useState("list");
+
+  const isList = guideTab === "list";
+
+  return React.createElement(
+    React.Fragment,
+    null,
+    React.createElement(
+      "div",
+      { className: "checkbox PrefModal__MacSubCheckbox" },
+      React.createElement(
+        "label",
+        null,
+        React.createElement("input", {
+          type: "checkbox",
+          name: "mouseBrowsingHighlight",
+          checked: values.mouseBrowsingHighlight,
+          onChange: handleCheckboxChange,
+        }),
+        React.createElement("span", null, _("options_mouseBrowsingHighlight"))
+      )
+    ),
+    React.createElement(
+      "div",
+      { className: "PrefModal__Grid__Col--right__MouseBrowsingHighlightColor" },
+      _("options_highlightColor"),
+      React.createElement(
+        "select",
+        {
+          className: `form-control b${values.mouseBrowsingHighlightColor}`,
+          name: "mouseBrowsingHighlightColor",
+          value: values.mouseBrowsingHighlightColor,
+          onChange: handleNumberInputChange,
+        },
+        Array(16)
+          .fill(0)
+          .map((_, i) =>
+            React.createElement("option", {
+              key: i,
+              value: i,
+              className: `b${i}`,
+            })
+          )
+      )
+    ),
+    React.createElement(
+      "div",
+      { style: { marginTop: "10px" } },
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "btn btn-default btn-sm",
+          onClick: () => setShowGuide(!showGuide),
+          style: {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "12px",
+          },
+        },
+        React.createElement("span", null, "ℹ️"),
+        React.createElement(
+          "span",
+          null,
+          showGuide
+            ? _("options_mouseBrowsingGuide_hide")
+            : _("options_mouseBrowsingGuide_toggle")
+        )
+      )
+    ),
+    showGuide
+      ? React.createElement(
+          "div",
+          {
+            style: {
+              marginTop: "10px",
+              padding: "10px",
+              borderRadius: "8px",
+              backgroundColor: "rgba(0, 0, 0, 0.25)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+            },
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                gap: "6px",
+                marginBottom: "10px",
+              },
+            },
+            React.createElement(
+              "button",
+              {
+                type: "button",
+                className: `btn btn-xs ${isList ? "btn-primary" : "btn-default"}`,
+                onClick: () => setGuideTab("list"),
+                style: { flex: 1, fontSize: "12px", padding: "4px 8px" },
+              },
+              _("options_mouseBrowsingGuide_tabList")
+            ),
+            React.createElement(
+              "button",
+              {
+                type: "button",
+                className: `btn btn-xs ${!isList ? "btn-primary" : "btn-default"}`,
+                onClick: () => setGuideTab("reading"),
+                style: { flex: 1, fontSize: "12px", padding: "4px 8px" },
+              },
+              _("options_mouseBrowsingGuide_tabReading")
+            )
+          ),
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                height: "200px",
+                borderRadius: "6px",
+                overflow: "hidden",
+                border: "1px solid rgba(255, 255, 255, 0.25)",
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#fff",
+                textShadow: "0 1px 2px rgba(0, 0, 0, 0.85)",
+                userSelect: "none",
+              },
+            },
+            isList
+              ? React.createElement(
+                  React.Fragment,
+                  null,
+                  // Row 0: Top bar (Home + thread first/next)
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", height: "13%" } },
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#a52834", borderRight: "1px solid rgba(255,255,255,0.2)" },
+                      cursorFirst,
+                      "=",
+                      _("options_mouseBrowsingGuide_firstThread")
+                    ),
+                    renderZoneBox(
+                      { width: "68%", backgroundColor: "#dc3545" },
+                      cursorHome,
+                      _("options_mouseBrowsingGuide_home")
+                    ),
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#a52834", borderLeft: "1px solid rgba(255,255,255,0.2)" },
+                      cursorNext,
+                      "]",
+                      _("options_mouseBrowsingGuide_nextThread")
+                    )
+                  ),
+                  // Row 1-2: Sub-top bar (Page Up + thread prev/next)
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", height: "14%", borderTop: "1px solid rgba(255,255,255,0.2)" } },
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#0a58ca", borderRight: "1px solid rgba(255,255,255,0.2)" },
+                      cursorPrevous,
+                      "[",
+                      _("options_mouseBrowsingGuide_prevThread")
+                    ),
+                    renderZoneBox(
+                      { width: "68%", backgroundColor: "#0d6efd" },
+                      cursorPageup,
+                      _("options_mouseBrowsingGuide_pageUp")
+                    ),
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#0a58ca", borderLeft: "1px solid rgba(255,255,255,0.2)" },
+                      cursorNext,
+                      "]",
+                      _("options_mouseBrowsingGuide_nextThread")
+                    )
+                  ),
+                  // Middle Area
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", height: "60%", borderTop: "1px solid rgba(255,255,255,0.2)" } },
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#fd7e14", borderRight: "1px solid rgba(255,255,255,0.2)" },
+                      cursorBack,
+                      "←",
+                      _("options_mouseBrowsingGuide_back")
+                    ),
+                    renderZoneBox(
+                      { width: "62%", backgroundColor: "#6f42c1" },
+                      null,
+                      _("options_mouseBrowsingGuide_enter")
+                    ),
+                    React.createElement(
+                      "div",
+                      { style: { display: "flex", flexDirection: "column", width: "22%", borderLeft: "1px solid rgba(255,255,255,0.2)" } },
+                      renderZoneBox(
+                        { height: "50%", backgroundColor: "#0d6efd", borderBottom: "1px solid rgba(255,255,255,0.2)" },
+                        cursorPageup,
+                        "PgUp",
+                        _("options_mouseBrowsingGuide_pageUp")
+                      ),
+                      renderZoneBox(
+                        { height: "50%", backgroundColor: "#d9a406", color: "#fff" },
+                        cursorPagedown,
+                        "PgDn",
+                        _("options_mouseBrowsingGuide_pageDown")
+                      )
+                    )
+                  ),
+                  // Bottom Row: End + refresh/last
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", height: "13%", borderTop: "1px solid rgba(255,255,255,0.2)" } },
+                    renderZoneBox(
+                      { width: "18%", backgroundColor: "#146c43", borderRight: "1px solid rgba(255,255,255,0.2)" },
+                      cursorRefresh,
+                      "",
+                      _("options_mouseBrowsingGuide_refresh")
+                    ),
+                    renderZoneBox(
+                      { width: "64%", backgroundColor: "#198754" },
+                      cursorEnd,
+                      _("options_mouseBrowsingGuide_end")
+                    ),
+                    renderZoneBox(
+                      { width: "18%", backgroundColor: "#146c43", borderLeft: "1px solid rgba(255,255,255,0.2)" },
+                      cursorLast,
+                      "",
+                      _("options_mouseBrowsingGuide_lastThread")
+                    )
+                  )
+                )
+              : React.createElement(
+                  React.Fragment,
+                  null,
+                  // Reading Mode Top Rows
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", height: "16%" } },
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#0a58ca", borderRight: "1px solid rgba(255,255,255,0.2)" },
+                      cursorPrevous,
+                      "= / [",
+                      `${_("options_mouseBrowsingGuide_firstThread")} / ${_("options_mouseBrowsingGuide_prevThread")}`
+                    ),
+                    renderZoneBox(
+                      { width: "68%", backgroundColor: "#0d6efd" },
+                      cursorPageup,
+                      _("options_mouseBrowsingGuide_pageUp")
+                    ),
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#0a58ca", borderLeft: "1px solid rgba(255,255,255,0.2)" },
+                      cursorNext,
+                      "]",
+                      _("options_mouseBrowsingGuide_nextThread")
+                    )
+                  ),
+                  // Reading Mode Middle Area
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", height: "71%", borderTop: "1px solid rgba(255,255,255,0.2)" } },
+                    renderZoneBox(
+                      { width: "16%", backgroundColor: "#fd7e14", borderRight: "1px solid rgba(255,255,255,0.2)" },
+                      cursorBack,
+                      "←",
+                      _("options_mouseBrowsingGuide_back")
+                    ),
+                    React.createElement(
+                      "div",
+                      { style: { display: "flex", flexDirection: "column", width: "84%" } },
+                      renderZoneBox(
+                        { height: "50%", backgroundColor: "#0d6efd", borderBottom: "1px solid rgba(255,255,255,0.2)" },
+                        cursorPageup,
+                        _("options_mouseBrowsingGuide_pageUp")
+                      ),
+                      renderZoneBox(
+                        { height: "50%", backgroundColor: "#d9a406" },
+                        cursorPagedown,
+                        _("options_mouseBrowsingGuide_pageDown")
+                      )
+                    )
+                  ),
+                  // Reading Mode Bottom Row
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", height: "13%", borderTop: "1px solid rgba(255,255,255,0.2)" } },
+                    renderZoneBox(
+                      { width: "18%", backgroundColor: "#146c43", borderRight: "1px solid rgba(255,255,255,0.2)" },
+                      cursorRefresh,
+                      "",
+                      _("options_mouseBrowsingGuide_refresh")
+                    ),
+                    renderZoneBox(
+                      { width: "64%", backgroundColor: "#198754" },
+                      cursorEnd,
+                      _("options_mouseBrowsingGuide_end")
+                    ),
+                    renderZoneBox(
+                      { width: "18%", backgroundColor: "#146c43", borderLeft: "1px solid rgba(255,255,255,0.2)" },
+                      cursorLast,
+                      "",
+                      _("options_mouseBrowsingGuide_lastThread")
+                    )
+                  )
+                )
+          ),
+          // Color legend
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                gap: "4px 12px",
+                marginTop: "10px",
+              },
+            },
+            isList ? renderLegendItem("#dc3545", _("options_mouseBrowsingGuide_home")) : null,
+            renderLegendItem("#198754", _("options_mouseBrowsingGuide_end")),
+            renderLegendItem("#0d6efd", _("options_mouseBrowsingGuide_pageUp")),
+            renderLegendItem("#d9a406", _("options_mouseBrowsingGuide_pageDown")),
+            renderLegendItem("#fd7e14", _("options_mouseBrowsingGuide_back")),
+            isList ? renderLegendItem("#6f42c1", _("options_mouseBrowsingGuide_enter")) : null
+          )
+        )
+      : null
+  );
+}
+
 export class MouseBrowsing extends PluginBase {
   static id = "mouse_browsing";
   static name = "mouse_browsing";
@@ -52,53 +444,8 @@ export class MouseBrowsing extends PluginBase {
     return _("plugin_mouse_browsing_desc");
   }
 
-  static renderOptions({ values = {}, handleCheckboxChange, handleNumberInputChange }) {
-    return React.createElement(
-      React.Fragment,
-      null,
-      React.createElement(
-        "div",
-        { className: "checkbox PrefModal__MacSubCheckbox" },
-        React.createElement(
-          "label",
-          null,
-          React.createElement("input", {
-            type: "checkbox",
-            name: "mouseBrowsingHighlight",
-            checked: values.mouseBrowsingHighlight,
-            onChange: handleCheckboxChange,
-          }),
-          React.createElement(
-            "span",
-            null,
-            _("options_mouseBrowsingHighlight")
-          )
-        )
-      ),
-      React.createElement(
-        "div",
-        { className: "PrefModal__Grid__Col--right__MouseBrowsingHighlightColor" },
-        _("options_highlightColor"),
-        React.createElement(
-          "select",
-          {
-            className: `form-control b${values.mouseBrowsingHighlightColor}`,
-            name: "mouseBrowsingHighlightColor",
-            value: values.mouseBrowsingHighlightColor,
-            onChange: handleNumberInputChange,
-          },
-          Array(16)
-            .fill(0)
-            .map((_, i) =>
-              React.createElement("option", {
-                key: i,
-                value: i,
-                className: `b${i}`,
-              })
-            )
-        )
-      )
-    );
+  static renderOptions(props) {
+    return React.createElement(MouseBrowsingOptions, props);
   }
 
   constructor(app, options = {}) {
