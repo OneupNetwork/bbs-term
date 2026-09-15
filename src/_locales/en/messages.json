@@ -484,7 +484,7 @@
     "message": "No action"
   },
   "options_doPaste": {
-    "message": "Perform 'Paste'"
+    "message": "Paste from clipboard directly"
   },
   "options_leftKey": {
     "message": "Sends LEFT key"
@@ -494,6 +494,21 @@
   },
   "options_enterKey": {
     "message": "Sends ENTER key"
+  },
+  "options_upKey": {
+    "message": "Sends UP key"
+  },
+  "options_downKey": {
+    "message": "Sends DOWN key"
+  },
+  "options_pageUpKey": {
+    "message": "Sends PageUp key"
+  },
+  "options_pageDownKey": {
+    "message": "Sends PageDown key"
+  },
+  "options_escKey": {
+    "message": "Sends ESC key"
   },
   "options_upDown": {
     "message": "Controls up / down"

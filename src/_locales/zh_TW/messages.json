@@ -484,7 +484,7 @@
     "message": "無動作"
   },
   "options_doPaste": {
-    "message": "執行 '貼上'"
+    "message": "直接貼上剪貼簿內容"
   },
   "options_leftKey": {
     "message": "送出左方向鍵"
@@ -494,6 +494,21 @@
   },
   "options_enterKey": {
     "message": "送出ENTER鍵"
+  },
+  "options_upKey": {
+    "message": "送出上方向鍵"
+  },
+  "options_downKey": {
+    "message": "送出下方向鍵"
+  },
+  "options_pageUpKey": {
+    "message": "送出 PageUp 鍵"
+  },
+  "options_pageDownKey": {
+    "message": "送出 PageDown 鍵"
+  },
+  "options_escKey": {
+    "message": "送出 ESC 鍵"
   },
   "options_upDown": {
     "message": "控制上 / 下"

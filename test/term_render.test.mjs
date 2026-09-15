@@ -1836,9 +1836,9 @@ test('PrefModal streamlines extensions UI and consolidates options', () => {
     'MouseBrowsing must provide mouseBrowsingHighlight under options'
   );
   assert.ok(
-    mouseBrowsingSource.includes('name: "mouseLeftFunction"') ||
-    mouseBrowsingSource.includes('name="mouseLeftFunction"'),
-    'MouseBrowsing must provide mouseLeftFunction under options'
+    prefModalSource.includes('name="mouseLeftFunction"') &&
+    prefModalSource.includes('name="mouseMiddleFunction"'),
+    'PrefModal must provide mouseLeftFunction and mouseMiddleFunction under Mouse tab'
   );
 
   // 3. Obsolete image preview options are removed from General tab

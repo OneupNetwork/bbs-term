@@ -52,6 +52,10 @@ export class BaseSite extends EventEmitter {
     return this.charset === CHARSETS.UTF8;
   }
 
+  get supportNavKeys() {
+    return false;
+  }
+
   /**
    * Returns true if the user has passed the initial login screen.
    */

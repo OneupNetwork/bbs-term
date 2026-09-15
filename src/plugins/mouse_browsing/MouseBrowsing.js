@@ -1,6 +1,6 @@
 import React from "preact/compat";
 import { PluginBase } from "../PluginBase.js";
-import { parseOptionText } from "../../js/pref.js";
+import { normalizeMouseButtonAction } from "../../js/pref.js";
 import { _ } from "../../js/i18n.js";
 import { PAGE_STATE } from "../../js/sites/index.js";
 const cursorBack = new URL("../../cursor/back.png", import.meta.url).href;
@@ -32,71 +32,6 @@ export const MOUSE_CURSOR_MAP = [
   `url(${cursorLast}) 0 0,auto`, // 14
 ];
 
-const MOUSE_LEFT_OPTIONS = [
-  "options_none",
-  "options_enterKey",
-  "options_rightKey",
-];
-
-const MOUSE_MIDDLE_OPTIONS = [
-  "options_none",
-  "options_enterKey",
-  "options_leftKey",
-  "options_doPaste",
-];
-
-function renderOptionDesc(rawText) {
-  const { desc } = parseOptionText(rawText);
-  if (!desc) return null;
-  return React.createElement(
-    "span",
-    {
-      className: "help-block",
-      style: {
-        fontSize: "12px",
-        opacity: 0.7,
-        marginTop: "4px",
-        display: "block",
-      },
-    },
-    desc
-  );
-}
-
-function renderSelectOptionGroup({
-  controlId,
-  label,
-  name,
-  value,
-  options,
-  onChange,
-}) {
-  const currentKey = options[value];
-  const currentText = currentKey ? _(currentKey) : "";
-  return React.createElement(
-    "div",
-    { className: "form-group", id: controlId },
-    React.createElement("label", { className: "control-label" }, label),
-    React.createElement(
-      "select",
-      {
-        className: "form-control",
-        name,
-        value,
-        onChange,
-      },
-      options.map((key, index) =>
-        React.createElement(
-          "option",
-          { key, value: index },
-          parseOptionText(_(key)).label
-        )
-      )
-    ),
-    renderOptionDesc(currentText)
-  );
-}
-
 export class MouseBrowsing extends PluginBase {
   static id = "mouse_browsing";
   static name = "mouse_browsing";
@@ -107,8 +42,6 @@ export class MouseBrowsing extends PluginBase {
     enableMouseBrowsing: false,
     mouseBrowsingHighlight: true,
     mouseBrowsingHighlightColor: 2,
-    mouseLeftFunction: 0,
-    mouseMiddleFunction: 0,
   };
 
   static get title() {
@@ -164,23 +97,7 @@ export class MouseBrowsing extends PluginBase {
               })
             )
         )
-      ),
-      renderSelectOptionGroup({
-        controlId: "mouseLeftFunction",
-        label: _("options_mouseLeftFunction"),
-        name: "mouseLeftFunction",
-        value: values.mouseLeftFunction,
-        options: MOUSE_LEFT_OPTIONS,
-        onChange: handleNumberInputChange,
-      }),
-      renderSelectOptionGroup({
-        controlId: "mouseMiddleFunction",
-        label: _("options_mouseMiddleFunction"),
-        name: "mouseMiddleFunction",
-        value: values.mouseMiddleFunction,
-        options: MOUSE_MIDDLE_OPTIONS,
-        onChange: handleNumberInputChange,
-      })
+      )
     );
   }
 
@@ -227,15 +144,16 @@ export class MouseBrowsing extends PluginBase {
       }
     }
     if (prefs.mouseLeftFunction !== undefined) {
-      this.mouseLeftFunction =
-        typeof prefs.mouseLeftFunction === "boolean"
-          ? prefs.mouseLeftFunction
-            ? 1
-            : 0
-          : Number(prefs.mouseLeftFunction) || 0;
+      this.mouseLeftFunction = normalizeMouseButtonAction(
+        prefs.mouseLeftFunction,
+        "left"
+      );
     }
     if (prefs.mouseMiddleFunction !== undefined) {
-      this.mouseMiddleFunction = Number(prefs.mouseMiddleFunction) || 0;
+      this.mouseMiddleFunction = normalizeMouseButtonAction(
+        prefs.mouseMiddleFunction,
+        "middle"
+      );
     }
   }
 
@@ -340,24 +258,37 @@ export class MouseBrowsing extends PluginBase {
       if (e.target && e.target.closest?.("a")) {
         return false;
       }
-      if (this.mouseMiddleFunction === 1) {
-        if (!this.app?.inputInterceptors?.dispatchNavCmd?.("doEnter")) {
-          this.app?.send("\r");
+      const midAction = normalizeMouseButtonAction(
+        this.mouseMiddleFunction !== undefined &&
+          this.mouseMiddleFunction !== 0 &&
+          this.mouseMiddleFunction !== "none"
+          ? this.mouseMiddleFunction
+          : this.app?.mouseMiddleFunction,
+        "middle"
+      );
+      if (midAction !== "none") {
+        if (this.app?.mouse?.executeMouseButtonAction) {
+          if (this.app.mouse.executeMouseButtonAction(midAction, "middle")) {
+            e.preventDefault?.();
+            return true;
+          }
+        } else if (midAction === "enter") {
+          if (!this.app?.inputInterceptors?.dispatchNavCmd?.("doEnter")) {
+            this.app?.send("\r");
+          }
+          e.preventDefault?.();
+          return true;
+        } else if (midAction === "left") {
+          if (!this.app?.inputInterceptors?.dispatchNavCmd?.("doLeft")) {
+            this.app?.send("\x1b[D");
+          }
+          e.preventDefault?.();
+          return true;
+        } else if (midAction === "paste") {
+          this.app?.doPaste?.();
+          e.preventDefault?.();
+          return true;
         }
-        e.preventDefault?.();
-        return true;
-      }
-      if (this.mouseMiddleFunction === 2) {
-        if (!this.app?.inputInterceptors?.dispatchNavCmd?.("doLeft")) {
-          this.app?.send("\x1b[D");
-        }
-        e.preventDefault?.();
-        return true;
-      }
-      if (this.mouseMiddleFunction === 3) {
-        this.app?.doPaste?.();
-        e.preventDefault?.();
-        return true;
       }
       return false;
     }
@@ -622,16 +553,34 @@ export class MouseBrowsing extends PluginBase {
         }
         break;
       }
-      case 0:
-        if (this.mouseLeftFunction === 1) {
-          app.setNavCmd("doEnter");
-          return true;
-        }
-        if (this.mouseLeftFunction === 2) {
-          app.setNavCmd("doRight");
-          return true;
+      case 0: {
+        const leftAction = normalizeMouseButtonAction(
+          this.mouseLeftFunction !== undefined &&
+            this.mouseLeftFunction !== 0 &&
+            this.mouseLeftFunction !== "none"
+            ? this.mouseLeftFunction
+            : app.mouseLeftFunction,
+          "left"
+        );
+        if (leftAction !== "none") {
+          if (app.mouse?.executeMouseButtonAction) {
+            return app.mouse.executeMouseButtonAction(leftAction, "left");
+          }
+          if (leftAction === "enter") {
+            app.setNavCmd("doEnter");
+            return true;
+          }
+          if (leftAction === "right") {
+            app.setNavCmd("doRight");
+            return true;
+          }
+          if (leftAction === "left") {
+            app.setNavCmd("doLeft");
+            return true;
+          }
         }
         return this._navOrSend("doLeft", "\x1b[D");
+      }
       case 8: {
         if (app.inputInterceptors?.dispatchNavCmd?.("previousThread")) {
           return true;
@@ -698,16 +647,34 @@ export class MouseBrowsing extends PluginBase {
         }
         break;
       }
-      default:
-        if (this.mouseLeftFunction === 1) {
-          app.setNavCmd("doEnter");
-          return true;
-        }
-        if (this.mouseLeftFunction === 2) {
-          app.setNavCmd("doRight");
-          return true;
+      default: {
+        const leftAction = normalizeMouseButtonAction(
+          this.mouseLeftFunction !== undefined &&
+            this.mouseLeftFunction !== 0 &&
+            this.mouseLeftFunction !== "none"
+            ? this.mouseLeftFunction
+            : app.mouseLeftFunction,
+          "left"
+        );
+        if (leftAction !== "none") {
+          if (app.mouse?.executeMouseButtonAction) {
+            return app.mouse.executeMouseButtonAction(leftAction, "left");
+          }
+          if (leftAction === "enter") {
+            app.setNavCmd("doEnter");
+            return true;
+          }
+          if (leftAction === "right") {
+            app.setNavCmd("doRight");
+            return true;
+          }
+          if (leftAction === "left") {
+            app.setNavCmd("doLeft");
+            return true;
+          }
         }
         break;
+      }
     }
 
     return true;

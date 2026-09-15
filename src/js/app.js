@@ -12,7 +12,7 @@ import { setupI18n } from './i18n';
 import { setTimer, parseConnectUrl } from './util';
 import { hasWebKitImeQuirk, shouldPreserveDomSelection } from './quirks';
 import { setTerminalBellEnabled, setWindowFocused, isWindowFocused, playTerminalBell } from './bell.js';
-import { DEFAULT_PREFS, getDefaultFontSize, readValuesWithDefault, writeValues } from './pref.js';
+import { DEFAULT_PREFS, getDefaultFontSize, normalizeMouseButtonAction, readValuesWithDefault, writeValues } from './pref.js';
 import { applyColorScheme } from './color_schemes.js';
 import AppOverlay from '../components/AppOverlay';
 import { getSite } from './sites';
@@ -121,6 +121,8 @@ export class App extends EventEmitter {
     this.warnBeforeClose = DEFAULT_PREFS.warnBeforeClose;
     this.colorScheme = DEFAULT_PREFS.colorScheme;
     this.trimTrailingSpaces = DEFAULT_PREFS.trimTrailingSpaces;
+    this.mouseLeftFunction = DEFAULT_PREFS.mouseLeftFunction;
+    this.mouseMiddleFunction = DEFAULT_PREFS.mouseMiddleFunction;
     this.rightClickAction = DEFAULT_PREFS.rightClickAction;
     this.mouseWheelAction = DEFAULT_PREFS.mouseWheelAction;
     this.mouseWheelRightAction = DEFAULT_PREFS.mouseWheelRightAction;
@@ -975,8 +977,14 @@ export class App extends EventEmitter {
         case 'trimTrailingSpaces':
           this.trimTrailingSpaces = !!value;
           break;
+        case 'mouseLeftFunction':
+          this.mouseLeftFunction = normalizeMouseButtonAction(value, 'left');
+          break;
+        case 'mouseMiddleFunction':
+          this.mouseMiddleFunction = normalizeMouseButtonAction(value, 'middle');
+          break;
         case 'rightClickAction':
-          this.rightClickAction = value;
+          this.rightClickAction = normalizeMouseButtonAction(value, 'right');
           break;
         case 'mouseWheelAction':
           this.mouseWheelAction = value;
@@ -1144,6 +1152,9 @@ export class App extends EventEmitter {
         break;
       case 'doEnd':
         this.send('\x1b[4~');
+        break;
+      case 'doEsc':
+        this.send('\x1b');
         break;
       case 'previousThread':
       case 'nextThread':

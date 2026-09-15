@@ -76,6 +76,10 @@ export class PttSite extends BaseSite {
     this.currentBoard = null;
   }
 
+  get supportNavKeys() {
+    return true;
+  }
+
   /**
    * PTT does not send double keystrokes for DBCS cursor movement.
    * @returns {boolean}
