@@ -3627,7 +3627,8 @@ test('TermView and TermKeyboard handle Safari WebKit IME composition, colors, an
 
   // TermView composition text visibility check
   assert.ok(termViewSource.includes('this.input.style.color = fgHex'), 'TermView must set visible text color during composition');
-  assert.ok(termViewSource.includes('this.input.style.background = bgHex'), 'TermView must set background during composition');
+  assert.ok(termViewSource.includes("const imeBg = 'rgba(128, 128, 128, 0.3)'"), 'TermView must use 30% opacity gray background during composition');
+  assert.ok(termViewSource.includes('this.input.style.background = imeBg'), 'TermView must set background to imeBg during composition');
   assert.ok(termViewSource.includes("this.input.style.color = 'transparent'"), 'TermView must restore transparent color on composition end');
 
   // TermKeyboard composition guard check
@@ -3835,12 +3836,14 @@ test('IME composition styling applies across all browsers and initial focus succ
   const appSource = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
   const mainSource = fs.readFileSync(path.resolve('src/js/main.js'), 'utf-8');
 
-  // 1. updateInputBufferPos must set visible color/background unconditionally from cell attributes and position inline at cursor
+  // 1. updateInputBufferPos must set visible color/semi-transparent background unconditionally from cell attributes and position inline at cursor
   const updatePosMatch = termViewSource.match(/updateInputBufferPos\(\)\s*\{[\s\S]*?updateInputBufferWidth\(\)/);
   assert.ok(updatePosMatch, 'updateInputBufferPos found');
   assert.ok(!updatePosMatch[0].includes('if (this.hasWebKitImeQuirk)'), 'updateInputBufferPos must not gate IME colors behind hasWebKitImeQuirk');
   assert.ok(updatePosMatch[0].includes('this.input.style.color = fgHex'), 'updateInputBufferPos must set visible text color from cell fg attribute');
-  assert.ok(updatePosMatch[0].includes('this.input.style.background = bgHex'), 'updateInputBufferPos must set visible background color from cell bg attribute');
+  assert.ok(updatePosMatch[0].includes("const imeBg = 'rgba(128, 128, 128, 0.3)'"), 'updateInputBufferPos must define 30% opacity gray background');
+  assert.ok(updatePosMatch[0].includes('this.input.style.background = imeBg'), 'updateInputBufferPos must set semi-transparent gray background');
+  assert.ok(updatePosMatch[0].includes('this.input.style.textShadow = `0 0 2px ${bgHex}`'), 'updateInputBufferPos must set textShadow halo from bgHex for contrast');
   assert.ok(updatePosMatch[0].includes("this.input.style.fontSize = effectiveChh + 'px'"), 'updateInputBufferPos must set fontSize to full effectiveChh');
   assert.ok(updatePosMatch[0].includes('this.input.style.letterSpacing ='), 'updateInputBufferPos must set letterSpacing to match 2 * effectiveChw');
   assert.ok(updatePosMatch[0].includes('double ${fgHex}'), 'updateInputBufferPos must apply thick double border matching fgHex');
@@ -4183,7 +4186,7 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   assert.equal(mockCursor.style.display, 'none', 'Cursor must be hidden during IME composition');
   assert.equal(mockInput.style.zIndex, '13', '#t zIndex must be 13 during composition');
   assert.equal(mockInput.style.forcedColorAdjust, 'none', '#t forcedColorAdjust must be none');
-  assert.equal(mockInput.style.background, '#000000', '#t background must match cell background (#000000)');
+  assert.equal(mockInput.style.background, 'rgba(128, 128, 128, 0.3)', '#t background must be 30% opacity gray');
   assert.equal(mockInput.style.fontSize, '24px', '#t fontSize must match chh (24px)');
   assert.equal(mockInput.style.letterSpacing, '0px', '#t letterSpacing must be 0px when 2*chw == chh (24px)');
   assert.equal(mockInput.style.left, '55px', '#t leftPos must be pos[0] (60) - border (3) - padX (2) = 55px');
@@ -4239,6 +4242,7 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   assert.equal(mockCursor.style.display, '', 'Cursor must be restored after IME composition ends');
   assert.equal(mockInput.style.background, 'transparent', '#t background restored to transparent after composition');
   assert.equal(mockInput.style.letterSpacing, '', '#t letterSpacing cleared after composition');
+  assert.equal(mockInput.style.textShadow, 'none', '#t textShadow cleared after composition');
 });
 
 test('Selection lifecycle clears selection and restores focus on copy, paste, Shift, and BBS keys (Issue #41)', () => {

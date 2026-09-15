@@ -1043,6 +1043,7 @@ export class TermView extends EventEmitter {
 
       const borderSize = 3;
       const padX = 2;
+      const imeBg = 'rgba(128, 128, 128, 0.3)';
       const effectiveChw = (this.chw || Math.max(8, this.chh / 2)) * (this.scaleX || 1);
       const effectiveChh = this.chh * (this.scaleY || 1);
       const cjkAdvance = effectiveChw * 2;
@@ -1057,11 +1058,12 @@ export class TermView extends EventEmitter {
       this.input.style.margin = '0px';
       this.input.style.boxSizing = 'content-box';
       // Workaround for Safari / All Browsers: Text inside input element #t is transparent by default.
-      // Visible text, background, and caret colors derived from cursor cell attributes are required during IME composition.
+      // Visible text, semi-transparent gray background, and caret colors derived from cursor cell attributes are required during IME composition.
       this.input.style.color = fgHex;
-      this.input.style.background = bgHex;
-      this.input.style.backgroundColor = bgHex;
+      this.input.style.background = imeBg;
+      this.input.style.backgroundColor = imeBg;
       this.input.style.caretColor = fgHex;
+      this.input.style.textShadow = `0 0 2px ${bgHex}`;
       this.input.style.fontSize = effectiveChh + 'px';
       this.input.style.letterSpacing = letterSpacing ? `${letterSpacing}px` : '0px';
       this.input.style.lineHeight = effectiveChh + 'px';
@@ -1188,6 +1190,7 @@ export class TermView extends EventEmitter {
     this.input.style.background = 'transparent';
     this.input.style.backgroundColor = 'transparent';
     this.input.style.caretColor = 'transparent';
+    this.input.style.textShadow = 'none';
     this.input.style.letterSpacing = '';
     this.input.style.minWidth = '';
     // Workaround for WebKit IME: activate Lock Delay for trailing keydown
