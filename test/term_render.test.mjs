@@ -3841,8 +3841,11 @@ test('IME composition styling applies across all browsers and initial focus succ
   assert.ok(!updatePosMatch[0].includes('if (this.hasWebKitImeQuirk)'), 'updateInputBufferPos must not gate IME colors behind hasWebKitImeQuirk');
   assert.ok(updatePosMatch[0].includes('this.input.style.color = fgHex'), 'updateInputBufferPos must set visible text color from cell fg attribute');
   assert.ok(updatePosMatch[0].includes('this.input.style.background = bgHex'), 'updateInputBufferPos must set visible background color from cell bg attribute');
+  assert.ok(updatePosMatch[0].includes("this.input.style.fontSize = effectiveChh + 'px'"), 'updateInputBufferPos must set fontSize to full effectiveChh');
+  assert.ok(updatePosMatch[0].includes('this.input.style.letterSpacing ='), 'updateInputBufferPos must set letterSpacing to match 2 * effectiveChw');
   assert.ok(updatePosMatch[0].includes('double ${fgHex}'), 'updateInputBufferPos must apply thick double border matching fgHex');
   assert.ok(updatePosMatch[0].includes('let topPos = pos[1] - borderSize'), 'updateInputBufferPos must align inner content inline at cursor top (pos[1] - borderSize)');
+  assert.ok(updatePosMatch[0].includes('let leftPos = pos[0] - borderSize - padX'), 'updateInputBufferPos must align first character pixel at cursor left (pos[0] - borderSize - padX)');
 
   // 2. main.js must show TermWindow before focusing inputArea so Canvas mode initial focus succeeds
   const displayIdx = mainSource.indexOf('app.showTermWindow()');
@@ -4087,7 +4090,7 @@ test('TouchController list_scroll release on 24th row (bottom status bar) trigge
   );
 });
 
-test('IME composition input #t has higher z-order than #cursor and hides #cursor during composition (Issue #28)', () => {
+test('IME composition input #t has higher z-order than #cursor and hides #cursor during composition (Issue #28)', async () => {
   const indexHtml = fs.readFileSync(path.resolve('index.html'), 'utf-8');
   const mainCss = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
   const currentTermViewSource = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
@@ -4100,8 +4103,11 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   assert.ok(mainCss.includes('forced-color-adjust: none;'), 'main.css must disable forced-color-adjust on cursor');
 
   // 2. Behavioral verification in TermView during composition lifecycle
+  const { wcwidth, wcswidth } = await import('../src/js/wcwidth.js');
+  const { getAsciiWidthRatio } = await import('../src/js/font_util.js');
   const updateCursorPosBody = currentTermViewSource.match(/updateCursorPos\(\)\s*\{([\s\S]*?\n  )\}/)[1];
   const updateInputBufferPosBody = currentTermViewSource.match(/updateInputBufferPos\(\)\s*\{([\s\S]*?\n  )\}/)[1];
+  const updateInputBufferWidthBody = currentTermViewSource.match(/updateInputBufferWidth\(\)\s*\{([\s\S]*?\n  )\}/)[1];
   const onCompositionStartBody = currentTermViewSource.match(/onCompositionStart\(e\)\s*\{([\s\S]*?\n  )\}/)[1];
   const onCompositionEndBody = currentTermViewSource.match(/onCompositionEnd\(e\)\s*\{([\s\S]*?\n  )\}/)[1];
 
@@ -4132,6 +4138,7 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
     chh: 24,
     scaleX: 1,
     scaleY: 1,
+    fontFace: 'MingLiu, monospace',
     cursorStyle: 'underline',
     innerBounds: { width: 960, height: 576 },
     cursor: mockCursor,
@@ -4139,6 +4146,11 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
     isComposition: false,
     convertMN2XYEx: (x, y) => [x * 12, y * 24],
   };
+
+  mockView.updateInputBufferWidth = new Function(
+    'wcwidth', 'wcswidth', 'getAsciiWidthRatio',
+    `return function updateInputBufferWidth() { ${updateInputBufferWidthBody} }`
+  )(wcwidth, wcswidth, getAsciiWidthRatio).bind(mockView);
 
   mockView.updateInputBufferPos = new Function(
     'termColors', 'termInvColors', 'termDefaultBg', 'termDefaultFg', 'getContrastColor',
@@ -4171,6 +4183,49 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   assert.equal(mockCursor.style.display, 'none', 'Cursor must be hidden during IME composition');
   assert.equal(mockInput.style.zIndex, '13', '#t zIndex must be 13 during composition');
   assert.equal(mockInput.style.forcedColorAdjust, 'none', '#t forcedColorAdjust must be none');
+  assert.equal(mockInput.style.background, '#000000', '#t background must match cell background (#000000)');
+  assert.equal(mockInput.style.fontSize, '24px', '#t fontSize must match chh (24px)');
+  assert.equal(mockInput.style.letterSpacing, '0px', '#t letterSpacing must be 0px when 2*chw == chh (24px)');
+  assert.equal(mockInput.style.left, '55px', '#t leftPos must be pos[0] (60) - border (3) - padX (2) = 55px');
+  assert.equal(mockInput.style.minWidth, '12px', '#t minWidth must be 1 column (12px), not 2 columns');
+
+  // Test Array IME (行列) single ASCII character: width must be 1 column (12px), not 2 columns
+  mockInput.value = '1';
+  mockView.updateInputBufferWidth();
+  assert.equal(mockInput.style.width, '12px', 'Single ASCII char in Array IME must have width 12px (1 column)');
+
+  // Test Array IME two ASCII characters ('1-'): width must be 2 columns (24px), not 3 columns
+  mockInput.value = '1-';
+  mockView.updateInputBufferWidth();
+  assert.equal(mockInput.style.width, '24px', 'Two ASCII chars in Array IME must have width 24px (2 columns)');
+
+  // Test Array IME dashed arrow radicals ('2⇡' and 4-key '2⇡3⇣4⇠5⇢'): dashed arrows (U+21E0..U+21E3) must be 1 column
+  mockInput.value = '2⇡';
+  mockView.updateInputBufferWidth();
+  assert.equal(mockInput.style.width, '24px', 'Array IME key "2⇡" must have width 24px (2 columns, not 3)');
+
+  mockInput.value = '2⇡3⇣4⇠5⇢';
+  mockView.updateInputBufferWidth();
+  assert.equal(mockInput.style.width, '96px', '4 Array IME keys "2⇡3⇣4⇠5⇢" must have width 96px (8 columns, not 12)');
+
+  // Test Western font (Consolas) with ASCII composition ('1-'): letter-spacing compensates from 0.55em (13.2px) to 12px (-1.2px)
+  mockInput.value = '1-';
+  mockView.fontFace = 'Consolas, monospace';
+  mockView.updateInputBufferWidth();
+  assert.equal(mockInput.style.letterSpacing, '-1.2px', 'ASCII composition in Consolas must apply -1.2px letter-spacing');
+  mockView.fontFace = 'MingLiu, monospace';
+
+  // Test Chinese composition ('測試'): width must be 4 columns (48px)
+  mockInput.value = '測試';
+  mockView.updateInputBufferWidth();
+  assert.equal(mockInput.style.width, '48px', 'Two CJK chars must have width 48px (4 columns)');
+  mockInput.value = '';
+
+  // Test non-square aspect ratio (chw=13, chh=24 -> cjkAdvance=26, letterSpacing=2px)
+  mockView.chw = 13;
+  mockView.updateInputBufferPos();
+  assert.equal(mockInput.style.letterSpacing, '2px', '#t letterSpacing must compensate when 2*chw (26) != chh (24)');
+  mockView.chw = 12;
 
   // Even if cursor-move fires during composition, cursor remains hidden
   mockView.buf.cur_x = 6;
@@ -4182,6 +4237,8 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   assert.equal(mockView.isComposition, false);
   assert.equal(mockInput.getAttribute('bshow'), '0');
   assert.equal(mockCursor.style.display, '', 'Cursor must be restored after IME composition ends');
+  assert.equal(mockInput.style.background, 'transparent', '#t background restored to transparent after composition');
+  assert.equal(mockInput.style.letterSpacing, '', '#t letterSpacing cleared after composition');
 });
 
 test('Selection lifecycle clears selection and restores focus on copy, paste, Shift, and BBS keys (Issue #41)', () => {

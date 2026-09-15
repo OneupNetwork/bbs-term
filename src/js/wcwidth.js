@@ -40,6 +40,7 @@ export function initWidthTable() {
   setRange(0x0370, 0x04ff, 2); // Greek, Cyrillic (Wide in Big5 BBS)
   setRange(0x1100, 0x115f, 2); // Hangul Jamo
   setRange(0x2000, 0x243f, 2); // General punctuation, arrows, math, enclosed alphanumerics
+  setRange(0x219a, 0x21ff, 1); // Non-basic arrows (e.g. dashed arrows ⇠⇡⇢⇣ U+21E0..U+21E3 in Array IME) default to 1 unless in UAO
   setRange(0x2329, 0x232a, 2);
   setRange(0x2500, 0x27bf, 2); // Box drawing, block elements, geometric shapes, misc symbols
   setRange(0x2e80, 0xa4cf, 2); // CJK radicals, CJK symbols/punctuation, ideographs, Hangul
