@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import preact from '@preact/preset-vite';
 import path from 'path';
 import fs from 'fs';
@@ -9,22 +9,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig(({ mode, command }) => {
-  const isProduction = mode === 'production';
+  const env = loadEnv(mode, __dirname, '');
+  const isProduction = command === 'build' && mode !== 'development';
   const isDevelopment = !isProduction;
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
 
-  const theme = process.env.APP_THEME || process.env.THEME || 'default';
-  const appTitle = process.env.APP_TITLE || 'WebSocket Terminal';
-  const appShortName = process.env.APP_SHORT_NAME || 'WSTerm';
+  const theme = env.APP_THEME || env.THEME || 'default';
+  const appTitle = env.APP_TITLE || 'WebSocket Terminal';
+  const appShortName = env.APP_SHORT_NAME || 'WSTerm';
   const appDescription =
-    process.env.APP_DESCRIPTION ||
+    env.APP_DESCRIPTION ||
     'A web client for connecting to the ANSI based terminals via WebSockets.';
-  const dynamicTitle = process.env.DYNAMIC_TITLE ?? 'true';
-  const siteUrl = process.env.SITE_URL;
+  const dynamicTitle = env.DYNAMIC_TITLE ?? 'true';
+  const siteUrl = env.SITE_URL;
 
   const getCommitHash = () => {
-    if (process.env.COMMIT_HASH) return process.env.COMMIT_HASH;
-    if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 8);
+    if (env.COMMIT_HASH) return env.COMMIT_HASH;
+    if (env.GITHUB_SHA) return env.GITHUB_SHA.slice(0, 8);
     try {
       return execSync('git rev-parse --short HEAD', {
         encoding: 'utf8',
@@ -36,7 +37,7 @@ export default defineConfig(({ mode, command }) => {
   };
 
   const getBuildDate = () => {
-    if (process.env.BUILD_DATE) return process.env.BUILD_DATE;
+    if (env.BUILD_DATE) return env.BUILD_DATE;
     return new Date().toISOString().slice(0, 10);
   };
 
@@ -230,20 +231,20 @@ export default defineConfig(({ mode, command }) => {
         isProduction ? siteUrl || 'wss://ws.ptt.cc/bbs' : '/bbs'
       ),
       'process.env.ALLOW_OVERRIDE_FROM_QUERY': JSON.stringify(
-        isDevelopment || process.env.ALLOW_OVERRIDE_FROM_QUERY === 'yes'
+        isDevelopment || env.ALLOW_OVERRIDE_FROM_QUERY === 'yes'
       ),
       'process.env.DEVELOPER_MODE': JSON.stringify(isDevelopment),
-      'process.env.SITE_TYPE': JSON.stringify(process.env.SITE_TYPE || 'auto'),
-      'process.env.DEFAULT_PLUGINS': JSON.stringify(process.env.DEFAULT_PLUGINS || ''),
-      'process.env.DEFAULT_PREFS': JSON.stringify(process.env.DEFAULT_PREFS || ''),
+      'process.env.SITE_TYPE': JSON.stringify(env.SITE_TYPE || 'auto'),
+      'process.env.DEFAULT_PLUGINS': JSON.stringify(env.DEFAULT_PLUGINS || ''),
+      'process.env.DEFAULT_PREFS': JSON.stringify(env.DEFAULT_PREFS || ''),
       ...(() => {
         const appInfo = {
-          NAME: process.env.npm_package_name || pkg.name,
-          VERSION: process.env.npm_package_version || pkg.version,
+          NAME: env.npm_package_name || pkg.name,
+          VERSION: env.npm_package_version || pkg.version,
           COMMIT_HASH: getCommitHash(),
           BUILD_DATE: getBuildDate(),
-          GITHUB_REPOSITORY_OWNER: process.env.GITHUB_REPOSITORY_OWNER || 'ptt',
-          GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY || 'ptt/ptt-term',
+          GITHUB_REPOSITORY_OWNER: env.GITHUB_REPOSITORY_OWNER || 'ptt',
+          GITHUB_REPOSITORY: env.GITHUB_REPOSITORY || 'ptt/ptt-term',
         };
         return {
           APP: JSON.stringify(appInfo),
@@ -265,13 +266,13 @@ export default defineConfig(({ mode, command }) => {
       },
       proxy: {
         '/bbs': {
-          target: process.env.DEV_PROXY_TARGET || 'https://ws.ptt.cc',
+          target: env.DEV_PROXY_TARGET || 'https://ws.ptt.cc',
           secure: true,
           ws: true,
           changeOrigin: true,
           configure: (proxy) => {
             proxy.on('proxyReqWs', (proxyReq) => {
-              proxyReq.setHeader('origin', process.env.DEV_PROXY_HEADER || 'https://term.ptt.cc');
+              proxyReq.setHeader('origin', env.DEV_PROXY_HEADER || 'https://term.ptt.cc');
             });
           },
         },
