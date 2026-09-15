@@ -721,14 +721,47 @@ export class TermView extends EventEmitter {
     }
   }
 
+  getTermWinOffset() {
+    if (this.termWin) {
+      if (typeof this.termWin.getBoundingClientRect === 'function') {
+        const rect = this.termWin.getBoundingClientRect();
+        if (rect && (rect.width > 0 || rect.height > 0 || rect.left > 0 || rect.top > 0)) {
+          return { left: rect.left || 0, top: rect.top || 0 };
+        }
+      }
+      if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+        try {
+          const style = window.getComputedStyle(this.termWin);
+          return {
+            left: parseFloat(style?.left) || 0,
+            top: parseFloat(style?.top) || 0,
+          };
+        } catch (e) {}
+      }
+    }
+    return { left: 0, top: 0 };
+  }
+
   getWindowInnerBounds() {
-    if (typeof document === 'undefined' || !document.documentElement) {
+    const offset = this.getTermWinOffset ? this.getTermWinOffset() : { left: 0, top: 0 };
+    const docEl = typeof document !== 'undefined' ? document.documentElement : null;
+    const clientWidth =
+      this.termWin && this.termWin.clientWidth > 0
+        ? this.termWin.clientWidth
+        : docEl
+          ? Math.max(0, docEl.clientWidth - offset.left)
+          : 0;
+    const clientHeight =
+      this.termWin && this.termWin.clientHeight > 0
+        ? this.termWin.clientHeight
+        : docEl
+          ? Math.max(0, docEl.clientHeight - offset.top)
+          : 0;
+    if (clientWidth === 0 && clientHeight === 0 && !docEl) {
       return { width: 0, height: 0 };
     }
-    const width =
-      document.documentElement.clientWidth - (this.viewMargin || 0) * 2;
-    const height =
-      document.documentElement.clientHeight - (this.viewMargin || 0) * 2;
+    const width = Math.max(0, clientWidth - (this.viewMargin || 0) * 2);
+    const height = Math.max(0, clientHeight - (this.viewMargin || 0) * 2);
     return { width, height };
   }
 
@@ -745,9 +778,10 @@ export class TermView extends EventEmitter {
   getAvailableScrollWidth() {
     const cols = this.buf.cols;
     const totalWidth = this.chw * cols + 10;
+    const offset = this.getTermWinOffset ? this.getTermWinOffset() : { left: 0, top: 0 };
     const viewportWidth =
       (this.innerBounds && this.innerBounds.width) ||
-      (typeof window !== 'undefined' ? window.innerWidth : 0);
+      (typeof window !== 'undefined' ? Math.max(0, window.innerWidth - offset.left) : 0);
     return Math.max(0, totalWidth - viewportWidth);
   }
 
@@ -839,8 +873,9 @@ export class TermView extends EventEmitter {
       return customPos;
     }
     const origin = this._getGridOrigin();
-    const x = cX - origin[0];
-    const y = cY - origin[1];
+    const termWinOffset = this.getTermWinOffset ? this.getTermWinOffset() : { left: 0, top: 0 };
+    const x = cX - termWinOffset.left - origin[0];
+    const y = cY - termWinOffset.top - origin[1];
     const cols = this.buf.cols;
     const rows = this.buf.rows;
     let col = Math.floor(x / (this.chw * this.scaleX));

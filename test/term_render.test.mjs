@@ -4364,3 +4364,70 @@ test('Selection lifecycle clears selection and restores focus on copy, paste, Sh
   );
 });
 
+test('iOS landscape Dynamic Island safe area left inset is respected by #TermWindow, TermView, and EasyReading', () => {
+  const mainCssSource = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
+  const currentTermViewSource = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  const easyReadingSource = fs.readFileSync(path.resolve('src/plugins/easy_reading/EasyReading.js'), 'utf-8');
+
+  // 1. #TermWindow in main.css must start from env(safe-area-inset-left, 0px) and size width accordingly
+  const termWinBlock = mainCssSource.slice(
+    mainCssSource.indexOf('#TermWindow {'),
+    mainCssSource.indexOf('#t {')
+  );
+  assert.ok(
+    termWinBlock.includes('left: env(safe-area-inset-left, 0px);') &&
+      termWinBlock.includes('width: calc(100% - env(safe-area-inset-left, 0px));'),
+    '#TermWindow must set left and width accounting for env(safe-area-inset-left, 0px)'
+  );
+
+  // 2. TermView getWindowInnerBounds and clientToPos account for getTermWinOffset().left
+  const offsetMatch = currentTermViewSource.match(/getTermWinOffset\(\)\s*\{([\s\S]*?\n  )\}/);
+  const boundsMatch = currentTermViewSource.match(/getWindowInnerBounds\(\)\s*\{([\s\S]*?\n  )\}/);
+  const originMatch = currentTermViewSource.match(/_getGridOrigin\(\)\s*\{([\s\S]*?\n  )\}/);
+  const clientToPosMatch = currentTermViewSource.match(/clientToPos\(cX, cY\)\s*\{([\s\S]*?\n  )\}/);
+
+  assert.ok(
+    offsetMatch && boundsMatch && originMatch && clientToPosMatch,
+    'TermView must define getTermWinOffset, getWindowInnerBounds, _getGridOrigin, and clientToPos'
+  );
+
+  const mockView = {
+    innerBounds: { width: 793, height: 393 },
+    buf: { cols: 80, rows: 24 },
+    chw: 12,
+    chh: 24,
+    scaleX: 1,
+    scaleY: 1,
+    viewMargin: 0,
+    firstGridOffset: { left: 0, top: 0 },
+    termWin: {
+      clientWidth: 793,
+      clientHeight: 393,
+      getBoundingClientRect: () => ({ left: 59, top: 0, width: 793, height: 393 }),
+    },
+  };
+  mockView.getTermWinOffset = new Function(offsetMatch[1]).bind(mockView);
+  mockView.getWindowInnerBounds = new Function(boundsMatch[1]).bind(mockView);
+  mockView._getGridOrigin = new Function(originMatch[1]).bind(mockView);
+  mockView.clientToPos = new Function('cX', 'cY', clientToPosMatch[1]).bind(mockView);
+
+  assert.deepEqual(mockView.getTermWinOffset(), { left: 59, top: 0 });
+  assert.deepEqual(mockView.getWindowInnerBounds(), { width: 793, height: 393 });
+
+  // Tap at clientX = 59 + 5 (first column after Dynamic Island safe-area-inset-left = 59px)
+  const posCol0 = mockView.clientToPos(64, 10);
+  assert.deepEqual(posCol0, { col: 0, row: 0 }, 'Tap at safe area left boundary must map to column 0');
+
+  // Tap at clientX = 59 + 12 * 10 + 2 = 181 (column 10)
+  const posCol10 = mockView.clientToPos(181, 10);
+  assert.deepEqual(posCol10, { col: 10, row: 0 }, 'Tap at safe area + 10 columns must map to column 10');
+
+  // 3. EasyReading getClientToPos also accounts for getTermWinOffset
+  assert.ok(
+    easyReadingSource.includes('this.view.getTermWinOffset') &&
+      easyReadingSource.includes('cX - termWinOffset.left - origin[0]'),
+    'EasyReading getClientToPos must subtract termWinOffset.left'
+  );
+});
+
+

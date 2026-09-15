@@ -1594,7 +1594,8 @@ export class EasyReading extends PluginBase {
     const cols = this.buf?.cols || 80;
     const rows = this.buf?.rows || 24;
 
-    let col = Math.floor((cX - origin[0]) / chw);
+    const termWinOffset = this.view.getTermWinOffset ? this.view.getTermWinOffset() : { left: 0, top: 0 };
+    let col = Math.floor((cX - termWinOffset.left - origin[0]) / chw);
     if (col < 0) col = 0;
     else if (col >= cols) col = cols - 1;
 
