@@ -14,6 +14,12 @@ export const PAGE_STATE = Object.freeze({
   EDITING: 6,
 });
 
+/**
+ * Login prompt shared by Taiwan BBS systems. Sites are free to reword it, as
+ * long as it stays "請輸入<something>代號": Bahamut asks for 請輸入勇者代號.
+ */
+const LOGIN_PROMPT_RE = /請輸入.{0,3}代號/;
+
 export class BaseSite extends EventEmitter {
   constructor(name = 'base', charset = CHARSETS.BIG5) {
     super();
@@ -885,7 +891,7 @@ export class BaseSite extends EventEmitter {
         return false;
       }
     }
-    if (text && text.includes('請輸入代號')) {
+    if (text && LOGIN_PROMPT_RE.test(text)) {
       return true;
     }
     if (termBuf && typeof termBuf.getRowText === 'function') {
@@ -893,7 +899,7 @@ export class BaseSite extends EventEmitter {
       const endRow = termBuf.rows || 24;
       for (let r = startRow; r <= endRow; r++) {
         const rowStr = termBuf.getRowText(r, 0, termBuf.cols || 80);
-        if (rowStr && rowStr.includes('請輸入代號')) {
+        if (rowStr && LOGIN_PROMPT_RE.test(rowStr)) {
           return true;
         }
       }
