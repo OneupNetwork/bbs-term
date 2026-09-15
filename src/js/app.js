@@ -167,6 +167,9 @@ export class App extends EventEmitter {
     document.addEventListener('copy', (e) => {
       this.onDOMCopy(e);
     });
+    document.addEventListener('paste', (e) => {
+      this.onDOMPaste(e);
+    });
 
     window.onresize = () => {
       this.onWindowResize();
@@ -365,10 +368,13 @@ export class App extends EventEmitter {
 
     if (isModifierOnly) {
       switch (e.key.toLowerCase()) {
-        case 'c': {
+        case 'c':
+        case 'insert': {
           const selectedText = this.view?.getSelectedText?.();
           if (selectedText) {
             this.doCopy(selectedText);
+            this.view?.clearSelection?.();
+            this.setInputAreaFocus(true);
             stop = true;
           }
           break;
@@ -386,6 +392,16 @@ export class App extends EventEmitter {
       }
     } else if (isShiftModifier) {
       switch (e.key.toLowerCase()) {
+        case 'c': {
+          const selectedText = this.view?.getSelectedText?.();
+          if (selectedText) {
+            this.doCopy(selectedText);
+            this.view?.clearSelection?.();
+            this.setInputAreaFocus(true);
+            stop = true;
+          }
+          break;
+        }
         case 'v':
           this.doPaste();
           stop = true;
@@ -688,17 +704,26 @@ export class App extends EventEmitter {
       lines: this.lastSelection.lines,
     });
     this.doCopy(ansiText);
+    this.view?.clearSelection?.();
+    this.setInputAreaFocus(true);
   }
 
   onDOMCopy(e) {
     this.emit('term:user-activity', { type: 'copy' });
+    const hadStrToCopy = Boolean(this.clipboard.strToCopy);
     this.clipboard.handleDOMCopy(e, {
       getSelectedText: () => this.view?.getSelectedText(),
       trimTrailingSpaces: this.trimTrailingSpaces,
     });
+    if (!hadStrToCopy && e?.defaultPrevented) {
+      this.view?.clearSelection?.();
+      this.setInputAreaFocus(true);
+    }
   }
 
   async doPaste() {
+    this.view?.clearSelection?.();
+    this.setInputAreaFocus(true);
     try {
       const text = await this.clipboard.readText();
       this.dispatchPaste(text);
@@ -722,8 +747,22 @@ export class App extends EventEmitter {
   }
 
   onDOMPaste(e) {
+    if (!e || e.defaultPrevented || this.modalShown || this.isDialogOrExcludedTarget(e)) {
+      return;
+    }
+    if (
+      e.target &&
+      e.target !== this.inputArea &&
+      (e.target.tagName === 'INPUT' ||
+        e.target.tagName === 'TEXTAREA' ||
+        e.target.isContentEditable)
+    ) {
+      return;
+    }
     const str = this.clipboard.handleDOMPaste(e);
     if (str) {
+      this.view?.clearSelection?.();
+      this.setInputAreaFocus(true);
       this.dispatchPaste(str, e);
     }
   }

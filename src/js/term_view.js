@@ -225,7 +225,20 @@ export class TermView extends EventEmitter {
     if (!shouldAcceptInput())
       return;
     if (this.app && !this.app.isDialogOrExcludedTarget(e) && typeof document !== 'undefined' && document.activeElement !== this.input) {
-      this.app.setInputAreaFocus();
+      const isHoldSelectionModifier =
+        e.key === 'Control' ||
+        e.key === 'Meta' ||
+        e.key === 'Alt' ||
+        e.keyCode === 17 ||
+        e.keyCode === 18 ||
+        e.keyCode === 91 ||
+        e.keyCode === 93;
+      if (e.key === 'Shift' && !e.ctrlKey && !e.metaKey && !e.altKey && !this.isSelectionCollapsed()) {
+        this.clearSelection();
+        this.app.setInputAreaFocus(true);
+      } else if (!isHoldSelectionModifier || this.isSelectionCollapsed()) {
+        this.app.setInputAreaFocus();
+      }
     }
     if (!keyEventFilter(e))
       return;
@@ -240,6 +253,11 @@ export class TermView extends EventEmitter {
 
     if (!shouldAcceptInput())
       return;
+    if (e.key === 'Shift' && !e.ctrlKey && !e.metaKey && !e.altKey && !this.isSelectionCollapsed()) {
+      this.clearSelection();
+      this.app.setInputAreaFocus(true);
+      return;
+    }
     if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || (e.keyCode > 15 && e.keyCode < 19))
       return; // Shift Ctrl Alt
     if (this.preserveDomSelection && this.app && !this.app.isSelectionCollapsed()) {
@@ -626,10 +644,9 @@ export class TermView extends EventEmitter {
       return;
     }
 
-    const isModifierOnly = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
-    if (this.preserveDomSelection && this._domSelectedText && !isModifierOnly) {
-      this._domSelectedText = '';
-      this._domSelectionColRow = null;
+    if (!this.isSelectionCollapsed()) {
+      this.clearSelection();
+      this.app?.setInputAreaFocus?.(true);
     }
 
     this._keyboard.onKeyDown(e);
@@ -1310,18 +1327,18 @@ export class TermView extends EventEmitter {
   }
 
   clearSelection() {
-    if (this.componentScreen) {
+    if (this.componentScreen && typeof this.componentScreen.clearSelection === 'function') {
       this.componentScreen.clearSelection();
-    } else if (typeof window !== 'undefined' && window.getSelection) {
+    }
+    if (typeof window !== 'undefined' && window.getSelection) {
       const sel = window.getSelection();
-      if (sel && sel.removeAllRanges) {
+      if (sel && typeof sel.removeAllRanges === 'function') {
         sel.removeAllRanges();
       }
     }
-    if (this.preserveDomSelection) {
-      this._domSelectedText = '';
-      this._domSelectionColRow = null;
-    }
+    this._domSelectedText = '';
+    this._domSelectionColRow = null;
+    this.emit('term:selection-change', { selection: null });
   }
 
   hasDomSelectionFallback() {

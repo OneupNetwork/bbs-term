@@ -162,7 +162,7 @@ export const DropdownMenu = ({
           </MenuItem>
         </React.Fragment>
       )}
-      {normalEnabled && (
+      {(normalEnabled || selEnabled) && (
         <MenuItem eventKey="paste" onSelect={onMenuSelect}>
           {_("cmenu_paste")}
           <span className="DropdownMenu__Item__HotKey">

@@ -6,7 +6,11 @@ import DropdownMenu from "./DropdownMenu";
 import PrefModal from "../Settings/PrefModal";
 
 const menuHandlerByEventKey = {
-  copy: (app, { selectedText }) => app.doCopy(selectedText),
+  copy: (app, { selectedText }) => {
+    app.doCopy(selectedText);
+    app.view?.clearSelection?.();
+    app.setInputAreaFocus(true);
+  },
   copyAnsi: (app) => app.doCopyAnsi(),
   paste: (app) => app.doPaste(),
   searchGoogle: (app, { selectedText }) => app.doSearchGoogle(selectedText),
