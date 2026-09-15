@@ -4183,3 +4183,123 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   assert.equal(mockInput.getAttribute('bshow'), '0');
   assert.equal(mockCursor.style.display, '', 'Cursor must be restored after IME composition ends');
 });
+
+test('Selection lifecycle clears selection and restores focus on copy, paste, Shift, and BBS keys (Issue #41)', () => {
+  const appSource = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
+  const termViewSource = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
+  const contextMenuSource = fs.readFileSync(path.resolve('src/components/ContextMenu/index.js'), 'utf-8');
+  const dropdownMenuSource = fs.readFileSync(path.resolve('src/components/ContextMenu/DropdownMenu.js'), 'utf-8');
+
+  // 1. App attaches document paste listener and clears selection + restores focus on copy/paste
+  assert.ok(
+    appSource.includes("document.addEventListener('paste'"),
+    'App constructor must listen for paste events on document'
+  );
+  assert.ok(
+    dropdownMenuSource.includes('(normalEnabled || selEnabled)'),
+    'DropdownMenu must show Paste option even when text is currently selected'
+  );
+  assert.ok(
+    contextMenuSource.includes('app.view?.clearSelection?.()') &&
+    contextMenuSource.includes('app.setInputAreaFocus(true)'),
+    'ContextMenu copy handler must clear selection and restore input focus'
+  );
+
+  // 2. Behavioral test: First Ctrl+C copies and clears selection; second Ctrl+C passes through to BBS (\x03)
+  const handleShortcutKeyDownBody = appSource.match(/handleShortcutKeyDown\(e\)\s*\{([\s\S]*?\n  )\}/)[1];
+  const handleShortcutKeyDownFn = new Function('e', handleShortcutKeyDownBody);
+
+  let copiedText = null;
+  let selectionClearedCount = 0;
+  let focusForcedCount = 0;
+  let currentSelectedText = 'highlighted text';
+
+  const mockApp = {
+    view: {
+      getSelectedText: () => currentSelectedText,
+      clearSelection: () => {
+        selectionClearedCount++;
+        currentSelectedText = '';
+      },
+    },
+    doCopy: (str) => {
+      copiedText = str;
+    },
+    setInputAreaFocus: (force) => {
+      if (force) focusForcedCount++;
+    },
+    handleShortcutKeyDown: handleShortcutKeyDownFn,
+  };
+
+  // First Ctrl+C while text is selected -> copies text, clears selection, forces focus, intercepts key
+  const firstCtrlC = {
+    key: 'c',
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    preventDefault() { this.defaultPrevented = true; },
+  };
+  const handledFirst = mockApp.handleShortcutKeyDown(firstCtrlC);
+  assert.equal(handledFirst, true, 'First Ctrl+C with selection must be intercepted as Copy');
+  assert.equal(copiedText, 'highlighted text', 'First Ctrl+C must copy selected text');
+  assert.equal(selectionClearedCount, 1, 'First Ctrl+C must clear selection');
+  assert.equal(focusForcedCount, 1, 'First Ctrl+C must force input area focus');
+  assert.equal(currentSelectedText, '', 'Selection must be empty after Ctrl+C');
+
+  // Second Ctrl+C (e.g. to insert ANSI color code *[m in PTT editor) -> not intercepted, passes to TermKeyboard
+  const secondCtrlC = {
+    key: 'c',
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    preventDefault() { this.defaultPrevented = true; },
+  };
+  const handledSecond = mockApp.handleShortcutKeyDown(secondCtrlC);
+  assert.equal(handledSecond, false, 'Second Ctrl+C without selection must pass through to TermKeyboard for BBS *[m');
+
+  // 3. TermView.onKeyDown clears active selection and restores focus on any non-shortcut key (e.g. Ctrl+V, Enter, Shift+Insert)
+  const onKeyDownBody = termViewSource.match(/onKeyDown\(e\)\s*\{([\s\S]*?\n  )\}/)[1];
+  const onKeyDownFn = new Function('e', onKeyDownBody);
+
+  let keyboardReceivedKey = null;
+  let termViewSelected = true;
+  let termViewCleared = false;
+  let termViewFocused = false;
+  const mockTermView = {
+    isSelectionCollapsed: () => !termViewSelected,
+    clearSelection: () => {
+      termViewCleared = true;
+      termViewSelected = false;
+    },
+    app: {
+      dispatchKeyDown: () => false,
+      setInputAreaFocus: (force) => {
+        if (force) termViewFocused = true;
+      },
+    },
+    _keyboard: {
+      onKeyDown: (e) => {
+        keyboardReceivedKey = e.key;
+      },
+    },
+    onKeyDown: onKeyDownFn,
+  };
+
+  mockTermView.onKeyDown({ key: 'v', ctrlKey: true });
+  assert.equal(termViewCleared, true, 'TermView.onKeyDown must clear selection when BBS key (e.g. Ctrl+V) is pressed');
+  assert.equal(termViewFocused, true, 'TermView.onKeyDown must restore input focus when selection is cleared');
+  assert.equal(keyboardReceivedKey, 'v', 'TermView.onKeyDown must forward key event to TermKeyboard');
+
+  // 4. TermView keydown handler clears selection on standalone Shift keydown but preserves on Control keydown
+  assert.ok(
+    termViewSource.includes("e.key === 'Shift' && !e.ctrlKey && !e.metaKey && !e.altKey && !this.isSelectionCollapsed()"),
+    'TermView keydown/keyup must clear selection and restore focus when standalone Shift is pressed'
+  );
+  assert.ok(
+    termViewSource.includes('isHoldSelectionModifier'),
+    'TermView keydown must avoid stealing focus on Control/Meta keydown when selection is active'
+  );
+});
+
