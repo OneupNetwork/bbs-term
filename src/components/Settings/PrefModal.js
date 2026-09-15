@@ -1260,11 +1260,13 @@ export class PrefModal extends React.Component {
                           </div>
                         ) : (
                           <div className="PrefModal__ColorSchemeHint">
-                            <small className="text-muted">
-                              <a href="#" onClick={this.handleCustomizeCurrentScheme}>
-                                {_("options_colorScheme_customizeThis")}
-                              </a>
-                            </small>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-xs"
+                              onClick={this.handleCustomizeCurrentScheme}
+                            >
+                              {_("options_colorScheme_customizeThis")}
+                            </button>
                           </div>
                         )}
                       </>
