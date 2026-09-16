@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import child_process from "child_process";
 import { fileURLToPath } from "url";
+import { initBaseBig5Tables } from "../uao.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,25 +30,9 @@ function buildPatch() {
   const b2uOrig = readTable(path.join(__dirname, "uao250-b2u.big5.txt"), false);
   const u2bOrig = readTable(path.join(__dirname, "uao250-u2b.big5.txt"), true);
 
-  const td = new TextDecoder("big5");
   const b2uInit = new Uint16Array(65536);
   const u2bInit = new Uint16Array(65536);
-
-  const chunk = new Uint8Array(2);
-  for (let hi = 0x81; hi <= 0xfe; hi++) {
-    chunk[0] = hi;
-    for (let lo = 0x40; lo <= 0xfe; lo++) {
-      if (lo > 0x7e && lo < 0xa1) continue;
-      chunk[1] = lo;
-      const s = td.decode(chunk);
-      if (s.length === 1 && s !== "\ufffd") {
-        const u = s.charCodeAt(0);
-        const b = (hi << 8) | lo;
-        b2uInit[b] = u;
-        u2bInit[u] = b;
-      }
-    }
-  }
+  initBaseBig5Tables(b2uInit, u2bInit);
 
   // Calculate b2u delta
   const b2uPatch = [];

@@ -32,29 +32,64 @@ function decodeBase64ToUint16(b64) {
   return new Uint16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
 }
 
+export function initBaseBig5Tables(b2u, u2b) {
+  // 1. Pre-fill Big5 User-Defined / CP950 Private Use Area (PUA) linear mappings.
+  // Browsers (WHATWG Big5-HKSCS) and Node.js (ICU) differ in these extension ranges,
+  // whereas UAO 2.50 u2b preserves these exact CP950 PUA mappings (U+E000..U+F848).
+  const puaRanges = [
+    [0xfa, 0xfe, 0x40, 0xe000],
+    [0x8e, 0xa0, 0x40, 0xe311],
+    [0x81, 0x8d, 0x40, 0xeeb8],
+    [0xc6, 0xc8, 0xa1, 0xf6b1],
+  ];
+  for (const [hiStart, hiEnd, firstLo, startU] of puaRanges) {
+    let u = startU;
+    for (let hi = hiStart; hi <= hiEnd; hi++) {
+      for (let lo = hi === hiStart ? firstLo : 0x40; lo <= 0xfe; lo++) {
+        if (lo > 0x7e && lo < 0xa1) continue;
+        const b = (hi << 8) | lo;
+        b2u[b] = u;
+        u2b[u] = b;
+        u++;
+      }
+    }
+  }
+
+  // 2. Scan standard Big5 ranges where WHATWG (browsers) and ICU (Node.js) are 100% identical.
+  // Skip extension ranges (0x8140..0xA0FE, 0xA3C0..0xA3FE, 0xC6A1..0xC8FE, 0xF9FE, 0xFA40..0xFEFE)
+  // where WHATWG Big5-HKSCS contains duplicate CJK mappings (e.g. 0xFE6F -> 瑜, 0xFBB8 -> 婷, 0xFA66 -> 偽)
+  // that would otherwise overwrite standard Big5 entries in u2b.
+  const td = new TextDecoder("big5");
+  const chunk = new Uint8Array(2);
+  for (let hi = 0xa1; hi <= 0xf9; hi++) {
+    chunk[0] = hi;
+    for (let lo = 0x40; lo <= 0xfe; lo++) {
+      if (lo > 0x7e && lo < 0xa1) continue;
+      const b = (hi << 8) | lo;
+      if (
+        (b >= 0xa3c0 && b <= 0xa3fe) ||
+        (b >= 0xc6a1 && b <= 0xc8fe) ||
+        b === 0xf9fe
+      ) {
+        continue;
+      }
+      chunk[1] = lo;
+      const s = td.decode(chunk);
+      if (s.length === 1 && s !== "\ufffd") {
+        const u = s.charCodeAt(0);
+        b2u[b] = u;
+        u2b[u] = b;
+      }
+    }
+  }
+}
+
 export function initUAO() {
   if (isInitialized) {
     return;
   }
 
-  const td = new TextDecoder("big5");
-  const chunk = new Uint8Array(2);
-
-  // Scan standard Big5 ranges with native TextDecoder
-  for (let hi = 0x81; hi <= 0xfe; hi++) {
-    chunk[0] = hi;
-    for (let lo = 0x40; lo <= 0xfe; lo++) {
-      if (lo > 0x7e && lo < 0xa1) continue;
-      chunk[1] = lo;
-      const s = td.decode(chunk);
-      if (s.length === 1 && s !== "\ufffd") {
-        const u = s.charCodeAt(0);
-        const b = (hi << 8) | lo;
-        b2uTable[b] = u;
-        u2bTable[u] = b;
-      }
-    }
-  }
+  initBaseBig5Tables(b2uTable, u2bTable);
 
   // Apply UAO 2.50 b2u patch (and invert into u2b)
   const b2uPatchData = decodeBase64ToUint16(B2U_PATCH);
