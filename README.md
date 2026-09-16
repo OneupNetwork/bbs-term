@@ -46,7 +46,9 @@ BBSes across more than a decade of open source community collaboration:
   Worked on `ccns/PttChrome` and made contributions including dynamic page
   title, a more efficient dual-color rendering approach, text blink (SGR 5)
   support, various fixes for mouse browsing and Big5 transcoding, plus
-  continuous integration (CI/CD) and build configuration via GitHub.
+  continuing the initial works by
+  **Li-Shin Ho (r2, [holishing](https://github.com/holishing))**
+  of continuous integration (CI/CD) and build configuration via GitHub,
 - **Hung-Te Lin (piaip, [hungte](https://github.com/hungte))**:
   Focused on performance, standard and security. Created new features including
   high-performance HTML5 Canvas rendering engine, mobile and touch interface,
