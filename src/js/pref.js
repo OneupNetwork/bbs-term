@@ -24,6 +24,7 @@ export const DEFAULT_PREFS = {
   mouseWheelRightAction: "page",
   mouseWheelLeftAction: "none",
   mouseWheelTrackpadMode: false,
+  mouseWheelChangePost: false,
   enableBackNavigation: true,
   supportMouseReporting: true,
   enableAntiIdle: false,

@@ -138,6 +138,7 @@ export class App extends EventEmitter {
     this.mouseWheelRightAction = DEFAULT_PREFS.mouseWheelRightAction;
     this.mouseWheelLeftAction = DEFAULT_PREFS.mouseWheelLeftAction;
     this.mouseWheelTrackpadMode = DEFAULT_PREFS.mouseWheelTrackpadMode;
+    this.mouseWheelChangePost = DEFAULT_PREFS.mouseWheelChangePost;
     this.enableBackNavigation = DEFAULT_PREFS.enableBackNavigation;
 
     this.mouse = new MouseController(this);
@@ -1085,6 +1086,9 @@ export class App extends EventEmitter {
           break;
         case 'mouseWheelTrackpadMode':
           this.mouseWheelTrackpadMode = !!value;
+          break;
+        case 'mouseWheelChangePost':
+          this.mouseWheelChangePost = !!value;
           break;
         case 'enableBackNavigation':
           this.enableBackNavigation = !!value;

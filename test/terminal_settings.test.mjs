@@ -207,6 +207,7 @@ test('DEFAULT_PREFS includes new terminal settings with sensible defaults', () =
   assert.equal(DEFAULT_PREFS.mouseWheelRightAction, 'page');
   assert.equal(DEFAULT_PREFS.mouseWheelLeftAction, 'none');
   assert.equal(DEFAULT_PREFS.mouseWheelTrackpadMode, false);
+  assert.equal(DEFAULT_PREFS.mouseWheelChangePost, false);
   assert.equal(DEFAULT_PREFS.enableVisualBell, false);
   assert.equal(DEFAULT_PREFS.backspaceKey, 'control-h');
   assert.equal(DEFAULT_PREFS.deleteKey, 'escape-sequence');
@@ -282,6 +283,10 @@ test('PrefModal source code includes Mouse tab, colorScheme, visualBell, lineHei
   assert.ok(
     prefModalSrc.includes('name="mouseWheelLeftAction"'),
     'Mouse tab must contain mouseWheelLeftAction selector'
+  );
+  assert.ok(
+    prefModalSrc.includes('name="mouseWheelChangePost"'),
+    'Mouse tab must contain mouseWheelChangePost checkbox'
   );
   assert.ok(
     prefModalSrc.includes('name="trimTrailingSpaces"'),
@@ -421,6 +426,8 @@ test('i18n files define all required translations for new settings', () => {
     'plugin_group_ui',
     'plugin_group_bbs',
     'plugin_group_debug',
+    'options_mouseWheelChangePost',
+    'options_mouseWheelChangePost_desc',
   ];
 
   for (const key of requiredKeys) {

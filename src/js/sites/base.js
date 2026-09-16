@@ -392,9 +392,10 @@ export class BaseSite extends EventEmitter {
    * @param {string} options.cmd - Navigation command ('doArrowUp', 'doArrowDown', 'doPageUp', 'doPageDown')
    * @param {number} [options.count=1] - Number of command steps requested by this wheel event
    * @param {number} [options.now=Date.now()] - Current timestamp in ms
+   * @param {boolean} [options.allowBoundaryJump=false] - Whether to allow jumping to prev/next article at boundary
    * @returns {{ prevent: boolean, maxSteps: number, overrideCmd?: string }}
    */
-  filterWheelScroll(termBuf, { direction, isContinuous, cmd, count = 1, now = Date.now() } = {}) {
+  filterWheelScroll(termBuf, { direction, isContinuous, cmd, count = 1, now = Date.now(), allowBoundaryJump = false } = {}) {
     if (!termBuf || this.pageState !== PAGE_STATE.READING) {
       return { prevent: false, maxSteps: count };
     }
@@ -415,7 +416,7 @@ export class BaseSite extends EventEmitter {
     if (direction === 'up') {
       const atTop = this.isArticleTop(lastRowText, termBuf, statusResult);
       if (atTop) {
-        if (isContinuous || justEntered) {
+        if (!allowBoundaryJump || isContinuous || justEntered) {
           return { prevent: true, maxSteps: 0 };
         }
         this._readingEnterTime = now;
@@ -437,7 +438,7 @@ export class BaseSite extends EventEmitter {
     if (direction === 'down') {
       const atBottom = this.isArticleEnd(lastRowText, termBuf, statusResult);
       if (atBottom) {
-        if (isContinuous || justEntered) {
+        if (!allowBoundaryJump || isContinuous || justEntered) {
           return { prevent: true, maxSteps: 0 };
         }
         this._readingEnterTime = now;

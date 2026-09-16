@@ -438,6 +438,12 @@
   "options_mouseWheelTrackpadMode_desc": {
     "message": "Smooth out trackpad scrolling and absorb momentum to prevent over-scrolling. Leave unchecked for standard mouse wheels."
   },
+  "options_mouseWheelChangePost": {
+    "message": "Navigate to previous/next post when scrolling past article boundaries"
+  },
+  "options_mouseWheelChangePost_desc": {
+    "message": "When reading an article (including Easy Reading mode), scrolling up at the top or down at the bottom after a brief pause navigates to the previous or next post. When disabled, scrolling stops at article boundaries."
+  },
   "options_enableBackNavigation": {
     "message": "Map browser Back & trackpad left swipe to Left Arrow"
   },

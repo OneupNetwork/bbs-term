@@ -1301,6 +1301,9 @@ export class EasyReading extends PluginBase {
 
   _shouldAllowBoundaryNavJump(context) {
     if (context?.source === 'wheel') {
+      if (!this.app?.mouseWheelChangePost) {
+        return false;
+      }
       const now = Date.now();
       const justEntered = Boolean(
         this._articleEnterTime && now - this._articleEnterTime < 400
@@ -1472,6 +1475,7 @@ export class EasyReading extends PluginBase {
 
         if ((direction === 'up' && atTop) || (direction === 'down' && atBottom)) {
           if (
+            !this.app?.mouseWheelChangePost ||
             this._gestureHasScrolled ||
             this._gestureBlockedAtBoundary ||
             justEntered

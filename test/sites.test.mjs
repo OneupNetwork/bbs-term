@@ -3184,6 +3184,7 @@ test('Terminal site.filterWheelScroll and EasyReading stop continuous wheel scro
     cmd: 'doArrowUp',
     count: 1,
     now: 1200,
+    allowBoundaryJump: true,
   });
   assert.equal(res.prevent, true, 'Reflex upward scroll immediately after entering article at top is blocked');
 
@@ -3194,10 +3195,11 @@ test('Terminal site.filterWheelScroll and EasyReading stop continuous wheel scro
     cmd: 'doArrowUp',
     count: 3,
     now: 2000,
+    allowBoundaryJump: true,
   });
   assert.equal(res.prevent, true, 'Continuous upward scroll at article top is blocked');
 
-  // At t = 2500 (paused > 350ms, isContinuous: false), upward scroll at top jumps to previous article
+  // When allowBoundaryJump is false (default), even paused upward scroll at top is blocked
   res = ptt.filterWheelScroll(mockBuf, {
     direction: 'up',
     isContinuous: false,
@@ -3205,7 +3207,18 @@ test('Terminal site.filterWheelScroll and EasyReading stop continuous wheel scro
     count: 1,
     now: 2500,
   });
-  assert.equal(res.prevent, false, 'Paused upward scroll at top is allowed');
+  assert.equal(res.prevent, true, 'Paused upward scroll at top is blocked by default (allowBoundaryJump=false)');
+
+  // When allowBoundaryJump is true, paused upward scroll at top jumps to previous article
+  res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'up',
+    isContinuous: false,
+    cmd: 'doPageUp',
+    count: 1,
+    now: 2500,
+    allowBoundaryJump: true,
+  });
+  assert.equal(res.prevent, false, 'Paused upward scroll at top is allowed when allowBoundaryJump=true');
   assert.equal(res.maxSteps, 1, 'Jump allows exactly 1 step');
   assert.equal(res.overrideCmd, 'doArrowUp', 'PageUp at top overrides to doArrowUp so PTT jumps to previous article');
 
@@ -3234,10 +3247,11 @@ test('Terminal site.filterWheelScroll and EasyReading stop continuous wheel scro
     cmd: 'doArrowDown',
     count: 3,
     now: 4000,
+    allowBoundaryJump: true,
   });
   assert.equal(res.prevent, true, 'Continuous downward scroll at 100% is blocked');
 
-  // Paused downward scroll at 100% jumps to next article (maxSteps: 1)
+  // When allowBoundaryJump is false (default), paused downward scroll at 100% is blocked
   res = ptt.filterWheelScroll(mockBuf, {
     direction: 'down',
     isContinuous: false,
@@ -3245,7 +3259,18 @@ test('Terminal site.filterWheelScroll and EasyReading stop continuous wheel scro
     count: 3,
     now: 4500,
   });
-  assert.equal(res.prevent, false, 'Paused downward scroll at 100% is allowed');
+  assert.equal(res.prevent, true, 'Paused downward scroll at 100% is blocked by default (allowBoundaryJump=false)');
+
+  // When allowBoundaryJump is true, paused downward scroll at 100% jumps to next article (maxSteps: 1)
+  res = ptt.filterWheelScroll(mockBuf, {
+    direction: 'down',
+    isContinuous: false,
+    cmd: 'doArrowDown',
+    count: 3,
+    now: 4500,
+    allowBoundaryJump: true,
+  });
+  assert.equal(res.prevent, false, 'Paused downward scroll at 100% is allowed when allowBoundaryJump=true');
   assert.equal(res.maxSteps, 1, 'Downward jump at 100% clamps to 1 step');
 });
 
@@ -3467,10 +3492,97 @@ test('EasyReading exits cleanly when reading a long article from xyz menu withou
   }
 });
 
+test('EasyReading respects mouseWheelChangePost preference (default false) at top/bottom boundaries', () => {
+  const originalDoc = globalThis.document;
+  const createEl = (tag) => ({
+    tagName: tag.toUpperCase(),
+    style: {
+      display: '',
+      setProperty(k, v) { this[k] = v; },
+      getPropertyValue(k) { return this[k] || ''; },
+    },
+    attributes: {},
+    childNodes: [],
+    innerHTML: '',
+    scrollTop: 0,
+    scrollHeight: 600,
+    clientHeight: 300,
+    setAttribute(k, v) { this.attributes[k] = v; },
+    getAttribute(k) { return this.attributes[k]; },
+    appendChild(child) { this.childNodes.push(child); child.parentNode = this; return child; },
+    removeChild(child) {
+      const idx = this.childNodes.indexOf(child);
+      if (idx >= 0) this.childNodes.splice(idx, 1);
+      return child;
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    contains(node) { return node === this || this.childNodes.includes(node); },
+    querySelector() { return null; },
+  });
 
+  try {
+    globalThis.document = {
+      createElement: (tag) => createEl(tag),
+      getElementById: () => createEl('div'),
+    };
 
+    const ptt = new PttSite();
+    const sentCommands = [];
+    const mockApp = Object.assign(new EventEmitter(), {
+      site: ptt,
+      mouseWheelChangePost: false,
+      send(data) { sentCommands.push(data); },
+      getPlugin() { return null; },
+    });
+    const mockBuf = Object.assign(new EventEmitter(), {
+      cols: 80,
+      rows: 24,
+      lines: [],
+    });
+    mockApp.buf = mockBuf;
+    const er = new EasyReading(mockApp);
+    er.initUI(createEl('div'));
+    er.setEnabled(true);
+    er.started = true;
+    er.easyReadingReachedPageEnd = true;
+    er.show();
+    er._articleEnterTime = 1000;
 
+    // 1. At bottom (scrollTop = 300, scrollHeight = 600, clientHeight = 300), mouseWheelChangePost = false (default)
+    er.content.scrollTop = 300;
+    er.handleWheel({
+      deltaY: 120,
+      deltaMode: 0,
+      wheelDeltaY: -120,
+      stopPropagation() {},
+      preventDefault() {},
+    });
+    assert.deepEqual(sentCommands, [], 'When mouseWheelChangePost=false, discrete wheel at bottom must NOT change post');
 
+    // handleNavCmd from wheel (e.g. right click + wheel page down) at bottom must also NOT change post
+    er.handleNavCmd('doPageDown', { source: 'wheel', direction: 'down', isContinuous: false });
+    assert.deepEqual(sentCommands, [], 'When mouseWheelChangePost=false, handleNavCmd from wheel at bottom must NOT change post');
 
-
-
+    // 2. Enable mouseWheelChangePost = true -> discrete wheel after pause jumps to next post
+    mockApp.mouseWheelChangePost = true;
+    er._lastWheelGestureTime = 1000;
+    er._articleEnterTime = 1000;
+    const realDateNow = Date.now;
+    Date.now = () => 5000;
+    try {
+      er.handleWheel({
+        deltaY: 120,
+        deltaMode: 0,
+        wheelDeltaY: -120,
+        stopPropagation() {},
+        preventDefault() {},
+      });
+      assert.deepEqual(sentCommands, ['\x1b[B'], 'When mouseWheelChangePost=true, discrete wheel after pause jumps to next post');
+    } finally {
+      Date.now = realDateNow;
+    }
+  } finally {
+    globalThis.document = originalDoc;
+  }
+});

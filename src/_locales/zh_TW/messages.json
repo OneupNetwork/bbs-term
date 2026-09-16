@@ -438,6 +438,12 @@
   "options_mouseWheelTrackpadMode_desc": {
     "message": "平滑化觸控板捲動並吸收滑動慣性，避免一次捲動過多行數或誤觸。一般滑鼠使用者無須開啟。"
   },
+  "options_mouseWheelChangePost": {
+    "message": "閱讀文章滾輪捲動到底部／頂部時自動換篇"
+  },
+  "options_mouseWheelChangePost_desc": {
+    "message": "在閱讀文章（含好讀模式）捲動到最頂端或最底端時，停頓後再次滾動滾輪可切換至上一篇或下一篇文章。關閉時滾輪只會停在文章邊界。"
+  },
   "options_enableBackNavigation": {
     "message": "支援瀏覽器「上一頁」與觸控板左滑返回"
   },

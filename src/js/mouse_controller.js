@@ -606,6 +606,7 @@ export class MouseController {
         cmd,
         count,
         now,
+        allowBoundaryJump: Boolean(app.mouseWheelChangePost),
       });
       if (filterRes) {
         if (filterRes.prevent) {

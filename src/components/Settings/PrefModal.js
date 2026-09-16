@@ -1713,6 +1713,30 @@ export class PrefModal extends React.Component {
                   <label>
                     <input
                       type="checkbox"
+                      name="mouseWheelChangePost"
+                      checked={Boolean(values.mouseWheelChangePost)}
+                      onChange={this.handleCheckboxChange}
+                    />
+                    {_("options_mouseWheelChangePost")}
+                  </label>
+                </div>
+                <span
+                  className="help-block"
+                  style={{
+                    fontSize: "12px",
+                    opacity: 0.7,
+                    marginTop: "-4px",
+                    marginLeft: "24px",
+                    marginBottom: "10px",
+                    display: "block",
+                  }}
+                >
+                  {_("options_mouseWheelChangePost_desc")}
+                </span>
+                <div className="checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
                       name="enableBackNavigation"
                       checked={values.enableBackNavigation ?? true}
                       onChange={this.handleCheckboxChange}
