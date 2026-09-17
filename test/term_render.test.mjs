@@ -4645,6 +4645,20 @@ test('Cross-browser copy/paste: Safari/Firefox DOM selection, countCol Element/c
     mouseControllerSource.includes('if (e.button !== 0 || e.ctrlKey) return;'),
     'MouseController onClick must ignore macOS Ctrl+Click so it does not trigger left-click navigation'
   );
+
+  // 5. Firefox DOM selection (Issue #47): #screenContainer and #mainContainer must use position: relative
+  // so terminal rows stay in-flow within .main and dragging past row edges does not select all text above.
+  const mainCssSource = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
+  const screenMainBlock = mainCssSource.match(/#screenContainer,\s*#mainContainer\s*\{([^}]*)\}/);
+  assert.ok(screenMainBlock, '#screenContainer, #mainContainer rule must exist in main.css');
+  assert.ok(
+    screenMainBlock[1].includes('position: relative'),
+    '#screenContainer and #mainContainer must use position: relative for Firefox DOM selection (Issue #47)'
+  );
+  assert.ok(
+    !screenMainBlock[1].includes('position: absolute'),
+    '#screenContainer and #mainContainer must not use position: absolute'
+  );
 });
 
 
