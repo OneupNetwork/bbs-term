@@ -987,7 +987,7 @@ export class TermView extends EventEmitter {
       this.buf.cur_x,
       this.buf.cur_y
     );
-    if (customCursor === 'hide' || this.isComposition || this.input?.getAttribute('bshow') === '1') {
+    if (customCursor === 'hide') {
       this.cursor.style.display = 'none';
       this.updateInputBufferPos();
       return;
@@ -1066,25 +1066,8 @@ export class TermView extends EventEmitter {
       ? customCursor
       : this.convertMN2XYEx(this.buf.cur_x, this.buf.cur_y);
     if (this.input.getAttribute('bshow') == '1') {
-      const lines = this.buf.lines;
-      const line = lines ? lines[this.buf.cur_y] : null;
-      const ch = line ? line[this.buf.cur_x] : null;
-      const defaultBg = termColors.defaultBg || termDefaultBg || termColors[0] || '#000000';
-      const defaultFg = termColors.defaultFg || termDefaultFg || termColors[7] || '#c0c0c0';
-      const isPlain = Boolean(termColors.forcePlainText);
-      const bgIdx = ch ? ch.getBg() : 0;
-      const fgIdx = ch ? ch.getFg() : 7;
-      const bgHex = (isPlain || bgIdx === 0) ? defaultBg : (termColors[bgIdx] || defaultBg);
-      let fgHex = (isPlain || fgIdx === 7) ? defaultFg : (termColors[fgIdx] || defaultFg);
-      if (fgIdx === bgIdx || fgHex.toLowerCase() === bgHex.toLowerCase()) {
-        fgHex = (bgHex.toLowerCase() === defaultBg.toLowerCase()) ? defaultFg : (termInvColors[bgIdx] || defaultFg);
-      }
-      const minContrast = Math.max(isPlain ? 0 : (Number(termColors.minimumContrast) || 0), 50);
-      fgHex = getContrastColor(fgHex, bgHex, minContrast);
-
       const borderSize = 3;
       const padX = 2;
-      const imeBg = 'rgba(128, 128, 128, 0.3)';
       const effectiveChw = (this.chw || Math.max(8, this.chh / 2)) * (this.scaleX || 1);
       const effectiveChh = this.chh * (this.scaleY || 1);
       const cjkAdvance = effectiveChw * 2;
@@ -1093,18 +1076,17 @@ export class TermView extends EventEmitter {
       this.input.style.zIndex = '13';
       this.input.style.forcedColorAdjust = 'none';
       this.input.style.opacity = '1';
-      this.input.style.border = `${borderSize}px double ${fgHex}`;
+      this.input.style.border = `${borderSize}px double #000000`;
       this.input.style.outline = 'none';
       this.input.style.padding = `0 ${padX}px`;
       this.input.style.margin = '0px';
       this.input.style.boxSizing = 'content-box';
-      // Workaround for Safari / All Browsers: Text inside input element #t is transparent by default.
-      // Visible text, semi-transparent gray background, and caret colors derived from cursor cell attributes are required during IME composition.
-      this.input.style.color = fgHex;
-      this.input.style.background = imeBg;
-      this.input.style.backgroundColor = imeBg;
-      this.input.style.caretColor = fgHex;
-      this.input.style.textShadow = `0 0 2px ${bgHex}`;
+      // Reproduce classic PttChrome (1.2.0) IME box: solid white background, black text, double black border, positioned below cursor row.
+      this.input.style.color = '#000000';
+      this.input.style.background = '#ffffff';
+      this.input.style.backgroundColor = '#ffffff';
+      this.input.style.caretColor = '#000000';
+      this.input.style.textShadow = 'none';
       this.input.style.fontSize = effectiveChh + 'px';
       this.input.style.letterSpacing = letterSpacing ? `${letterSpacing}px` : '0px';
       this.input.style.lineHeight = effectiveChh + 'px';
@@ -1118,7 +1100,12 @@ export class TermView extends EventEmitter {
       const totalHeight = effectiveChh + borderSize * 2;
       const totalWidth = boxWidth + (borderSize + padX) * 2;
 
-      let topPos = pos[1] - borderSize;
+      let topPos;
+      if (pos[1] + effectiveChh * 2 > termwinheight + 2) {
+        topPos = pos[1] - totalHeight;
+      } else {
+        topPos = pos[1] + effectiveChh;
+      }
       if (topPos + totalHeight > termwinheight) {
         topPos = Math.max(0, termwinheight - totalHeight);
       } else if (topPos < 0) {
@@ -1137,11 +1124,17 @@ export class TermView extends EventEmitter {
       this.input.style.left = '0px';
       this.input.style.top = '0px';
     } else {
-      // On desktop, keep #t anchored at cursor coordinates even when not composing (bshow="0"),
+      // On desktop, keep #t anchored at target IME row coordinates even when not composing (bshow="0"),
       // so OS IME candidate window queries (Windows TSF, macOS NSTextInputClient, Linux IBus/Fcitx)
-      // find #t at the cursor rather than (0,0) on the first composition keystroke.
+      // find #t at the composition row rather than (0,0) on the first composition keystroke.
+      const effectiveChh = (this.chh || 16) * (this.scaleY || 1);
+      const termwinheight = this.innerBounds?.height || 0;
+      const totalHeight = effectiveChh + 6;
+      const targetTop = (termwinheight && pos[1] + effectiveChh * 2 > termwinheight + 2)
+        ? Math.max(0, pos[1] - totalHeight)
+        : pos[1] + effectiveChh;
       this.input.style.left = pos[0] + 'px';
-      this.input.style.top = pos[1] + 'px';
+      this.input.style.top = targetTop + 'px';
     }
   }
 

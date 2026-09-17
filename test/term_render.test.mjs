@@ -3626,9 +3626,8 @@ test('TermView and TermKeyboard handle Safari WebKit IME composition, colors, an
   assert.ok(termViewSource.includes("e.key === 'ArrowDown'"), 'keyEventFilter must guard candidate arrow keys');
 
   // TermView composition text visibility check
-  assert.ok(termViewSource.includes('this.input.style.color = fgHex'), 'TermView must set visible text color during composition');
-  assert.ok(termViewSource.includes("const imeBg = 'rgba(128, 128, 128, 0.3)'"), 'TermView must use 30% opacity gray background during composition');
-  assert.ok(termViewSource.includes('this.input.style.background = imeBg'), 'TermView must set background to imeBg during composition');
+  assert.ok(termViewSource.includes("this.input.style.color = '#000000'"), 'TermView must set black text color during composition');
+  assert.ok(termViewSource.includes("this.input.style.background = '#ffffff'"), 'TermView must use white background during composition');
   assert.ok(termViewSource.includes("this.input.style.color = 'transparent'"), 'TermView must restore transparent color on composition end');
 
   // TermKeyboard composition guard check
@@ -3836,19 +3835,19 @@ test('IME composition styling applies across all browsers and initial focus succ
   const appSource = fs.readFileSync(path.resolve('src/js/app.js'), 'utf-8');
   const mainSource = fs.readFileSync(path.resolve('src/js/main.js'), 'utf-8');
 
-  // 1. updateInputBufferPos must set visible color/semi-transparent background unconditionally from cell attributes and position inline at cursor
-  const updatePosMatch = termViewSource.match(/updateInputBufferPos\(\)\s*\{[\s\S]*?updateInputBufferWidth\(\)/);
+  // 1. updateInputBufferPos must reproduce PttChrome 1.2.0 white background, black text, double border, and position below cursor (or above on last row)
+  const updatePosMatch = termViewSource.match(/updateInputBufferPos\(\)\s*\{[\s\S]*?updateInputBufferWidth\?\.\(\)/);
   assert.ok(updatePosMatch, 'updateInputBufferPos found');
   assert.ok(!updatePosMatch[0].includes('if (this.hasWebKitImeQuirk)'), 'updateInputBufferPos must not gate IME colors behind hasWebKitImeQuirk');
-  assert.ok(updatePosMatch[0].includes('this.input.style.color = fgHex'), 'updateInputBufferPos must set visible text color from cell fg attribute');
-  assert.ok(updatePosMatch[0].includes("const imeBg = 'rgba(128, 128, 128, 0.3)'"), 'updateInputBufferPos must define 30% opacity gray background');
-  assert.ok(updatePosMatch[0].includes('this.input.style.background = imeBg'), 'updateInputBufferPos must set semi-transparent gray background');
-  assert.ok(updatePosMatch[0].includes('this.input.style.textShadow = `0 0 2px ${bgHex}`'), 'updateInputBufferPos must set textShadow halo from bgHex for contrast');
+  assert.ok(updatePosMatch[0].includes("this.input.style.color = '#000000'"), 'updateInputBufferPos must set black text color');
+  assert.ok(updatePosMatch[0].includes("this.input.style.background = '#ffffff'"), 'updateInputBufferPos must set white background color');
+  assert.ok(updatePosMatch[0].includes("this.input.style.textShadow = 'none'"), 'updateInputBufferPos must set textShadow to none');
   assert.ok(updatePosMatch[0].includes("this.input.style.fontSize = effectiveChh + 'px'"), 'updateInputBufferPos must set fontSize to full effectiveChh');
   assert.ok(updatePosMatch[0].includes('this.input.style.letterSpacing ='), 'updateInputBufferPos must set letterSpacing to match 2 * effectiveChw');
-  assert.ok(updatePosMatch[0].includes('double ${fgHex}'), 'updateInputBufferPos must apply thick double border matching fgHex');
-  assert.ok(updatePosMatch[0].includes('let topPos = pos[1] - borderSize'), 'updateInputBufferPos must align inner content inline at cursor top (pos[1] - borderSize)');
-  assert.ok(updatePosMatch[0].includes('let leftPos = pos[0] - borderSize - padX'), 'updateInputBufferPos must align first character pixel at cursor left (pos[0] - borderSize - padX)');
+  assert.ok(updatePosMatch[0].includes('double #000000'), 'updateInputBufferPos must apply double black border');
+  assert.ok(termViewSource.includes('topPos = pos[1] + effectiveChh'), 'updateInputBufferPos must position IME box below cursor row (pos[1] + effectiveChh)');
+  assert.ok(termViewSource.includes('topPos = pos[1] - totalHeight'), 'updateInputBufferPos must position IME box above cursor row when on last row');
+  assert.ok(termViewSource.includes('let leftPos = pos[0] - borderSize - padX'), 'updateInputBufferPos must align first character pixel at cursor left (pos[0] - borderSize - padX)');
 
   // 2. main.js must show TermWindow before focusing inputArea so Canvas mode initial focus succeeds
   const displayIdx = mainSource.indexOf('app.showTermWindow()');
@@ -4093,7 +4092,7 @@ test('TouchController list_scroll release on 24th row (bottom status bar) trigge
   );
 });
 
-test('IME composition input #t has higher z-order than #cursor and hides #cursor during composition (Issue #28)', async () => {
+test('IME composition input #t has higher z-order than #cursor, keeps #cursor visible, and positions on adjacent row with 85% opacity (Issues #28, #44)', async () => {
   const indexHtml = fs.readFileSync(path.resolve('index.html'), 'utf-8');
   const mainCss = fs.readFileSync(path.resolve('src/css/main.css'), 'utf-8');
   const currentTermViewSource = fs.readFileSync(path.resolve('src/js/term_view.js'), 'utf-8');
@@ -4101,7 +4100,7 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   // 1. Static z-index check in index.html & main.css
   assert.ok(indexHtml.includes('z-index:13'), 'index.html #t must have z-index:13 (higher than #cursor z-index:12)');
   assert.ok(mainCss.includes('#t {\n  z-index: 13;\n}'), 'main.css must define z-index: 13 for #t');
-  assert.ok(mainCss.includes('#t[bshow="1"] ~ #cursor {\n  display: none !important;\n}'), 'main.css must hide #cursor when #t[bshow="1"]');
+  assert.ok(!mainCss.includes('#t[bshow="1"] ~ #cursor'), 'main.css must NOT hide #cursor when #t[bshow="1"] so insertion point remains visible');
   assert.ok(mainCss.includes('background-color: transparent !important;'), 'main.css must enforce transparent background on underline cursor');
   assert.ok(mainCss.includes('forced-color-adjust: none;'), 'main.css must disable forced-color-adjust on cursor');
 
@@ -4179,18 +4178,28 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   mockView.updateCursorPos();
   assert.equal(mockCursor.style.display, '', 'Cursor should be visible when not composing');
 
-  // Start composition: cursor must be hidden and #t z-index set to 13
+  // Start composition: cursor remains visible on row 10, and #t is positioned below row 10 with white background and black text
   mockView.onCompositionStart({});
   assert.equal(mockView.isComposition, true);
   assert.equal(mockInput.getAttribute('bshow'), '1');
-  assert.equal(mockCursor.style.display, 'none', 'Cursor must be hidden during IME composition');
+  assert.equal(mockCursor.style.display, '', 'Cursor must remain visible at insertion point during IME composition (Issue #44)');
   assert.equal(mockInput.style.zIndex, '13', '#t zIndex must be 13 during composition');
   assert.equal(mockInput.style.forcedColorAdjust, 'none', '#t forcedColorAdjust must be none');
-  assert.equal(mockInput.style.background, 'rgba(128, 128, 128, 0.3)', '#t background must be 30% opacity gray');
+  assert.equal(mockInput.style.background, '#ffffff', '#t background must be white (#ffffff) like PttChrome 1.2.0');
+  assert.equal(mockInput.style.color, '#000000', '#t text color must be black (#000000) like PttChrome 1.2.0');
+  assert.equal(mockInput.style.border, '3px double #000000', '#t border must be 3px double #000000 like PttChrome 1.2.0');
   assert.equal(mockInput.style.fontSize, '24px', '#t fontSize must match chh (24px)');
   assert.equal(mockInput.style.letterSpacing, '0px', '#t letterSpacing must be 0px when 2*chw == chh (24px)');
   assert.equal(mockInput.style.left, '55px', '#t leftPos must be pos[0] (60) - border (3) - padX (2) = 55px');
+  assert.equal(mockInput.style.top, '264px', '#t topPos must be immediately below cursor row: pos[1] (240) + chh (24) = 264px');
   assert.equal(mockInput.style.minWidth, '12px', '#t minWidth must be 1 column (12px), not 2 columns');
+
+  // When cursor is on the bottom row (row 23, pos[1] = 552), #t must flip above cursor row (pos[1] - totalHeight = 552 - 30 = 522px)
+  mockView.buf.cur_y = 23;
+  mockView.updateInputBufferPos();
+  assert.equal(mockInput.style.top, '522px', '#t topPos on last row (row 23) must be above cursor row: pos[1] (552) - totalHeight (30) = 522px');
+  mockView.buf.cur_y = 10;
+  mockView.updateInputBufferPos();
 
   // Test Array IME (行列) single ASCII character: width must be 1 column (12px), not 2 columns
   mockInput.value = '1';
@@ -4230,16 +4239,16 @@ test('IME composition input #t has higher z-order than #cursor and hides #cursor
   assert.equal(mockInput.style.letterSpacing, '2px', '#t letterSpacing must compensate when 2*chw (26) != chh (24)');
   mockView.chw = 12;
 
-  // Even if cursor-move fires during composition, cursor remains hidden
+  // Even if cursor-move fires during composition, cursor remains visible on current row
   mockView.buf.cur_x = 6;
   mockView.updateCursorPos();
-  assert.equal(mockCursor.style.display, 'none', 'Cursor must stay hidden when updateCursorPos runs during composition');
+  assert.equal(mockCursor.style.display, '', 'Cursor must stay visible when updateCursorPos runs during composition');
 
-  // End composition: cursor becomes visible again
+  // End composition: cursor remains visible and #t styles are cleared
   mockView.onCompositionEnd({});
   assert.equal(mockView.isComposition, false);
   assert.equal(mockInput.getAttribute('bshow'), '0');
-  assert.equal(mockCursor.style.display, '', 'Cursor must be restored after IME composition ends');
+  assert.equal(mockCursor.style.display, '', 'Cursor must remain visible after IME composition ends');
   assert.equal(mockInput.style.background, 'transparent', '#t background restored to transparent after composition');
   assert.equal(mockInput.style.letterSpacing, '', '#t letterSpacing cleared after composition');
   assert.equal(mockInput.style.textShadow, 'none', '#t textShadow cleared after composition');
