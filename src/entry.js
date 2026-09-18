@@ -1,4 +1,4 @@
-
+import './js/browser_compat.js';
 import './css/ui.css';
 import './css/main.css';
 import './css/color.css';

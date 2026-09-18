@@ -259,6 +259,10 @@ export default defineConfig(({ mode, command }) => {
     server: {
       port: 8080,
       allowedHosts: true,
+      headers: {
+        'Permissions-Policy':
+          'browsing-topics=(), join-ad-interest-group=(), run-ad-auction=(), shared-storage=(), shared-storage-select-url=()',
+      },
       proxy: {
         '/bbs': {
           target: process.env.DEV_PROXY_TARGET || 'https://ws.ptt.cc',
@@ -271,6 +275,12 @@ export default defineConfig(({ mode, command }) => {
             });
           },
         },
+      },
+    },
+    preview: {
+      headers: {
+        'Permissions-Policy':
+          'browsing-topics=(), join-ad-interest-group=(), run-ad-auction=(), shared-storage=(), shared-storage-select-url=()',
       },
     },
     optimizeDeps: {

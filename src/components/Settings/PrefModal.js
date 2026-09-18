@@ -574,10 +574,12 @@ const SelectOptionGroup = ({
 }) => {
   const currentKey = options[value];
   const currentText = currentKey ? _(currentKey) : "";
+  const selectId = controlId ? `${controlId}Input` : `pref-${name}`;
   return (
     <div className="form-group" id={controlId}>
-      <label className="control-label">{label}</label>
+      <label className="control-label" htmlFor={selectId}>{label}</label>
       <select
+        id={selectId}
         className="form-control"
         name={name}
         value={value}
@@ -1067,10 +1069,11 @@ export class PrefModal extends React.Component {
                   </div>
 
                   <div className="form-group" id="enableBell">
-                    <label className="control-label">
+                    <label className="control-label" htmlFor="enableBellInput">
                       {_("options_enableBell")}
                     </label>
                     <select
+                      id="enableBellInput"
                       className="form-control"
                       name="enableBell"
                       value={
@@ -1128,10 +1131,11 @@ export class PrefModal extends React.Component {
                 />
                 <div className="PrefModal__TabBody">
                   <div className="form-group" id="colorScheme">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="colorSchemeInput">
                     {_("options_colorScheme")}
                   </label>
                   <select
+                    id="colorSchemeInput"
                     className="form-control"
                     name="colorScheme"
                     value={values.colorScheme || "default"}
@@ -1186,6 +1190,7 @@ export class PrefModal extends React.Component {
                                 >
                                   <input
                                     type="color"
+                                    aria-label={_("options_colorScheme_defaultBg")}
                                     value={ensureHexColor(activeBg)}
                                     onChange={(e) => this.handleCustomDefaultBgChange(e.target.value)}
                                     className="PrefModal__ColorInput"
@@ -1211,6 +1216,7 @@ export class PrefModal extends React.Component {
                                 >
                                   <input
                                     type="color"
+                                    aria-label={_("options_colorScheme_defaultFg")}
                                     value={ensureHexColor(activeFg)}
                                     onChange={(e) => this.handleCustomDefaultFgChange(e.target.value)}
                                     className="PrefModal__ColorInput"
@@ -1236,6 +1242,7 @@ export class PrefModal extends React.Component {
                                 >
                                   <input
                                     type="color"
+                                    aria-label={_("options_colorScheme_defaultLink")}
                                     value={ensureHexColor(activeLink)}
                                     onChange={(e) => this.handleCustomDefaultLinkChange(e.target.value)}
                                     className="PrefModal__ColorInput"
@@ -1265,6 +1272,7 @@ export class PrefModal extends React.Component {
                               >
                                 <input
                                   type="color"
+                                  aria-label={ANSI_COLOR_NAMES[i]}
                                   value={ensureHexColor(c)}
                                   onChange={(e) => this.handleCustomColorChange(i, e.target.value)}
                                   className="PrefModal__ColorInput"
@@ -1338,10 +1346,11 @@ export class PrefModal extends React.Component {
                   </small>
                 </div>
                 <div className="form-group" id="lineHeight">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="lineHeightInput">
                     {_("options_lineHeight")}
                   </label>
                   <select
+                    id="lineHeightInput"
                     className="form-control"
                     name="lineHeight"
                     value={String(values.lineHeight || 1.0)}
@@ -1356,10 +1365,11 @@ export class PrefModal extends React.Component {
                   </select>
                 </div>
                 <div className="form-group" id="cursorStyle">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="cursorStyleInput">
                     {_("options_cursorStyle")}
                   </label>
                   <select
+                    id="cursorStyleInput"
                     className="form-control"
                     name="caretShape"
                     value={caretShape}
@@ -1399,10 +1409,11 @@ export class PrefModal extends React.Component {
                   </label>
                 </div>
                 <div className="form-group" id="termMargin">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="termMarginInput">
                     {_("options_termMargin")}
                   </label>
                   <input
+                    id="termMarginInput"
                     className="form-control"
                     name="termMargin"
                     type="number"
@@ -1411,10 +1422,11 @@ export class PrefModal extends React.Component {
                   />
                 </div>
                 <div className="form-group" id="termSizeMode">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="termSizeModeInput">
                     {_("options_termSize")}
                   </label>
                   <select
+                    id="termSizeModeInput"
                     className="form-control"
                     name="termSizeMode"
                     value={isTouch ? "fixed-font-size" : values.termSizeMode}
@@ -1452,10 +1464,11 @@ export class PrefModal extends React.Component {
                 {!isTouch && values.termSizeMode === "fixed-term-size" && (
                   <div>
                     <div className="form-group" id="termSize_cols">
-                      <label className="control-label">
+                      <label className="control-label" htmlFor="termSizeColsInput">
                         {_("options_cols")}
                       </label>
                       <input
+                        id="termSizeColsInput"
                         className="form-control"
                         name="termSize.cols"
                         type="number"
@@ -1464,10 +1477,11 @@ export class PrefModal extends React.Component {
                       />
                     </div>
                     <div className="form-group" id="termSize_rows">
-                      <label className="control-label">
+                      <label className="control-label" htmlFor="termSizeRowsInput">
                         {_("options_rows")}
                       </label>
                       <input
+                        id="termSizeRowsInput"
                         className="form-control"
                         name="termSize.rows"
                         type="number"
@@ -1500,10 +1514,11 @@ export class PrefModal extends React.Component {
                     : values.fontSize;
                   return (
                     <div className="form-group" id="fontSize">
-                      <label className="control-label">
+                      <label className="control-label" htmlFor="fontSizeInput">
                         {_("options_fontSize")}
                       </label>
                       <input
+                        id="fontSizeInput"
                         className="form-control"
                         name={fontFieldName}
                         type="number"
@@ -1524,7 +1539,7 @@ export class PrefModal extends React.Component {
                 />
                 <div className="PrefModal__TabBody">
                   <div className="form-group" id="fontFace">
-                    <label className="control-label">
+                    <label className="control-label" htmlFor="fontFaceInput">
                       {_("options_fontFaceAndPriority")}
                     </label>
                     <FontManager
@@ -1547,10 +1562,11 @@ export class PrefModal extends React.Component {
                 />
                 <div className="PrefModal__TabBody">
                   <div className="form-group" id="mouseLeftFunction">
-                    <label className="control-label">
+                    <label className="control-label" htmlFor="mouseLeftFunctionInput">
                       {_("options_mouseLeftFunction")}
                     </label>
                     <select
+                      id="mouseLeftFunctionInput"
                       className="form-control"
                       name="mouseLeftFunction"
                       value={normalizeMouseButtonAction(
@@ -1578,10 +1594,11 @@ export class PrefModal extends React.Component {
                     )}
                   </div>
                   <div className="form-group" id="mouseMiddleFunction">
-                    <label className="control-label">
+                    <label className="control-label" htmlFor="mouseMiddleFunctionInput">
                       {_("options_mouseMiddleFunction")}
                     </label>
                     <select
+                      id="mouseMiddleFunctionInput"
                       className="form-control"
                       name="mouseMiddleFunction"
                       value={normalizeMouseButtonAction(
@@ -1609,10 +1626,11 @@ export class PrefModal extends React.Component {
                     )}
                   </div>
                   <div className="form-group" id="rightClickAction">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="rightClickActionInput">
                     {_("options_rightClickAction")}
                   </label>
                   <select
+                    id="rightClickActionInput"
                     className="form-control"
                     name="rightClickAction"
                     value={normalizeMouseButtonAction(
@@ -1638,10 +1656,11 @@ export class PrefModal extends React.Component {
                   )}
                 </div>
                 <div className="form-group" id="mouseWheelAction">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="mouseWheelActionInput">
                     {_("options_mouseWheelAction")}
                   </label>
                   <select
+                    id="mouseWheelActionInput"
                     className="form-control"
                     name="mouseWheelAction"
                     value={values.mouseWheelAction || "arrow-1"}
@@ -1654,10 +1673,11 @@ export class PrefModal extends React.Component {
                   )}
                 </div>
                 <div className="form-group" id="mouseWheelRightAction">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="mouseWheelRightActionInput">
                     {_("options_mouseWheelRightAction")}
                   </label>
                   <select
+                    id="mouseWheelRightActionInput"
                     className="form-control"
                     name="mouseWheelRightAction"
                     value={values.mouseWheelRightAction || "page"}
@@ -1670,10 +1690,11 @@ export class PrefModal extends React.Component {
                   )}
                 </div>
                 <div className="form-group" id="mouseWheelLeftAction">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="mouseWheelLeftActionInput">
                     {_("options_mouseWheelLeftAction")}
                   </label>
                   <select
+                    id="mouseWheelLeftActionInput"
                     className="form-control"
                     name="mouseWheelLeftAction"
                     value={values.mouseWheelLeftAction || "none"}
@@ -1933,6 +1954,7 @@ export class PrefModal extends React.Component {
                             <label className="PrefModal__MacSwitch">
                               <input
                                 type="checkbox"
+                                aria-label={plugin.title || plugin.name}
                                 name={plugin.prefKey || `plugin_${plugin.id}`}
                                 checked={isChecked}
                                 onChange={this.handleCheckboxChange}
@@ -1996,10 +2018,11 @@ export class PrefModal extends React.Component {
                 />
                 <div className="PrefModal__TabBody">
                   <div className="form-group" id="useCanvasEngine">
-                    <label className="control-label">
+                    <label className="control-label" htmlFor="useCanvasEngineInput">
                       {_("options_renderEngine")}
                     </label>
                     <select
+                      id="useCanvasEngineInput"
                       className="form-control"
                       name="useCanvasEngine"
                       value={values.useCanvasEngine !== false ? "canvas" : "dom"}
@@ -2032,10 +2055,11 @@ export class PrefModal extends React.Component {
                     </label>
                   </div>
                   <div className="form-group" id="backspaceKey">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="backspaceKeyInput">
                     {_("options_backspaceKey")}
                   </label>
                   <select
+                    id="backspaceKeyInput"
                     className="form-control"
                     name="backspaceKey"
                     value={values.backspaceKey || "control-h"}
@@ -2055,10 +2079,11 @@ export class PrefModal extends React.Component {
                   )}
                 </div>
                 <div className="form-group" id="deleteKey">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="deleteKeyInput">
                     {_("options_deleteKey")}
                   </label>
                   <select
+                    id="deleteKeyInput"
                     className="form-control"
                     name="deleteKey"
                     value={values.deleteKey || "escape-sequence"}
@@ -2083,10 +2108,11 @@ export class PrefModal extends React.Component {
                   )}
                 </div>
                 <div className="form-group" id="uiLocale">
-                  <label className="control-label">
+                  <label className="control-label" htmlFor="uiLocaleInput">
                     {_("options_uiLocale")}
                   </label>
                   <select
+                    id="uiLocaleInput"
                     className="form-control"
                     name="uiLocale"
                     value={values.uiLocale || "auto"}

@@ -402,8 +402,10 @@ export class FontManager extends React.Component {
           {isCustomInput ? (
             <>
               <input
+                id="fontFaceInput"
                 ref={this.customInputRef}
                 type="text"
+                aria-label={_("options_fontList_customPlaceholder")}
                 className="form-control FontManager__AddBox__Input"
                 value={customFontName}
                 onChange={this.handleCustomInputChange}
@@ -429,6 +431,8 @@ export class FontManager extends React.Component {
           ) : (
             <>
               <select
+                id="fontFaceInput"
+                aria-label={_("options_fontList_selectThenAdd")}
                 className="form-control FontManager__AddBox__Select"
                 value={selectedFont}
                 onChange={this.handleSelectChange}
