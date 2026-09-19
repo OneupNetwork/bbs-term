@@ -523,6 +523,7 @@ export class App extends EventEmitter {
       this.stream.charset = this.site ? this.site.charset : 'big5';
     }
     this.site?.resetLoginPrompt?.();
+    this.buf?.locator?.reset?.();
     console.info('app onConnect');
     this.connectState = 1;
     this.updateTabIcon('connect');
@@ -554,6 +555,7 @@ export class App extends EventEmitter {
 
     this.connectState = 2;
     this.mouse?.resetButtonState?.();
+    this.buf?.locator?.reset?.();
     this.emit('term:disconnect');
     this.buf.emit('term:disconnect');
 

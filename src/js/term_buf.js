@@ -205,6 +205,8 @@ export class TermBuf extends EventEmitter {
     this.scrollStart = 0;
     this.scrollEnd = validRows - 1;
     this.locator = new Locator(this);
+    this.on('term:connect', () => this.locator?.reset?.());
+    this.on('term:disconnect', () => this.locator?.reset?.());
     //this.scrollingTop=0;
     //this.scrollingBottom=23;
     this.attr = new TermChar(' ');

@@ -468,5 +468,34 @@ test('App, TermView, and TermBuf are completely decoupled from MouseBrowsing and
   mb.destroy();
 });
 
+test('Locator resets mouse reporting status on disconnect and reconnect', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+  const buf = new TermBuf(80, 24);
+
+  // Activate mouse reporting and press button
+  buf.handleDECSET(1003);
+  buf.locator.handleMouseDown({ button: 0 }, { col: 5, row: 5 });
+  assert.equal(buf.locator.isActive(), true);
+  assert.equal(buf.locator.mouseTrackingMode, 1003);
+  assert.equal(buf.locator.downButtons.has(0), true);
+
+  // Disconnect resets mouse reporting mode and pressed button state
+  buf.emit('term:disconnect');
+  assert.equal(buf.locator.isActive(), false);
+  assert.equal(buf.locator.mouseTrackingMode, 0);
+  assert.equal(buf.locator.downButtons.size, 0);
+
+  // Re-activate mouse reporting
+  buf.handleDECSET(1000);
+  assert.equal(buf.locator.isActive(), true);
+  assert.equal(buf.locator.mouseTrackingMode, 1000);
+
+  // Reconnect also resets mouse reporting mode
+  buf.emit('term:connect');
+  assert.equal(buf.locator.isActive(), false);
+  assert.equal(buf.locator.mouseTrackingMode, 0);
+});
+
+
 
 
