@@ -128,25 +128,5 @@ export function isDBCSLead(ch) {
 };
 
 export function ansiHalfColorConv(it) {
-  let str = '';
-  const regex = new RegExp('\x15\\[(([0-9]+)?;)+50m', 'g');
-  let result = null;
-  const indices = [];
-  while ((result = regex.exec(it))) {
-    indices.push(result.index + result[0].length - 4);
-  }
-
-  if (indices.length === 0) {
-    return it;
-  }
-
-  let curInd = 0;
-  for (let i = 0; i < indices.length; ++i) {
-    const ind = indices[i];
-    const preEscInd = it.substring(curInd, ind).lastIndexOf('\x15') + curInd;
-    str += it.substring(curInd, preEscInd) + '\x00' + it.substring(ind+4, ind+5) + it.substring(preEscInd, ind) + 'm';
-    curInd = ind+5;
-  }
-  str += it.substring(curInd);
-  return str;
+  return it.replace(/\x15\[66;([0-9;]*)m(.)/g, '$2\x15[$1m');
 };

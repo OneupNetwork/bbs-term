@@ -210,6 +210,7 @@ export class TermBuf extends EventEmitter {
     //this.scrollingTop=0;
     //this.scrollingBottom=23;
     this.attr = new TermChar(' ');
+    this.halfAttr = null;
     this.disableLinefeed = false;
     this.altScreen = '';
     this.changed = false;
@@ -312,7 +313,15 @@ export class TermBuf extends EventEmitter {
    */
   assignParamsToAttrs(params) {
     if (!Array.isArray(params)) return;
-    this.attr.assignParams(params);
+    for (let i = 0; i < params.length; ++i) {
+      const rawV = params[i];
+      const v = typeof rawV === 'number' && Number.isFinite(rawV) ? rawV : parseInt(rawV, 10);
+      if (v === 66) {
+        this.halfAttr = this.attr.cloneAttr();
+      } else {
+        this.attr.assignParams([rawV]);
+      }
+    }
   }
 
   /**
@@ -350,6 +359,7 @@ export class TermBuf extends EventEmitter {
       case '\n':
       case '\f':
       case '\v':
+        this.halfAttr = null;
         this.lineFeed();
         line = lines[this.cur_y];
         if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
@@ -386,8 +396,10 @@ export class TermBuf extends EventEmitter {
         if (this.cur_x >= cols) this.cur_x = cols - 1;
         let ch2 = line[this.cur_x];
         if (ch2) {
+          const leadAttr = attr || this.halfAttr || this.attr;
+          this.halfAttr = null;
           ch2.ch = ch;
-          ch2.copyAttr(attr || this.attr);
+          ch2.copyAttr(leadAttr);
           ch2.needUpdate = true;
           ch2.isDBCSLead = isWide;
           ch2.isDBCSTrail = false;
@@ -665,6 +677,7 @@ export class TermBuf extends EventEmitter {
   }
 
   back() {
+    this.halfAttr = null;
     if (!Number.isFinite(this.cur_x)) this.cur_x = 0;
     if (this.cur_x > 0) {
       --this.cur_x;
@@ -677,6 +690,7 @@ export class TermBuf extends EventEmitter {
    * @param {number} [param]
    */
   tab(param) {
+    this.halfAttr = null;
     if (!Number.isFinite(this.cur_x) || this.cur_x < 0) this.cur_x = 0;
     const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
     const mod = this.cur_x % 4;
@@ -692,6 +706,7 @@ export class TermBuf extends EventEmitter {
    * @param {number} [param]
    */
   backTab(param) {
+    this.halfAttr = null;
     if (!Number.isFinite(this.cur_x) || this.cur_x < 0) this.cur_x = 0;
     const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
     const mod = this.cur_x % 4;
@@ -947,6 +962,7 @@ export class TermBuf extends EventEmitter {
    * @param {number} y
    */
   gotoPos(x, y) {
+    this.halfAttr = null;
     const targetX = (typeof x === 'number' && Number.isFinite(x)) ? Math.floor(x) : 0;
     const targetY = (typeof y === 'number' && Number.isFinite(y)) ? Math.floor(y) : 0;
     this.cur_x = Math.max(0, Math.min(this.cols - 1, targetX));
@@ -956,6 +972,7 @@ export class TermBuf extends EventEmitter {
   }
 
   carriageReturn() {
+    this.halfAttr = null;
     this.cur_x = 0;
     this.posChanged = true;
     this.queueUpdate();
@@ -1130,7 +1147,7 @@ export class TermBuf extends EventEmitter {
       for (let col = start; col < end - 1; ++col) {
         if (!text[col] || !text[col + 1]) continue;
         if (text[col].isDBCSLead && this.ansiCmp(text[col], text[col + 1]))
-          output += this.ansiCmp(text[col], text[col + 1]).replace(/m$/g, ';50m') + text[col].ch;
+          output += this.ansiCmp(text[col], text[col + 1]).replace(/^\x1b\[/, '\x1b[66;') + text[col].ch;
         else
           output += text[col].ch + this.ansiCmp(text[col], text[col + 1]);
       }

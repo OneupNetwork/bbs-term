@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unescapeStr, wrapText, b2u, u2b, isDBCSLead } from '../src/js/string_util.js';
+import { unescapeStr, wrapText, b2u, u2b, isDBCSLead, ansiHalfColorConv } from '../src/js/string_util.js';
+import { Conv, CHARSETS } from '../src/js/conv.js';
 
 test('unescapeStr parses caret notation correctly', () => {
   assert.equal(unescapeStr('^C'), '\x03');
@@ -67,4 +68,19 @@ test('wrapText wraps within max length without breaking words', () => {
   for (const line of lines) {
     assert.ok(line.length <= 25);
   }
+});
+
+test('ansiHalfColorConv and Conv.encode handle SGR 66 in UTF-8 and Big5 modes', () => {
+  // 中 = \xa4\xa4, 文 = \xa4\xe5
+  const pasted = '\x15[31m\x15[66;1;32m中\x15[66;1;33m文';
+
+  // UTF-8 mode: sends SGR 66 directly
+  const convUtf8 = new Conv(CHARSETS.UTF8);
+  const encodedUtf8 = new TextDecoder().decode(convUtf8.encode(pasted));
+  assert.equal(encodedUtf8, pasted);
+
+  // Big5 mode: splits each 2-byte Big5 character in half with \x15[<params>m in between
+  const convBig5 = new Conv(CHARSETS.BIG5);
+  const encodedBig5 = convBig5.encode(pasted);
+  assert.equal(encodedBig5, '\x15[31m\xa4\x15[1;32m\xa4\xa4\x15[1;33m\xe5');
 });
