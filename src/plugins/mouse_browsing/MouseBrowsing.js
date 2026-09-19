@@ -444,6 +444,10 @@ export class MouseBrowsing extends PluginBase {
     return _("plugin_mouse_browsing_desc");
   }
 
+  static isDisabled(app) {
+    return Boolean(app?.buf?.locator?.isActive?.());
+  }
+
   static renderOptions(props) {
     return React.createElement(MouseBrowsingOptions, props);
   }
@@ -460,6 +464,10 @@ export class MouseBrowsing extends PluginBase {
     this.mouseMiddleFunction = 0;
   }
 
+  isDisabled(app) {
+    return Boolean((app || this.app)?.buf?.locator?.isActive?.());
+  }
+
   getContextMenuItems() {
     return [
       {
@@ -467,8 +475,10 @@ export class MouseBrowsing extends PluginBase {
         order: 5,
         label: () => _("cmenu_mouseBrowsing"),
         checked: () => Boolean(this.enabled),
+        enabled: (app) => !Boolean((app || this.app)?.buf?.locator?.isActive?.()),
         visible: (app, { normalEnabled } = {}) => Boolean(normalEnabled !== false),
         onClick: () => {
+          if (this.app?.buf?.locator?.isActive?.()) return;
           this.switchMouseBrowsing();
         },
       },

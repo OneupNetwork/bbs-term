@@ -51,6 +51,7 @@ const MenuItem = ({
   onSelect,
   onClick,
   divider,
+  disabled,
   className,
   children,
   openedAtRef,
@@ -60,6 +61,10 @@ const MenuItem = ({
   }
   const handleClick = (e) => {
     e.preventDefault();
+    if (disabled) {
+      e.stopPropagation();
+      return;
+    }
     if (openedAtRef && Date.now() < openedAtRef.current + 350) {
       return;
     }
@@ -67,8 +72,14 @@ const MenuItem = ({
     if (onClick) onClick(e);
   };
   return (
-    <li role="presentation" className={className}>
-      <a role="menuitem" tabIndex="-1" href="#" onClick={handleClick}>
+    <li role="presentation" className={cx(className, { disabled })}>
+      <a
+        role="menuitem"
+        aria-disabled={disabled || undefined}
+        tabIndex="-1"
+        href="#"
+        onClick={handleClick}
+      >
         {children}
       </a>
     </li>
@@ -211,9 +222,11 @@ export const DropdownMenu = ({
             pluginItems.map((item) => (
               <MenuItem
                 key={item.id}
+                disabled={item.enabled === false}
                 onClick={item.onClick}
                 className={cx({
                   "DropdownMenu__Item--checked": item.checked,
+                  "DropdownMenu__Item--disabled": item.enabled === false,
                 })}
               >
                 {typeof item.label === "function" ? item.label() : item.label}

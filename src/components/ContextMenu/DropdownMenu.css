@@ -79,6 +79,26 @@
   color: #ffffff;
 }
 
+.DropdownMenu--reset > li.disabled > a,
+.DropdownMenu--reset > li.DropdownMenu__Item--disabled > a,
+.DropdownMenu--reset > li.disabled > a:hover,
+.DropdownMenu--reset > li.DropdownMenu__Item--disabled > a:hover,
+.DropdownMenu--reset > li.disabled > a:focus,
+.DropdownMenu--reset > li.DropdownMenu__Item--disabled > a:focus {
+  color: #86868b;
+  background-color: transparent;
+  cursor: default;
+}
+
+.DropdownMenu__Item--checked.disabled::before,
+.DropdownMenu__Item--checked.DropdownMenu__Item--disabled::before,
+.DropdownMenu__Item--checked.disabled:hover::before,
+.DropdownMenu__Item--checked.DropdownMenu__Item--disabled:hover::before,
+.DropdownMenu__Item--checked.disabled:focus-within::before,
+.DropdownMenu__Item--checked.DropdownMenu__Item--disabled:focus-within::before {
+  color: #86868b;
+}
+
 .DropdownMenu--reset .divider {
   height: 1px;
   margin: 4px 6px;

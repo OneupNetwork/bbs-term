@@ -1891,6 +1891,10 @@ export class PrefModal extends React.Component {
                         {!isGroupCollapsed
                           ? group.plugins.map((plugin) => {
                           const pluginId = plugin.id || plugin.name;
+                          const isDisabled =
+                            typeof plugin.isDisabled === "function"
+                              ? Boolean(plugin.isDisabled(this.props.app, values))
+                              : Boolean(plugin.disabled);
                           const isChecked = Boolean(
                             plugin.prefKey ? values[plugin.prefKey] : plugin.enabled
                           );
@@ -1904,6 +1908,7 @@ export class PrefModal extends React.Component {
                                 `PrefModal__MacListItem--${group.id}`,
                                 {
                                   "PrefModal__MacListItem--enabled": isChecked,
+                                  "PrefModal__MacListItem--disabled": isDisabled,
                                   "PrefModal__MacListItem--hasOptions": hasOptions,
                                   "PrefModal__MacListItem--expanded": isExpanded,
                                 }
@@ -1957,6 +1962,7 @@ export class PrefModal extends React.Component {
                                 aria-label={plugin.title || plugin.name}
                                 name={plugin.prefKey || `plugin_${plugin.id}`}
                                 checked={isChecked}
+                                disabled={isDisabled}
                                 onChange={this.handleCheckboxChange}
                               />
                               <span className="PrefModal__MacSwitchSlider" />

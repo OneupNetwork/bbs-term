@@ -891,6 +891,15 @@ dialog.PrefModal .NativeDialog__content {
   transform: translateX(20px);
 }
 
+.PrefModal__MacSwitch input:disabled + .PrefModal__MacSwitchSlider {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.PrefModal__MacListItem--disabled .PrefModal__MacSwitch {
+  cursor: not-allowed;
+}
+
 .PrefModal__ColorDefaults {
   display: flex;
   flex-direction: column;

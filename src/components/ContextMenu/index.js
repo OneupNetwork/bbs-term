@@ -596,6 +596,7 @@ export class ContextMenu extends React.Component {
         enabled: isEnabled,
         order: item.order ?? 100,
         onClick: (event) => {
+          if (!isEnabled) return;
           if (event) event.stopPropagation();
           this.handleHide();
           if (typeof item.onClick === "function") {

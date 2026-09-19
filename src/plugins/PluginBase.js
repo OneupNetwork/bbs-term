@@ -35,6 +35,10 @@ export class PluginBase {
       icon: this.icon || 'extension',
       group: this.group || 'other',
       renderOptions: this.renderOptions,
+      isDisabled:
+        typeof this.isDisabled === 'function'
+          ? this.isDisabled.bind(this)
+          : undefined,
       onTogglePref:
         typeof this.onTogglePref === 'function'
           ? this.onTogglePref.bind(this)
@@ -134,6 +138,12 @@ export class PluginBase {
       renderOptions:
         this.constructor.renderOptions ||
         (hasCustomRenderOptions ? this.renderOptions.bind(this) : undefined),
+      isDisabled:
+        typeof this.isDisabled === 'function'
+          ? this.isDisabled.bind(this)
+          : typeof this.constructor.isDisabled === 'function'
+          ? this.constructor.isDisabled.bind(this.constructor)
+          : undefined,
       onTogglePref:
         this.constructor.onTogglePref
           ? this.constructor.onTogglePref.bind(this.constructor)

@@ -496,6 +496,45 @@ test('Locator resets mouse reporting status on disconnect and reconnect', async 
   assert.equal(buf.locator.mouseTrackingMode, 0);
 });
 
+test('MouseBrowsing context menu item is disabled and unclickable when mouse reporting is active', () => {
+  const buf = new MockTermBuf(80, 24);
+  const mockApp = {
+    conn: { isConnected: true },
+    buf,
+    on: () => {},
+    off: () => {},
+    registerInputInterceptor: () => {},
+    unregisterInputInterceptor: () => {},
+  };
+
+  const mb = new MouseBrowsing(mockApp, { enabled: true });
+  mb.init({ app: mockApp, buf });
+
+  const [item] = mb.getContextMenuItems();
+  const meta = mb.getMetadata();
+  assert.equal(item.enabled(mockApp), true, 'Menu item should be enabled when mouse reporting is inactive');
+  assert.equal(meta.isDisabled(mockApp), false, 'Plugin metadata should not be disabled when mouse reporting is inactive');
+  assert.equal(MouseBrowsing.getMetadata().isDisabled(mockApp), false, 'Static plugin metadata should not be disabled when mouse reporting is inactive');
+
+  // Enable VT mouse reporting (DECSET 1000)
+  buf.handleDECSET(1000);
+  assert.equal(buf.locator.isActive(), true);
+  assert.equal(item.enabled(mockApp), false, 'Menu item must be disabled when mouse reporting is active');
+  assert.equal(meta.isDisabled(mockApp), true, 'Plugin metadata must be disabled when mouse reporting is active');
+  assert.equal(MouseBrowsing.getMetadata().isDisabled(mockApp), true, 'Static plugin metadata must be disabled when mouse reporting is active');
+
+  // Clicking disabled item should not toggle MouseBrowsing
+  item.onClick();
+  assert.equal(mb.enabled, true, 'Clicking disabled menu item must not toggle MouseBrowsing state');
+
+  // Disable VT mouse reporting (DECRST 1000)
+  buf.handleDECRST(1000);
+  assert.equal(item.enabled(mockApp), true, 'Menu item should be re-enabled when mouse reporting is deactivated');
+  assert.equal(meta.isDisabled(mockApp), false, 'Plugin metadata should be re-enabled when mouse reporting is deactivated');
+
+  mb.destroy();
+});
+
 
 
 
