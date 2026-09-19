@@ -101,6 +101,26 @@ export class EasyReading extends PluginBase {
     this._onBufCursorMove = () => this._onCursorMove();
   }
 
+  getContextMenuItems() {
+    return [
+      {
+        id: 'easy_reading',
+        order: 6,
+        label: () => _('cmenu_easyReading'),
+        checked: () => Boolean(this.enabled),
+        visible: (app, { normalEnabled } = {}) => Boolean(normalEnabled !== false),
+        onClick: () => {
+          this.switchEasyReading();
+        },
+      },
+    ];
+  }
+
+  switchEasyReading() {
+    this.setEnabled(!this.enabled, true);
+    return this.enabled;
+  }
+
   onInit() {
     this.registerInputInterceptor(this);
     this.listenApp('term:easy-reading:switch', (e) => {
@@ -386,7 +406,7 @@ export class EasyReading extends PluginBase {
     const lastRowDiv = document.createElement('div');
     lastRowDiv.setAttribute('id', 'easyReadingLastRow');
     const spaces = ' ';
-    this.lastRowDivContent = wrapAsciiHtml('<span align="left"><span class="q0 b7">' + spaces + '瀏覽 </span><span class="q1 b7">(100%)</span><span class="q1 b7"> [好讀模式]</span><span class="q0 b7"> 滾輪/上下鍵捲動，</span><span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span><span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span></span>');
+    this.lastRowDivContent = wrapAsciiHtml('<span align="left"><span class="q0 b7">' + spaces + '瀏覽 </span><span class="q1 b7">(100%)</span><span class="q1 b7"> [好讀模式]</span><span class="q0 b7"> 滾輪/上下/空白鍵 </span><span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span><span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span></span>');
     lastRowDiv.innerHTML = this.lastRowDivContent;
     this._lastRowDiv = lastRowDiv;
     easyReadingFooter.appendChild(lastRowDiv);
@@ -1156,6 +1176,7 @@ export class EasyReading extends PluginBase {
           break;
         case 'ArrowRight':
         case ' ':
+        case 'Spacebar':
         case 't':
           stop = this._scrollBy(this._turnPageLines);
           if (!stop) {
@@ -1598,11 +1619,35 @@ export class EasyReading extends PluginBase {
     const leaveToTermCmds = this.site?.getLeaveToTerminalCommands?.() || [];
     if (
       (this._keyDownIsComposing || this._keyDownKeyCode === 229) &&
-      e?.target &&
-      !leaveToTermCmds.includes(e.target.value)
+      e?.target
     ) {
-      e.target.value = '';
-      return true;
+      const rawVal = e.target.value;
+      const normalizedKey = rawVal === '\u3000' ? ' ' : rawVal;
+      if (normalizedKey) {
+        const synthEvent = {
+          key: normalizedKey,
+          ctrlKey: false,
+          altKey: false,
+          shiftKey: false,
+          defaultPrevented: false,
+          preventDefault() {
+            this.defaultPrevented = true;
+          },
+        };
+        this._onKeyDown(synthEvent);
+        if (synthEvent.defaultPrevented) {
+          e.target.value = '';
+          return true;
+        }
+        if (normalizedKey === ' ') {
+          e.target.value = ' ';
+          return false;
+        }
+      }
+      if (!leaveToTermCmds.includes(rawVal)) {
+        e.target.value = '';
+        return true;
+      }
     }
     return false;
   }

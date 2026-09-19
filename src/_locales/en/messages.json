@@ -30,6 +30,9 @@
   "cmenu_mouseBrowsing": {
     "message": "Mouse browsing"
   },
+  "cmenu_easyReading": {
+    "message": "Easy Reading"
+  },
   "cmenu_showInputHelper": {
     "message": "Input helper ..."
   },

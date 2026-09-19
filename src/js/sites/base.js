@@ -714,7 +714,7 @@ export class BaseSite extends EventEmitter {
     const html = '<span align="left">' +
            '<span class="q1 b7">' + spaces + '[好讀模式] </span>' +
            '<span class="' + cls + ' b7">(' + pctStr + ') </span>' +
-           '<span class="q0 b7"> 滾輪/上下鍵捲動，</span>' +
+           '<span class="q0 b7"> 滾輪/上下/空白鍵 </span>' +
            cmdsStr +
            '<span data-er-cmd="Escape" style="cursor:pointer"><span class="q1 b7">(Esc)</span><span class="q0 b7">回到終端機 </span></span>' +
            '<span data-er-cmd="q" style="cursor:pointer"><span class="q1 b7">(←/q)</span><span class="q0 b7">離開</span></span>' +

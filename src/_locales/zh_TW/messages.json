@@ -30,6 +30,9 @@
   "cmenu_mouseBrowsing": {
     "message": "滑鼠瀏覽"
   },
+  "cmenu_easyReading": {
+    "message": "好讀模式"
+  },
   "cmenu_showInputHelper": {
     "message": "輸入小幫手 ..."
   },

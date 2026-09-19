@@ -1792,5 +1792,72 @@ test('LiveUpdate and EasyReading cooperate on End key, leaveToTerminal, and DOM 
   liveUpdate.destroy();
 });
 
+test('Issue #49: EasyReading registers context menu toggle item and handles Space key page-down under direct and IME input', async () => {
+  const { EasyReading } = await import('../src/plugins/easy_reading/EasyReading.js');
+  const app = new MockApp();
+  app.prefValues = { enableEasyReading: false };
+  const plugin = new EasyReading(app, { enabled: false });
+  plugin.init();
+
+  // 1. Context menu item registration & toggle
+  const items = plugin.getContextMenuItems();
+  assert.equal(items.length, 1);
+  assert.equal(items[0].id, 'easy_reading');
+  assert.equal(items[0].checked(), false);
+  assert.equal(items[0].visible(app, { normalEnabled: true }), true);
+  assert.equal(items[0].visible(app, { normalEnabled: false }), false);
+
+  items[0].onClick();
+  assert.equal(plugin.enabled, true, 'Clicking EasyReading context menu item should enable plugin');
+  assert.equal(items[0].checked(), true);
+
+  // 2. Space key scrolls down by _turnPageLines under both direct keydown and IME text input
+  plugin.started = true;
+  plugin._overlay = { style: { display: 'block', setProperty() {} } };
+  plugin._content = {
+    scrollTop: 0,
+    clientHeight: 320,
+    scrollHeight: 1600,
+  };
+  plugin.view = { chh: 16 };
+  plugin.easyReadingReachedPageEnd = true;
+
+  // Direct Space keydown
+  const keyDownEvent = {
+    key: ' ',
+    keyCode: 32,
+    ctrlKey: false,
+    altKey: false,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  };
+  const handledKey = plugin.handleKeyDown(keyDownEvent);
+  assert.equal(handledKey, true);
+  assert.equal(plugin._content.scrollTop, 19 * 16, 'Direct Space key should scroll down 1 page');
+
+  // IME Space input (keydown keyCode 229 -> textInput ' ')
+  plugin.handleKeyDown({
+    key: 'Process',
+    keyCode: 229,
+    isComposing: true,
+    ctrlKey: false,
+    altKey: false,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  });
+  const inputTarget = { value: ' ' };
+  const handledText = plugin.handleTextInput({ target: inputTarget });
+  assert.equal(handledText, true);
+  assert.equal(inputTarget.value, '');
+  assert.equal(plugin._content.scrollTop, 38 * 16, 'IME Space input should scroll down another page');
+
+  plugin.destroy();
+});
+
+
 
 
