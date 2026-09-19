@@ -175,6 +175,17 @@ test('LoginModal structure adheres to browser password manager conventions', () 
   assert.ok(modalSource.includes('LoginModal__Btn--disable'), 'Must render disable button in footer');
   assert.ok(modalSource.includes('handleDisable'), 'Must implement handleDisable handler');
   assert.ok(modalCss.includes('margin-right: auto'), 'Disable button must push cancel/submit buttons to right');
+
+  // 1Password & password manager autofill compatibility:
+  // Submit button must appear before Cancel and Disable in DOM order after password input,
+  // and must not be disabled while waiting for React state sync during autofill.
+  const submitIdx = modalSource.indexOf('LoginModal__Btn--submit');
+  const cancelIdx = modalSource.indexOf('LoginModal__Btn--cancel');
+  const disableIdx = modalSource.indexOf('LoginModal__Btn--disable');
+  assert.ok(submitIdx > 0 && submitIdx < cancelIdx && cancelIdx < disableIdx,
+    'Submit button must precede Cancel and Disable buttons in DOM order so autofill/Tab targets Submit first');
+  assert.ok(modalCss.includes('order: 1') && modalCss.includes('order: 2') && modalCss.includes('order: 3'),
+    'CSS flex order must preserve visual button placement (Disable left, Cancel/Submit right)');
 });
 
 test('ContextMenu and DropdownMenu integration passes pluginItems', () => {

@@ -357,12 +357,14 @@ export class LoginModal extends React.Component {
 
           <div className="LoginModal__Footer">
             <button
-              type="button"
-              className="btn btn-default LoginModal__Btn LoginModal__Btn--disable"
-              onClick={this.handleDisable}
+              ref={this.submitBtnRef}
+              type="submit"
+              className="btn btn-primary LoginModal__Btn LoginModal__Btn--submit"
               disabled={submitted}
             >
-              {_("login_modal_disable")}
+              {submitted
+                ? _("login_modal_logging_in")
+                : _("login_modal_submit")}
             </button>
             <button
               type="button"
@@ -373,14 +375,12 @@ export class LoginModal extends React.Component {
               {_("login_modal_cancel")}
             </button>
             <button
-              ref={this.submitBtnRef}
-              type="submit"
-              className="btn btn-primary LoginModal__Btn LoginModal__Btn--submit"
-              disabled={submitted || !(username || this.usernameInputRef.current?.value || "").trim()}
+              type="button"
+              className="btn btn-default LoginModal__Btn LoginModal__Btn--disable"
+              onClick={this.handleDisable}
+              disabled={submitted}
             >
-              {submitted
-                ? _("login_modal_logging_in")
-                : _("login_modal_submit")}
+              {_("login_modal_disable")}
             </button>
           </div>
         </form>

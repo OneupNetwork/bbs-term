@@ -108,6 +108,7 @@ dialog.LoginModal {
 }
 
 .LoginModal__Btn--disable {
+  order: 1;
   margin-right: auto;
   color: #8e8e93;
   background-color: transparent;
@@ -125,7 +126,12 @@ dialog.LoginModal {
   box-shadow: none;
 }
 
+.LoginModal__Btn--cancel {
+  order: 2;
+}
+
 .LoginModal__Btn--submit {
+  order: 3;
   background-color: #007aff;
   border-color: #007aff;
   color: #ffffff;
