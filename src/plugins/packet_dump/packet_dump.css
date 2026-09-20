@@ -48,6 +48,16 @@
   color: #bbb;
 }
 
+.packet-dump-charset {
+  background: #2d3748;
+  color: #68d391;
+  border: 1px solid #4a5568;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
 .packet-dump-legend {
   display: flex;
   gap: 8px;

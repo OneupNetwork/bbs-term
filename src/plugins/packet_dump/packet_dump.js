@@ -92,6 +92,7 @@ export class PacketDump extends PluginBase {
     }
     const overlay = this.ensureElement();
     if (overlay) {
+      this.updateCharset();
       overlay.style.display = "flex";
       this.scrollBottom();
     }
@@ -119,7 +120,21 @@ export class PacketDump extends PluginBase {
     this.overlay = null;
     this._createdOverlay = false;
     this.contentEl = null;
+    this.charsetEl = null;
     this.toggleBtn = null;
+  }
+
+  getCharsetLabel() {
+    const cs = String(
+      this.app?.stream?.charset || this.app?.site?.charset || "big5"
+    ).toLowerCase();
+    return cs === "utf-8" || cs === "utf8" ? "UTF-8" : cs.toUpperCase();
+  }
+
+  updateCharset() {
+    if (this.charsetEl) {
+      this.charsetEl.textContent = this.getCharsetLabel();
+    }
   }
 
   ensureElement() {
@@ -147,6 +162,7 @@ export class PacketDump extends PluginBase {
         <div id="packetDumpHeader" class="nomouse_command">
           <div class="packet-dump-header-left nomouse_command">
             <span class="packet-dump-title nomouse_command">Packet Dump</span>
+            <span id="packetDumpCharset" class="packet-dump-charset nomouse_command"></span>
             <span class="packet-dump-legend nomouse_command">
               <span class="packet-dump-legend-recv nomouse_command">■ Recv</span>
               <span class="packet-dump-legend-send nomouse_command">■ Send</span>
@@ -164,7 +180,9 @@ export class PacketDump extends PluginBase {
 
     this.overlay = overlay;
     this.contentEl = overlay.querySelector("#packetDumpContent");
+    this.charsetEl = overlay.querySelector("#packetDumpCharset");
     this.toggleBtn = overlay.querySelector("#packetDumpToggleBtn");
+    this.updateCharset();
 
     const clearBtn = overlay.querySelector("#packetDumpClearBtn");
     if (clearBtn) {
@@ -275,6 +293,7 @@ export class PacketDump extends PluginBase {
   log(direction, data) {
     if (!this.enabled) return;
     this.ensureElement();
+    this.updateCharset();
     if (!this.contentEl) return;
 
     let bytes = data;
