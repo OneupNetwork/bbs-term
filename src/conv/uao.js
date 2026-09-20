@@ -1,7 +1,8 @@
-import { B2U_PATCH, U2B_PATCH } from "./uao_patch.js";
+import { B2U_PATCH, U2B_PATCH, AMBCJK_PATCH } from "./uao_patch.js";
 
 export const b2uTable = new Uint16Array(65536);
 export const u2bTable = new Uint16Array(65536);
+export let ambCjkRanges = new Uint16Array(0);
 
 let isInitialized = false;
 const initListeners = [];
@@ -107,6 +108,9 @@ export function initUAO() {
     const b = u2bPatchData[i + 1];
     u2bTable[u] = b;
   }
+
+  // Decode official CJK ambiguous width ranges (ambcjk.big5.txt)
+  ambCjkRanges = decodeBase64ToUint16(AMBCJK_PATCH);
 
   // Setup window.lib backward compatibility
   if (typeof window !== "undefined") {

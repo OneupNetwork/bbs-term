@@ -112,12 +112,21 @@ test('widthTable is a 64KB Uint8Array synchronized with UAO mappings', () => {
   assert.equal(widthTable[0x41], 1); // 'A'
   assert.equal(widthTable[0x20], 1); // ' '
 
-  // CJK ideographs and UAO mappings are 2
+  // CJK ideographs, East Asian Ambiguous (ambcjk.big5.txt), and UAO Katakana are 2
   assert.equal(widthTable[0x4e2d], 2); // '中'
-  assert.equal(widthTable[0x00a2], 2); // '¢' (mapped in UAO)
-  assert.equal(widthTable[0x00a3], 2); // '£' (mapped in UAO)
-  assert.equal(widthTable[0x0101], 2); // 'ā' (mapped in UAO)
+  assert.equal(widthTable[0x00a1], 2); // '¡' (Ambiguous in ambcjk.big5.txt)
+  assert.equal(widthTable[0x00a4], 2); // '¤' (Ambiguous in ambcjk.big5.txt)
+  assert.equal(widthTable[0x00e0], 2); // 'à' (Ambiguous in ambcjk.big5.txt)
+  assert.equal(widthTable[0x00e1], 2); // 'á' (Ambiguous in ambcjk.big5.txt)
+  assert.equal(widthTable[0x0101], 2); // 'ā' (Ambiguous in ambcjk.big5.txt)
   assert.equal(widthTable[0xff61], 2); // '｡' (halfwidth Katakana mapped in UAO)
+
+  // EastAsianWidth=N/Na characters remain single-width (1) even if in u2bTable
+  assert.equal(widthTable[0x00e2], 1); // 'â' (EastAsianWidth=N)
+  assert.equal(widthTable[0x00a2], 1); // '¢' (EastAsianWidth=Na)
+  assert.equal(widthTable[0x00a3], 1); // '£' (EastAsianWidth=Na)
+  assert.equal(widthTable[0x00a9], 1); // '©' (EastAsianWidth=N)
+  assert.equal(widthTable[0x0121], 1); // 'ġ' (EastAsianWidth=N)
 
   // Test re-initializing width table and applying UAO
   initWidthTable();

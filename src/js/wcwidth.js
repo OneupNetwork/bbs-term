@@ -4,8 +4,7 @@
 
 // Optimized with a 64KB Uint8Array lookup table for O(1) BMP character width resolution.
 
-import { forceWidthCodes } from './symbol_table.js';
-import { u2bTable, addUAOInitListener } from '../conv/uao.js';
+import { ambCjkRanges, addUAOInitListener } from '../conv/uao.js';
 
 export const widthTable = new Uint8Array(65536);
 
@@ -16,17 +15,24 @@ function setRange(start, end, val) {
 }
 
 /**
- * Applies UAO table mappings to the width table.
- * Any non-zero entry in u2bTable (characters mapped by Big5/UAO) is marked as fullwidth (2 columns),
+ * Applies UAO / East Asian Ambiguous CJK width ranges (ambcjk.big5.txt)
+ * and UAO double-byte halfwidth Katakana (U+FF61..U+FF9F) to widthTable,
  * excluding zero-width formatting characters like soft hyphen (0x00ad).
  */
 export function applyUAOToWidthTable() {
-  if (!u2bTable) return;
-  for (let i = 0x20; i < 65536; i++) {
-    if (u2bTable[i] > 0 && i !== 0x00ad) {
-      widthTable[i] = 2;
+  if (ambCjkRanges && ambCjkRanges.length > 0) {
+    for (let i = 0; i < ambCjkRanges.length; i += 2) {
+      const start = ambCjkRanges[i];
+      const end = ambCjkRanges[i + 1];
+      for (let cp = start; cp <= end; cp++) {
+        if (cp !== 0x00ad) {
+          widthTable[cp] = 2;
+        }
+      }
     }
   }
+  // UAO maps half-width Katakana (U+FF61..U+FF9F) to double-byte Big5 (0xC8xx)
+  setRange(0xff61, 0xff9f, 2);
 }
 
 /**
@@ -51,14 +57,7 @@ export function initWidthTable() {
   setRange(0xff01, 0xff60, 2); // Fullwidth Forms
   setRange(0xffe0, 0xffe6, 2); // Fullwidth signs
 
-  // 2. Forced width symbols from symbol_table
-  if (Array.isArray(forceWidthCodes)) {
-    for (const code of forceWidthCodes) {
-      if (code < 65536) widthTable[code] = 2;
-    }
-  }
-
-  // 3. Control characters & DEL (0 columns)
+  // 2. Control characters & DEL (0 columns)
   setRange(0x00, 0x1f, 0);
   setRange(0x7f, 0x9f, 0);
 
