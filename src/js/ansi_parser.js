@@ -393,6 +393,16 @@ export class AnsiParser {
           case 'Z':
             term.backTab(getParam(0, 1));
             break;
+          case 'n':
+            if (getParam(0, 0) === 6) {
+              const report = `\x1b[${term.cur_y + 1};${term.cur_x + 1}R`;
+              if (this.stream && typeof this.stream.send === 'function') {
+                this.stream.send(report);
+              } else if (term.view?.app?.send) {
+                term.view.app.send(report);
+              }
+            }
+            break;
           default:
             break;
           }
