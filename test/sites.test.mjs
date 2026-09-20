@@ -3318,6 +3318,50 @@ test('PttSite parseListRow and isMenuScreen recognize modern PTT show_status bar
   }
 });
 
+test('Ptt2Site determines MENU, LIST, EDITING, and READING states directly from footer bar', () => {
+  const ptt2 = getSite('ptt2');
+  assert.equal(ptt2.name, 'ptt2');
+
+  const makeMockTerm = (lastRow, cur_x = 1, cur_y = 5) => ({
+    rows: 24,
+    cols: 80,
+    cur_y,
+    cur_x,
+    isLineEmpty: () => false,
+    getRowText: (r) => (r === 23 ? lastRow : ''),
+  });
+
+  // 1. MENU detection purely by footer bar ("M/D 週X HH:MM |")
+  const menuFooters = [
+    ' 主功能表 Valentines     9/20 週日 17:48 | hungte | 線上12345人        (h)說明 ',
+    ' 休閒遊樂                9/20 週日 8:05 | guest | 線上1人   (←)回到上層 (h)說明 ',
+    ' 統計資訊                12/31 週日 23:59 | sysop           (←)回到上層 (h)說明 ',
+  ];
+  for (const footer of menuFooters) {
+    const term = makeMockTerm(footer, 20, 12);
+    assert.equal(ptt2.isMenuScreen(term), true, `Menu footer: ${footer}`);
+    assert.equal(ptt2.setPageState(term), PAGE_STATE.MENU);
+  }
+
+  // 2. LIST detection purely by vs_cmd_bar footer caption + trailing hint
+  const listFooters = [
+    ' 文章列表  (r)閱讀 (P)發表 (y)回應 (X)推文                      (←)離開 (h)說明 ',
+    ' 看板列表  (s)搜尋 (c)新文章 (f)加入最愛                        (←)離開 (h)說明 ',
+    ' 休閒聊天  (t)聊天 (q)查詢 (w)水球                              (←)離開 (h)說明 ',
+    ' 操作說明  (↑)上移 (↓)下移 (Enter)執行                                (q/←)離開',
+  ];
+  for (const footer of listFooters) {
+    const term = makeMockTerm(footer, 1, 5);
+    assert.equal(ptt2.isListScreen(term), true, `List footer: ${footer}`);
+    assert.equal(ptt2.setPageState(term), PAGE_STATE.LIST);
+  }
+
+  // 3. EDITING detection purely by footer caption
+  const editTerm = makeMockTerm(' 編輯文章  (^X/^Q)離開 (^Z/F1)說明');
+  assert.equal(ptt2.isEditingScreen(editTerm), true);
+  assert.equal(ptt2.setPageState(editTerm), PAGE_STATE.EDITING);
+});
+
 test('EasyReading exits cleanly when reading a long article from xyz menu without getting stuck or needing extra q', () => {
   const originalDoc = globalThis.document;
   const mockElements = new Map();

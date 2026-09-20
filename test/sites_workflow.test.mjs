@@ -50,7 +50,7 @@ test('ptt.yml and ptt2.yml have correct values', () => {
   assert.equal(ptt2.CNAME, 'term.ptt2.cc');
   assert.equal(ptt2.TARGET_REPO, 'ptt/term.ptt2.cc');
   assert.equal(ptt2.THEME, 'ptt2.cc');
-  assert.equal(ptt2.SITE_TYPE, 'ptt');
+  assert.equal(ptt2.SITE_TYPE, 'ptt2');
   assert.equal(ptt2.DEPLOY_BRANCH, 'beta');
 });
 
