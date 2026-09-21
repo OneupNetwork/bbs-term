@@ -442,7 +442,7 @@ export class BaseSite extends EventEmitter {
           return { prevent: true, maxSteps: 0 };
         }
         this._readingEnterTime = now;
-        return { prevent: false, maxSteps: 1 };
+        return { prevent: false, maxSteps: 1, overrideCmd: 'doArrowDown' };
       }
       return { prevent: false, maxSteps: count };
     }

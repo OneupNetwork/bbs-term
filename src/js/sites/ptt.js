@@ -1,4 +1,4 @@
-import { BaseSite } from './base.js';
+import { BaseSite, PAGE_STATE } from './base.js';
 
 export function parseReplyText(it) {
   return (
@@ -180,6 +180,23 @@ export class PttSite extends BaseSite {
       }
     }
     return super.isArticleEnd(lastRowText, termBuf, statusResult);
+  }
+
+  filterWheelScroll(termBuf, options = {}) {
+    const res = super.filterWheelScroll(termBuf, options);
+    if (
+      this.pageState === PAGE_STATE.READING &&
+      !res.prevent &&
+      !res.overrideCmd
+    ) {
+      if (options.cmd === 'doArrowUp') {
+        return { ...res, overrideCmd: 'k' };
+      }
+      if (options.cmd === 'doArrowDown') {
+        return { ...res, overrideCmd: 'j' };
+      }
+    }
+    return res;
   }
 
   isCursorParked(termBuf) {

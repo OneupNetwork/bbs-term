@@ -7,6 +7,7 @@ import {
   TouchController,
   computeToolbarLayout,
 } from '../src/touch/TouchController.js';
+import { MouseController } from '../src/js/mouse_controller.js';
 import {
   AntiIdle,
   AutoWrap,
@@ -1263,8 +1264,8 @@ test('TouchController handles horizontal and vertical pan gestures without firin
   assert.ok(touchSource.includes('app.view.panBy(-moveDeltaX, 0)'));
   assert.ok(touchSource.includes('app.view.panBy(0, -moveDeltaY)'));
   assert.ok(
-    touchSource.includes("this.panDirection === 'list_scroll'") ||
-      touchSource.includes('this.panDirection === "list_scroll"')
+    touchSource.includes("this.panDirection === 'scroll'") ||
+      touchSource.includes('this.panDirection === "scroll"')
   );
   assert.ok(
     !touchSource.includes('app.inputArea.focus()'),
@@ -1372,7 +1373,7 @@ test('TouchController handles 2-finger pinch gesture to zoom font and 2-finger p
   assert.equal(controller.isPinching, false);
 });
 
-test('TouchController handles 1-finger drag selection and auto-copies on release', () => {
+test('TouchController requires long press to start text selection and auto-copies on release', () => {
   const listeners = {};
   const mockTermWin = {
     style: {},
@@ -1390,11 +1391,17 @@ test('TouchController handles 1-finger drag selection and auto-copies on release
   let selectionStarted = false;
   let selectionUpdated = false;
   let copiedText = null;
+  let scrollCalls = 0;
 
   const mockApp = {
     termWin: mockTermWin,
     doCopy(text) {
       copiedText = text;
+    },
+    mouse: {
+      handleTouchScroll() {
+        scrollCalls++;
+      }
     },
     view: {
       startSelection(coords) {
@@ -1407,12 +1414,41 @@ test('TouchController handles 1-finger drag selection and auto-copies on release
         return 'selected terminal text';
       }
     },
-    buf: { pageState: 0 } // Not in article list
+    buf: { pageState: 0 }
   };
 
   const controller = new TouchController(mockApp);
 
-  // Pointer down at (50, 50)
+  // 1. Immediate drag without long press -> performs touch scroll, NOT selection
+  listeners.pointerdown({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 50,
+    clientY: 100,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  listeners.pointermove({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 50,
+    clientY: 60,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  assert.equal(selectionStarted, false, 'Immediate drag must not start text selection');
+  assert.equal(controller.isPanning, true, 'Immediate drag enters scroll mode');
+  assert.equal(scrollCalls, 1, 'Immediate drag dispatches touch scroll');
+  listeners.pointerup({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 50,
+    clientY: 60,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  // 2. Long press at (50, 50) followed by drag -> selects text and copies on release
   listeners.pointerdown({
     pointerType: 'touch',
     pointerId: 1,
@@ -1422,7 +1458,16 @@ test('TouchController handles 1-finger drag selection and auto-copies on release
     stopPropagation() {}
   });
 
-  // Drag to (150, 80) -> distance > MOVE_THRESHOLD
+  // Trigger long press
+  controller.startSelectionAtStartPoint();
+  assert.equal(
+    selectionStarted,
+    true,
+    'startSelection should be called after long press'
+  );
+  assert.equal(controller.isSelecting, true);
+
+  // Drag to (150, 80)
   listeners.pointermove({
     pointerType: 'touch',
     pointerId: 1,
@@ -1433,16 +1478,10 @@ test('TouchController handles 1-finger drag selection and auto-copies on release
   });
 
   assert.equal(
-    selectionStarted,
-    true,
-    'startSelection should be called on drag'
-  );
-  assert.equal(
     selectionUpdated,
     true,
-    'updateSelection should be called on drag'
+    'updateSelection should be called on drag after long press'
   );
-  assert.equal(controller.isSelecting, true);
 
   // Release pointer
   listeners.pointerup({
@@ -4024,7 +4063,7 @@ test('Canvas mode fontFitWindowWidth renders natively at scaled dimensions witho
   }
 });
 
-test('TouchController list_scroll release on 24th row (bottom status bar) triggers onMouse_click for End action', () => {
+test('TouchController touch scroll sends up/down or j/k when mouse report is off, and SGR wheel report when mouse report is on', () => {
   const listeners = {};
   const mockTermWin = {
     style: {},
@@ -4036,60 +4075,134 @@ test('TouchController list_scroll release on 24th row (bottom status bar) trigge
     releasePointerCapture() {},
   };
 
-  let clickedCoords = null;
+  const navCmds = [];
+  const sentReports = [];
+  let locatorActive = false;
+
+  const mockSite = {
+    pageState: 0,
+    supportNavKeys: false,
+    filterWheelScroll(buf, opts) {
+      if (this.pageState === 3 /* READING */ && this.supportNavKeys) {
+        return {
+          prevent: false,
+          maxSteps: opts.count,
+          overrideCmd: opts.direction === 'up' ? 'k' : 'j',
+        };
+      }
+      return { prevent: false, maxSteps: opts.count };
+    },
+  };
+
   const mockApp = {
     termWin: mockTermWin,
-    site: { pageState: 2 /* PAGE_STATE.LIST */ },
-    buf: { rows: 24, cols: 80 },
+    modalShown: false,
+    site: mockSite,
+    buf: {
+      rows: 24,
+      cols: 80,
+      locator: {
+        isActive: () => locatorActive,
+        handleWheel(e, pos) {
+          const isUp = (e?.deltaY ?? 0) < 0;
+          const cb = isUp ? 64 : 65;
+          return `\x1b[<${cb};${pos.col + 1};${pos.row + 1}M`;
+        },
+      },
+    },
     view: {
-      highlightedRow: -1, // Status bar row 23 does not set highlightedRow
+      chh: 24,
       clearHighlight() {},
     },
-    clientToPos(x, y) {
-      // Simulate y=370 landing on row 23 (the 24th row)
-      return { col: 40, row: y >= 360 ? 23 : 10 };
-    },
+    isDialogOrExcludedTarget() { return false; },
+    clientToPos() { return { col: 10, row: 5 }; },
+    setNavCmd(cmd) { navCmds.push(cmd); },
+    send(data) { sentReports.push(data); },
     onMouse_move() {},
-    onMouse_click(e) {
-      clickedCoords = { clientX: e.clientX, clientY: e.clientY };
-    },
+    onMouse_click() {},
     emit() {},
   };
 
+  mockApp.mouse = new MouseController(mockApp, { attachDOM: false });
   new TouchController(mockApp);
 
-  // Start touch at y=350
+  // 1. Without mouse report & non-reading site -> drag up (200 -> 170) scrolls down (doArrowDown)
   listeners.pointerdown({
     pointerType: 'touch',
     pointerId: 1,
     clientX: 200,
-    clientY: 350,
+    clientY: 200,
     preventDefault() {},
   });
-
-  // Move vertically > 8px onto row 23 (y=375)
   listeners.pointermove({
     pointerType: 'touch',
     pointerId: 1,
     clientX: 200,
-    clientY: 375,
+    clientY: 170, // dragged up 30px (>= chh 24px) -> natural scroll down
     preventDefault() {},
   });
-
-  // Release on row 23
   listeners.pointerup({
     pointerType: 'touch',
     pointerId: 1,
     clientX: 200,
-    clientY: 375,
+    clientY: 170,
     preventDefault() {},
   });
+  assert.deepEqual(navCmds, ['doArrowDown'], 'Touch drag up without mouse report sends doArrowDown (natural scroll)');
+  navCmds.length = 0;
 
-  assert.deepEqual(
-    clickedCoords,
-    { clientX: 200, clientY: 375 },
-    'Releasing list_scroll gesture on 24th row (row 23) must trigger onMouse_click'
-  );
+  // 2. Without mouse report & site in READING mode with supportNavKeys -> drag down (200 -> 230) scrolls up -> overrides to 'k'
+  mockSite.pageState = 3; // READING
+  mockSite.supportNavKeys = true;
+  listeners.pointerdown({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 200,
+    preventDefault() {},
+  });
+  listeners.pointermove({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 230, // dragged down 30px -> natural scroll up -> 'k'
+    preventDefault() {},
+  });
+  listeners.pointerup({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 230,
+    preventDefault() {},
+  });
+  assert.deepEqual(navCmds, ['k'], 'Touch drag down in reading mode overrides to k (natural scroll)');
+  navCmds.length = 0;
+
+  // 3. With mouse report active -> drag up (200 -> 170) sends SGR wheel down (65) to server
+  locatorActive = true;
+  listeners.pointerdown({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 200,
+    preventDefault() {},
+  });
+  listeners.pointermove({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 170, // dragged up 30px -> natural scroll down -> SGR wheel down (65)
+    preventDefault() {},
+  });
+  listeners.pointerup({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 200,
+    clientY: 170,
+    preventDefault() {},
+  });
+  assert.deepEqual(navCmds, [], 'With mouse report active, navCmds are not sent');
+  assert.deepEqual(sentReports, ['\x1b[<65;11;6M'], 'With mouse report active, SGR wheel report is sent to server');
 });
 
 test('IME composition input #t has higher z-order than #cursor, keeps #cursor visible, and positions on adjacent row with 85% opacity (Issues #28, #44)', async () => {

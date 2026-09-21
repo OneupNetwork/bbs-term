@@ -135,7 +135,7 @@ test('MouseController ignores horizontal-dominant wheel events without preventin
   assert.equal(defaultPrevented, true);
 });
 
-test('BackNavigationController intercepts browser back as doLeft and restores sentinel via forward()', () => {
+test('BackNavigationController intercepts browser back as doLeft and forward as doRight via center sentinel', () => {
   const navCmds = [];
   let currentTime = 1000;
   const mockWin = createMockWindow();
@@ -160,10 +160,10 @@ test('BackNavigationController intercepts browser back as doLeft and restores se
   assert.equal(backNav.armed, false);
   assert.equal(mockWin.getStackLength(), 1);
 
-  // 2. First user activation pushes sentinel S1
+  // 2. First user activation pushes center sentinel S1 + forward sentinel S2 and steps back to S1
   mockWin.emit('pointerdown');
   assert.equal(backNav.armed, true);
-  assert.equal(mockWin.getStackLength(), 2);
+  assert.equal(mockWin.getStackLength(), 3);
   assert.equal(mockWin.getCurrentIndex(), 1);
 
   // 3. Consecutive back navigations send doLeft and traverse forward back to S1 without growing stack
@@ -172,20 +172,30 @@ test('BackNavigationController intercepts browser back as doLeft and restores se
     assert.equal(navCmds.length, i + 1);
     assert.equal(navCmds[i], 'doLeft');
     assert.equal(backNav.armed, true);
-    assert.equal(mockWin.getStackLength(), 2);
+    assert.equal(mockWin.getStackLength(), 3);
     assert.equal(mockWin.getCurrentIndex(), 1);
   }
 
-  // 4. When in NORMAL state (cannot navigate back), first back re-arms, second back within DOUBLE_BACK_EXIT_MS releases sentinel
+  // 4. Consecutive forward navigations send doRight and traverse back to S1 without growing stack
+  for (let i = 0; i < 3; i++) {
+    mockWin.history.forward();
+    assert.equal(navCmds.length, 5 + i + 1);
+    assert.equal(navCmds[5 + i], 'doRight');
+    assert.equal(backNav.armed, true);
+    assert.equal(mockWin.getStackLength(), 3);
+    assert.equal(mockWin.getCurrentIndex(), 1);
+  }
+
+  // 5. When in NORMAL state (cannot navigate back), first back re-arms, second back within DOUBLE_BACK_EXIT_MS releases sentinel
   mockApp.site.pageState = PAGE_STATE.NORMAL;
   currentTime = 5000;
   mockWin.history.back();
-  assert.equal(navCmds.length, 5); // no new doLeft sent
+  assert.equal(navCmds.length, 8); // no new doLeft sent
   assert.equal(backNav.armed, true); // still armed after first blocked attempt
 
   currentTime = 5000 + DOUBLE_BACK_EXIT_MS - 100;
   mockWin.history.back();
-  assert.equal(navCmds.length, 5);
+  assert.equal(navCmds.length, 8);
   assert.equal(backNav.armed, false); // released so next back leaves site
 
   backNav.detach();

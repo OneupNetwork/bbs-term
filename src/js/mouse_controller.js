@@ -125,6 +125,18 @@ export class MouseController {
     const app = this.app;
     if (!app.conn || !app.conn.isConnected) return false;
 
+    if (app.site?.handlePassScreenClick?.(app.buf, app.conn)) {
+      return true;
+    }
+    if (app.buf?.locator?.isActive?.()) {
+      const pos = app.clientToPos(e.clientX, e.clientY);
+      const report = app.buf.locator.handleMouseClick(e, pos);
+      if (report) {
+        app.send(report);
+        return true;
+      }
+    }
+
     if (force && e && typeof e === 'object') {
       e.force = true;
     }
@@ -200,8 +212,19 @@ export class MouseController {
     }
   }
 
+  isTouchSynthesizedEvent(e) {
+    if (!e) return false;
+    if (e.pointerType === 'touch') return true;
+    const lastTouchTime = this.app?.touch?.lastTouchTime;
+    if (lastTouchTime && Date.now() - lastTouchTime < 500) {
+      return true;
+    }
+    return false;
+  }
+
   onClick(e) {
     const app = this.app;
+    if (this.isTouchSynthesizedEvent(e)) return;
     if (
       app.modalShown ||
       app.contextMenuShown ||
@@ -260,6 +283,7 @@ export class MouseController {
 
   onMouseDown(e) {
     const app = this.app;
+    if (this.isTouchSynthesizedEvent(e)) return;
     if (
       app.modalShown ||
       app.contextMenuShown ||
@@ -296,6 +320,7 @@ export class MouseController {
 
   onMouseUp(e) {
     const app = this.app;
+    if (this.isTouchSynthesizedEvent(e)) return;
     const isRightClick = e.button === 2 || (e.button === 0 && e.ctrlKey);
     if (e.button === 0 && !e.ctrlKey) {
       this.leftButtonDown = false;
@@ -629,5 +654,76 @@ export class MouseController {
         isContinuous: i > 0 ? true : isContinuous,
       });
     }
+  }
+
+  handleTouchScroll(e, deltaY) {
+    const app = this.app;
+    if (!app || app.modalShown || app.isDialogOrExcludedTarget(e)) return false;
+    if (!deltaY) return false;
+
+    const now = Date.now();
+    const rawDirection = deltaY < 0 ? 'up' : 'down';
+    const isNewGesture =
+      !this._lastWheelGestureEventTime ||
+      now - this._lastWheelGestureEventTime >= 350 ||
+      this._lastWheelDirection !== rawDirection;
+    if (isNewGesture) {
+      this._gestureHasDispatchedCmd = false;
+      this.wheelDeltaYAccum = 0;
+    }
+    this._lastWheelGestureEventTime = now;
+    this._lastWheelDirection = rawDirection;
+
+    const stepPx = Math.max(16, app.view?.chh || 24);
+    if (
+      (this.wheelDeltaYAccum > 0 && deltaY < 0) ||
+      (this.wheelDeltaYAccum < 0 && deltaY > 0)
+    ) {
+      this.wheelDeltaYAccum = 0;
+    }
+    this.wheelDeltaYAccum = (this.wheelDeltaYAccum || 0) + deltaY;
+
+    if (Math.abs(this.wheelDeltaYAccum) < stepPx) {
+      return true;
+    }
+
+    const isScrollUp = this.wheelDeltaYAccum < 0;
+    const steps = Math.max(
+      1,
+      Math.floor(Math.abs(this.wheelDeltaYAccum) / stepPx)
+    );
+    this.wheelDeltaYAccum -= isScrollUp ? -(steps * stepPx) : steps * stepPx;
+
+    if (app.buf?.locator?.isActive?.()) {
+      const pos = app.clientToPos(e.clientX, e.clientY);
+      const wheelEv = {
+        deltaY: isScrollUp ? -1 : 1,
+        clientX: e.clientX,
+        clientY: e.clientY,
+      };
+      for (let i = 0; i < steps; i++) {
+        const report = app.buf.locator.handleWheel(wheelEv, pos);
+        if (report) {
+          app.send(report);
+        }
+      }
+      return true;
+    }
+
+    const wheelEv = {
+      deltaY: isScrollUp ? -(steps * stepPx) : steps * stepPx,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      preventDefault() {},
+      stopPropagation() {},
+    };
+    const interceptorHandled = app.inputInterceptors?.dispatchWheel(wheelEv);
+    if (interceptorHandled) {
+      return true;
+    }
+
+    const cmd = isScrollUp ? 'doArrowUp' : 'doArrowDown';
+    this._dispatchWheelNav(cmd, steps, rawDirection, now);
+    return true;
   }
 }
