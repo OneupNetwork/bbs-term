@@ -1471,7 +1471,9 @@ test('Plugins declare defaultPrefs and onTogglePref hooks, decoupling PrefModal 
   const liveUpdated = LiveUpdate.onTogglePref(true, {});
   assert.equal(liveUpdated.endTurnsOnLiveUpdate, true);
   assert.equal(liveUpdated.showLiveUpdateToolbar, true);
-  assert.equal(liveUpdated.liveUpdateInterval, 1);
+  assert.equal(liveUpdated.liveUpdateInterval, 3);
+  const liveUpdatedFromLegacy1 = LiveUpdate.onTogglePref(true, { liveUpdateInterval: 1 });
+  assert.equal(liveUpdatedFromLegacy1.liveUpdateInterval, 3);
 
   // AntiIdle onTogglePref
   const antiIdleUpdated = AntiIdle.onTogglePref(true, { antiIdleTime: 0 });

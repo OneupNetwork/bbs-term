@@ -47,7 +47,7 @@ export class LiveUpdate extends PluginBase {
   static defaultPrefs = {
     enableLiveUpdate: false,
     endTurnsOnLiveUpdate: true,
-    liveUpdateInterval: 1,
+    liveUpdateInterval: 3,
     showLiveUpdateToolbar: true,
   };
 
@@ -60,8 +60,8 @@ export class LiveUpdate extends PluginBase {
     if (updated.showLiveUpdateToolbar === undefined) {
       updated.showLiveUpdateToolbar = true;
     }
-    if (!updated.liveUpdateInterval) {
-      updated.liveUpdateInterval = 1;
+    if (!updated.liveUpdateInterval || updated.liveUpdateInterval < 3) {
+      updated.liveUpdateInterval = 3;
     }
     return updated;
   }
@@ -131,8 +131,8 @@ export class LiveUpdate extends PluginBase {
             className: "form-control",
             type: "number",
             name: "liveUpdateInterval",
-            min: "1",
-            value: values.liveUpdateInterval || 1,
+            min: "3",
+            value: Math.max(3, parseInt(values.liveUpdateInterval, 10) || 3),
             onChange: handleNumberInputChange,
           }),
           React.createElement(
@@ -148,7 +148,7 @@ export class LiveUpdate extends PluginBase {
   constructor(app, options = {}) {
     super(app, options);
     if (this.endTurnsOn === undefined) this.endTurnsOn = options.endTurnsOn ?? true;
-    if (this.intervalSec === undefined) this.intervalSec = options.intervalSec ?? 1;
+    if (this.intervalSec === undefined) this.intervalSec = options.intervalSec ?? 3;
     if (this.showToolbar === undefined) this.showToolbar = options.showToolbar ?? true;
     if (this.active === undefined) this.active = false;
     if (this.showsModal === undefined) this.showsModal = Boolean(this.enabled && this.showToolbar);
@@ -261,9 +261,9 @@ export class LiveUpdate extends PluginBase {
     }
 
     if (this.options?.intervalSec !== undefined) {
-      this.intervalSec = Math.max(1, parseInt(this.options.intervalSec, 10) || 1);
+      this.intervalSec = Math.max(3, parseInt(this.options.intervalSec, 10) || 3);
     } else {
-      this.intervalSec = Math.max(1, parseInt(prefs?.liveUpdateInterval, 10) || 1);
+      this.intervalSec = Math.max(3, parseInt(prefs?.liveUpdateInterval, 10) || 3);
     }
 
     if (this.options?.showToolbar !== undefined) {
@@ -336,7 +336,7 @@ export class LiveUpdate extends PluginBase {
 
   setIntervalSec(sec, savePref = false) {
     const parsed = parseInt(sec, 10);
-    const nextSec = parsed > 1 ? parsed : 1;
+    const nextSec = parsed >= 3 ? parsed : 3;
     const changed = this.intervalSec !== nextSec;
     this.intervalSec = nextSec;
     if (savePref) {
@@ -392,7 +392,7 @@ export class LiveUpdate extends PluginBase {
     if (immediate) {
       this.refresh();
     }
-    const intervalMs = (this.intervalSec || 1) * 1000;
+    const intervalMs = (this.intervalSec || 3) * 1000;
     this.timer = this.setInterval(() => {
       this.refresh();
     }, intervalMs);

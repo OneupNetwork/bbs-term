@@ -129,8 +129,8 @@ export class LiveHelperModal extends Component {
           <input
             type="number"
             className="LiveHelperModal__Body__Input form-control nomouse_command"
-            value={intervalSec || 1}
-            min="1"
+            value={Math.max(3, parseInt(intervalSec, 10) || 3)}
+            min="3"
             style={{ cursor: 'text' }}
             onChange={(e) => {
               onIntervalChange?.(e.target.value);

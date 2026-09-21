@@ -15,7 +15,7 @@ export const DEFAULT_PREFS = {
   enableEasyReading: false,
   enableLiveUpdate: false,
   endTurnsOnLiveUpdate: true,
-  liveUpdateInterval: 1,
+  liveUpdateInterval: 3,
   showLiveUpdateToolbar: true,
   copyOnSelect: false,
   trimTrailingSpaces: true,
@@ -326,6 +326,10 @@ export const getDefaultPrefs = () => {
         ? parseTrustedDomains(customDefaults.picPreviewTrustedDomains)
         : [...DEFAULT_PREFS.picPreviewTrustedDomains],
     picPreviewKnownDefaults: [...DEFAULT_PREFS.picPreviewKnownDefaults],
+    liveUpdateInterval: Math.max(
+      3,
+      parseInt(customDefaults.liveUpdateInterval, 10) || DEFAULT_PREFS.liveUpdateInterval
+    ),
   };
 };
 
@@ -385,7 +389,7 @@ export const readValuesWithDefault = () => {
       }
       if (saved.liveUpdateInterval !== undefined) {
         const parsedInterval = parseInt(saved.liveUpdateInterval, 10);
-        prefs.liveUpdateInterval = parsedInterval > 0 ? parsedInterval : 1;
+        prefs.liveUpdateInterval = parsedInterval >= 3 ? parsedInterval : 3;
       }
       if (saved.showLiveUpdateToolbar !== undefined) {
         prefs.showLiveUpdateToolbar = Boolean(saved.showLiveUpdateToolbar);
