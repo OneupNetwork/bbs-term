@@ -520,10 +520,10 @@
     "message": "Refresh Pushed Texts"
   },
   "options_supportMouseReporting": {
-    "message": "Support Mouse Reporting"
+    "message": "Native Mouse & Touch Support"
   },
   "options_supportMouseReporting_desc": {
-    "message": "The terminal only transmits mouse events. Server-side software support is required; many sites may not respond."
+    "message": "Report native mouse and touch pointer/scroll events to the server (Mouse & Touch Reporting). Requires server-side support (e.g., the MOUSE preference option)."
   },
   "options_highlightColor": {
     "message": "Color"

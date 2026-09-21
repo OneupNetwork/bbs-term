@@ -54,9 +54,19 @@ export class BackNavigationController {
     );
   }
 
+  canNavigateForward() {
+    return this.canNavigateBack();
+  }
+
   triggerBackNavigation() {
     if (!this.canNavigateBack()) return false;
     this.app.setNavCmd('doLeft');
+    return true;
+  }
+
+  triggerForwardNavigation() {
+    if (!this.canNavigateForward()) return false;
+    this.app.setNavCmd('doRight');
     return true;
   }
 
@@ -65,27 +75,39 @@ export class BackNavigationController {
     if (!w || !w.history || typeof w.history.pushState !== 'function') {
       return false;
     }
-    const state = { backNavGuardId: ++this.guardSeq };
+    const centerState = { backNavGuardId: ++this.guardSeq };
+    const forwardState = { backNavGuardId: ++this.guardSeq };
     try {
-      w.history.pushState(state, '');
-      this.currentId = state.backNavGuardId;
+      w.history.pushState(centerState, '');
+      this.currentId = centerState.backNavGuardId;
+      if (typeof w.history.back === 'function') {
+        w.history.pushState(forwardState, '');
+        this.restoring = true;
+        w.history.back();
+      }
       return true;
     } catch {
       return false;
     }
   }
 
-  restoreSentinel() {
+  restoreSentinel(direction = 'forward') {
     const w = this.win;
-    const canForward = w?.navigation ? Boolean(w.navigation.canGoForward) : true;
-    if (!canForward || !w?.history || typeof w.history.forward !== 'function') {
+    const stepFn = direction === 'back' ? w?.history?.back : w?.history?.forward;
+    const canTraverse =
+      direction === 'back'
+        ? true
+        : w?.navigation
+          ? Boolean(w.navigation.canGoForward)
+          : true;
+    if (!canTraverse || !w?.history || typeof stepFn !== 'function') {
       this.armed = this.pushSentinel();
       return;
     }
     this.restoring = true;
     this.armed = true;
     try {
-      w.history.forward();
+      stepFn.call(w.history);
     } catch {
       this.restoring = false;
       this.armed = this.pushSentinel();
@@ -93,8 +115,7 @@ export class BackNavigationController {
     }
     this.setTimeout(() => {
       const state = w.history && w.history.state;
-      if (state && state.backNavGuardId) {
-        this.currentId = state.backNavGuardId;
+      if (state && state.backNavGuardId === this.currentId) {
         return;
       }
       this.restoring = false;
@@ -129,12 +150,14 @@ export class BackNavigationController {
     }
 
     const state = e && e.state;
-    if (state && state.backNavGuardId === this.currentId) {
+    const targetId =
+      state && typeof state.backNavGuardId === 'number' ? state.backNavGuardId : 0;
+
+    if (targetId === this.currentId) {
       return;
     }
-    if (state && state.backNavGuardId) {
-      this.currentId = state.backNavGuardId;
-    }
+
+    const isForward = targetId > this.currentId;
 
     if (!this.armed) return;
     this.armed = false;
@@ -146,9 +169,16 @@ export class BackNavigationController {
       return;
     }
 
+    if (isForward) {
+      this.triggerForwardNavigation();
+      this.lastBlockedTime = 0;
+      this.restoreSentinel('back');
+      return;
+    }
+
     if (this.triggerBackNavigation()) {
       this.lastBlockedTime = 0;
-      this.restoreSentinel();
+      this.restoreSentinel('forward');
       return;
     }
 
@@ -159,7 +189,7 @@ export class BackNavigationController {
     }
 
     this.lastBlockedTime = t;
-    this.restoreSentinel();
+    this.restoreSentinel('forward');
   }
 
   syncOverscrollStyle() {

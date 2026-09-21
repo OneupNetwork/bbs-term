@@ -228,9 +228,12 @@ export class CanvasScreen extends React.Component {
   startSelection = (coords) => {
     const pos = this.getGridPos(coords);
     this.isMouseDown = true;
-    this.dragStarted = false;
+    this.dragStarted = true;
     this.startPos = pos;
-    this.setState({ selStart: pos, selEnd: pos });
+    const line = this.props.lines && this.props.lines[pos.row];
+    const cols = this.getCols();
+    const wordSel = CanvasSelection.getWordSelection(pos, line, cols);
+    this.setState(wordSel);
   };
 
   updateSelection = (coords) => {
@@ -247,8 +250,13 @@ export class CanvasScreen extends React.Component {
     }
     if (this.dragStarted) {
       const selEnd = this.state.selEnd;
-      if (!selEnd || selEnd.col !== pos.col || selEnd.row !== pos.row) {
-        this.setState({ selEnd: pos });
+      if (
+        !selEnd ||
+        selEnd.col !== pos.col ||
+        selEnd.row !== pos.row ||
+        this.state.selStart !== this.startPos
+      ) {
+        this.setState({ selStart: this.startPos, selEnd: pos });
       }
     }
   };

@@ -1220,6 +1220,10 @@ export class App extends EventEmitter {
       return;
     }
     switch (cmd) {
+      case 'j':
+      case 'k':
+        this.send(cmd);
+        break;
       case 'doArrowUp':
         this.send('\x1b[A');
         break;

@@ -435,10 +435,10 @@ test('i18n files define all required translations for new settings', () => {
     assert.ok(enUS.includes(key), `en_US must include ${key}`);
   }
 
-  // Exact note requested by user
+  // Updated label & note for Native Mouse & Touch Support
   assert.ok(
-    zhTW.includes('終端機只能送出滑鼠資訊，此功能仍需要伺服器端軟體支援，多數站台可能無反應。'),
-    'zh_TW note text must match user request exactly'
+    zhTW.includes('原生滑鼠與觸控支援'),
+    'zh_TW label must match Native Mouse & Touch Support'
   );
 });
 

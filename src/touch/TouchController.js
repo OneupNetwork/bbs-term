@@ -1,5 +1,6 @@
 import { PAGE_STATE } from "../js/sites/index.js";
 
+export const LONG_PRESS_MS = 500;
 const MOVE_THRESHOLD = 8;
 const PINCH_STEP_PX = 28;
 
@@ -16,6 +17,7 @@ export class TouchController {
     this.isSelecting = false;
     this.isPinching = false;
     this.panDirection = null;
+    this.longPressTimer = null;
     this.pointers = new Map();
     this.pinchLastDist = 0;
     this.pinchAccumulatedDelta = 0;
@@ -30,6 +32,32 @@ export class TouchController {
     if (this.longPressTimer) {
       clearTimeout(this.longPressTimer);
       this.longPressTimer = null;
+    }
+  }
+
+  startSelectionAtStartPoint() {
+    const app = this.app;
+    if (
+      !this.touchStarted ||
+      this.isPanning ||
+      this.isSelecting ||
+      this.isPinching ||
+      this.pointers.size !== 1
+    ) {
+      return;
+    }
+    this.isSelecting = true;
+    this.panDirection = "select";
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      try {
+        navigator.vibrate(10);
+      } catch (err) {}
+    }
+    if (app.view) {
+      app.view.startSelection({
+        clientX: this.startX,
+        clientY: this.startY,
+      });
     }
   }
 
@@ -75,11 +103,18 @@ export class TouchController {
         }
         console.debug("pointerdown (touch)");
 
+        this.clearLongPressTimer();
+        this.longPressTimer = setTimeout(() => {
+          this.longPressTimer = null;
+          this.startSelectionAtStartPoint();
+        }, LONG_PRESS_MS);
+
         try {
           target.setPointerCapture(e.pointerId);
         } catch (err) {}
       } else if (this.pointers.size === 2) {
         // Multi-touch: enter pinch zoom / two-finger pan mode
+        this.clearLongPressTimer();
         if (this.isSelecting && app.view) {
           app.view.clearSelection();
         }
@@ -104,6 +139,7 @@ export class TouchController {
 
       if (this.pointers.size >= 2) {
         // Two-finger gesture: pinch to zoom font and two-finger pan
+        this.clearLongPressTimer();
         const [p1, p2] = Array.from(this.pointers.values());
         const currentDist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
         const distDelta = currentDist - this.pinchLastDist;
@@ -138,38 +174,33 @@ export class TouchController {
 
       if (this.isPinching) return;
 
-      const dist = Math.hypot(e.clientX - this.startX, e.clientY - this.startY);
-      if (dist > MOVE_THRESHOLD) {
-        if (!this.panDirection) {
-          const dx = Math.abs(e.clientX - this.startX);
-          const dy = Math.abs(e.clientY - this.startY);
-          const site = app.site;
-          if (dy >= dx && site?.pageState === PAGE_STATE.LIST) {
-            this.panDirection = "list_scroll";
-            this.isPanning = true;
-          } else {
-            this.panDirection = "select";
-            this.isSelecting = true;
-            if (app.view) {
-              app.view.startSelection({
-                clientX: this.startX,
-                clientY: this.startY,
-              });
-            }
-          }
-        }
-      }
-
-      if (this.panDirection === "list_scroll") {
+      if (this.panDirection === "select" && this.isSelecting) {
         e.preventDefault();
-        app.onMouse_move(e.clientX, e.clientY, false, true, { highlight: true });
-        this.touchedCenter.x = e.clientX;
-        this.touchedCenter.y = e.clientY;
-      } else if (this.panDirection === "select" && this.isSelecting) {
-        e.preventDefault();
+        this.lastX = e.clientX;
+        this.lastY = e.clientY;
         if (app.view) {
           app.view.updateSelection({ clientX: e.clientX, clientY: e.clientY });
         }
+        return;
+      }
+
+      const dist = Math.hypot(e.clientX - this.startX, e.clientY - this.startY);
+      if (dist > MOVE_THRESHOLD) {
+        this.clearLongPressTimer();
+        if (!this.panDirection) {
+          this.panDirection = "scroll";
+          this.isPanning = true;
+        }
+      }
+
+      if (this.panDirection === "scroll" && this.isPanning) {
+        e.preventDefault();
+        const deltaY = this.lastY - e.clientY;
+        this.lastX = e.clientX;
+        this.lastY = e.clientY;
+        this.touchedCenter.x = e.clientX;
+        this.touchedCenter.y = e.clientY;
+        app.mouse?.handleTouchScroll?.(e, deltaY);
       }
     });
 
@@ -177,6 +208,7 @@ export class TouchController {
       if (e.pointerType !== "touch") return;
       if (!this.pointers.has(e.pointerId)) return;
 
+      this.clearLongPressTimer();
       this.lastTouchTime = Date.now();
       this.pointers.delete(e.pointerId);
 
@@ -215,38 +247,7 @@ export class TouchController {
         return;
       }
 
-      if (this.isPanning) {
-        const site = app.site;
-        if (
-          this.panDirection === "list_scroll" &&
-          site?.pageState === PAGE_STATE.LIST &&
-          app.buf
-        ) {
-          const pos = app.clientToPos
-            ? app.clientToPos(this.touchedCenter.x, this.touchedCenter.y)
-            : null;
-          const lastRowNum = site?.getLastRowNum
-            ? site.getLastRowNum(app.buf)
-            : app.buf.rows - 1;
-          const isBottomRow = Boolean(pos && pos.row === lastRowNum);
-          const isHighlighted =
-            app.view &&
-            typeof app.view.highlightedRow === "number" &&
-            app.view.highlightedRow !== -1;
-          if (isHighlighted || isBottomRow) {
-            app.onMouse_click(
-              {
-                clientX: this.touchedCenter.x,
-                clientY: this.touchedCenter.y,
-              },
-              true
-            );
-          }
-          app.emit?.("term:clear-highlight");
-          app.view?.clearHighlight?.();
-          if (target && target.style) target.style.cursor = "auto";
-        }
-      } else {
+      if (!this.isPanning) {
         e.preventDefault();
         e.stopPropagation();
         if (app.view) {
@@ -275,6 +276,7 @@ export class TouchController {
       if (e.pointerType !== "touch") return;
       if (!this.pointers.has(e.pointerId)) return;
 
+      this.clearLongPressTimer();
       this.lastTouchTime = Date.now();
       this.pointers.delete(e.pointerId);
 

@@ -520,10 +520,10 @@
     "message": "重新整理推文"
   },
   "options_supportMouseReporting": {
-    "message": "支援滑鼠定位協議"
+    "message": "原生滑鼠與觸控支援"
   },
   "options_supportMouseReporting_desc": {
-    "message": "終端機只能送出滑鼠資訊，此功能仍需要伺服器端軟體支援，多數站台可能無反應。"
+    "message": "向伺服器回報原生滑鼠與觸控座標／捲動資訊（Mouse & Touch Reporting）。需伺服器端啟用支援（如個人設定中的 MOUSE 選項）。"
   },
   "options_highlightColor": {
     "message": "底色"
