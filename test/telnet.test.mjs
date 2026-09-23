@@ -136,5 +136,22 @@ test('TelnetFilter inbound on Stream notifies stream telopt listener', () => {
   assert.equal(payload.opt, 0);
 });
 
+test('TelnetConnection sendTimingMark sends IAC DO TIMING_MARK and silently absorbs WILL/WONT TIMING_MARK', () => {
+  const socket = new MockSocket();
+  const conn = new TelnetConnection(socket);
+  const received = [];
+  conn.addEventListener('data', (e) => received.push(e.data));
+
+  conn.sendTimingMark();
+  assert.deepEqual(socket.sent[0], new Uint8Array([IAC, DO, 0x06]));
+
+  // Server responds with IAC WONT TIMING_MARK (pttbbs default) or IAC WILL TIMING_MARK (RFC 860)
+  socket.emit('data', { data: new Uint8Array([IAC, WONT, 0x06, IAC, WILL, 0x06]) });
+  // Neither should leak into terminal data or trigger an extra IAC DONT reply
+  assert.equal(received.length, 0);
+  assert.equal(socket.sent.length, 1);
+});
+
+
 
 

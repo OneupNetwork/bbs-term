@@ -23,6 +23,7 @@ import {
   BINARY,
   ECHO,
   SUPRESS_GO_AHEAD,
+  TIMING_MARK,
   TERM_TYPE,
   IS,
   SEND,
@@ -67,6 +68,7 @@ const TELNET_OPT_NAMES = {
   [BINARY]: "BINARY (0)",
   [ECHO]: "ECHO (1)",
   [SUPRESS_GO_AHEAD]: "SUPPRESS_GO_AHEAD (3)",
+  [TIMING_MARK]: "TIMING_MARK (6)",
   [TERM_TYPE]: "TERM_TYPE (24)",
   [NAWS]: "NAWS (31)",
 };

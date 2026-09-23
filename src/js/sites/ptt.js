@@ -206,7 +206,11 @@ export class PttSite extends BaseSite {
   }
 
   sendAntiIdle(conn) {
-    conn.sendNop();
+    if (conn.sendTimingMark) {
+      conn.sendTimingMark();
+    } else {
+      conn.sendNop();
+    }
   }
 
   getPagingSlice(

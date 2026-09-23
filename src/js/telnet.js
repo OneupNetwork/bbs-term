@@ -27,6 +27,7 @@ export const IAC = 0xff;
 export const BINARY = 0x00;
 export const ECHO  = 0x01;
 export const SUPRESS_GO_AHEAD = 0x03;
+export const TIMING_MARK = 0x06;
 export const TERM_TYPE = 0x18;
 export const IS = 0x00;
 export const SEND = 0x01;
@@ -184,6 +185,8 @@ export class TelnetFilter extends EventEmitter {
             s.sendRaw(new Uint8Array([IAC, DO, b]));
           }
           break;
+        case TIMING_MARK:
+          break;
         default:
           if (s && s.sendRaw) {
             s.sendRaw(new Uint8Array([IAC, DONT, b]));
@@ -313,6 +316,13 @@ export class TelnetFilter extends EventEmitter {
       s.sendRaw(new Uint8Array([IAC, NOP]));
     }
   }
+
+  sendTimingMark(stream) {
+    const s = stream || this.stream;
+    if (s && s.sendRaw) {
+      s.sendRaw(new Uint8Array([IAC, DO, TIMING_MARK]));
+    }
+  }
 }
 
 export class TelnetConnection extends EventEmitter {
@@ -410,5 +420,9 @@ export class TelnetConnection extends EventEmitter {
 
   sendNop() {
     this.filter.sendNop({ sendRaw: (d) => this._sendRaw(d) });
+  }
+
+  sendTimingMark() {
+    this.filter.sendTimingMark({ sendRaw: (d) => this._sendRaw(d) });
   }
 }

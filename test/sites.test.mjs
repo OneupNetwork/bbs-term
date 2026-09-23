@@ -1767,9 +1767,11 @@ test('src/plugins exports AntiIdle and delegates keepalive to site', async () =>
   const pttSite = new PttSite();
   const baseSite = new BaseSite();
 
+  const timingMarkCalls = [];
   const nopCalls = [];
   const sentData = [];
   const mockConn = {
+    sendTimingMark: () => timingMarkCalls.push('timing_mark'),
     sendNop: () => nopCalls.push('nop'),
     send: (d) => sentData.push(d),
   };
@@ -1793,11 +1795,11 @@ test('src/plugins exports AntiIdle and delegates keepalive to site', async () =>
 
   // Tick 1s: should not trigger yet
   antiIdle.tick(1000);
-  assert.equal(nopCalls.length, 0);
+  assert.equal(timingMarkCalls.length, 0);
 
-  // Tick 1s: reaches 2000ms, should trigger PttSite.sendAntiIdle -> sendNop
+  // Tick 1s: reaches 2000ms, should trigger PttSite.sendAntiIdle -> sendTimingMark
   antiIdle.tick(1000);
-  assert.equal(nopCalls.length, 1);
+  assert.equal(timingMarkCalls.length, 1);
   assert.equal(antiIdle.idleTime, 0);
 
   // Switch to baseSite: should trigger send('\x1b\x1b')

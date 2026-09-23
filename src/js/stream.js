@@ -190,4 +190,12 @@ export class Stream extends EventEmitter {
       this.sendRaw(new Uint8Array([0xff, 0xf1]));
     }
   }
+
+  sendTimingMark() {
+    if (this.telnetFilter && this.telnetFilter.sendTimingMark) {
+      this.telnetFilter.sendTimingMark(this);
+    } else {
+      this.sendRaw(new Uint8Array([0xff, 0xfd, 0x06]));
+    }
+  }
 }
