@@ -533,10 +533,14 @@ export class App extends EventEmitter {
     if (this.timerEverySec) {
       this.timerEverySec.cancel();
     }
+    let lastTickTime = Date.now();
     this.timerEverySec = setTimer(
       true,
       () => {
-        this.emit('term:tick', { intervalMs: 1000 });
+        const now = Date.now();
+        const intervalMs = Math.max(0, now - lastTickTime) || 1000;
+        lastTickTime = now;
+        this.emit('term:tick', { intervalMs, now });
         this.view.onBlink();
       },
       1000

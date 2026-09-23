@@ -62,6 +62,7 @@ export class AntiIdle extends PluginBase {
   constructor(app, options = {}) {
     super(app, options);
     this.idleTime = 0;
+    this.lastTickTime = Date.now();
     if (this.interval === undefined) {
       this.interval = options.interval ?? AntiIdle.DEFAULT_INTERVAL_SEC * 1000;
     }
@@ -77,11 +78,20 @@ export class AntiIdle extends PluginBase {
     });
 
     this.listenAppWhileEnabled("term:tick", (e) => {
-      this.tick(e?.intervalMs ?? e?.detail?.intervalMs ?? 1000);
+      const intervalMs = e?.intervalMs ?? e?.detail?.intervalMs ?? 1000;
+      const now = e?.now ?? e?.detail?.now;
+      this.tick(intervalMs, now);
     });
     this.listenAppWhileEnabled("term:send", () => this.resetIdle());
     this.listenAppWhileEnabled("term:user-activity", () => this.resetIdle());
     this.listenAppWhileEnabled("term:connect", () => this.resetIdle());
+    if (typeof document !== "undefined") {
+      this.listenWhileEnabled(document, "visibilitychange", () => {
+        if (!document.hidden) {
+          this.tick(0);
+        }
+      });
+    }
   }
 
   syncFromPrefs() {
@@ -112,8 +122,9 @@ export class AntiIdle extends PluginBase {
     this.resetIdle();
   }
 
-  resetIdle() {
+  resetIdle(now = Date.now()) {
     this.idleTime = 0;
+    this.lastTickTime = now;
   }
 
   onEnable() {
@@ -124,11 +135,16 @@ export class AntiIdle extends PluginBase {
     this.resetIdle();
   }
 
-  tick(deltaMs = 1000) {
+  tick(deltaMs = 1000, now = Date.now()) {
     if (!this.enabled || !this.app) return;
     if (this.app.connectState !== 1) return;
 
-    this.idleTime += deltaMs;
+    const wallElapsed =
+      typeof this.lastTickTime === "number" ? Math.max(0, now - this.lastTickTime) : 0;
+    this.lastTickTime = now;
+    const effectiveDelta = Math.max(Number(deltaMs) || 0, wallElapsed);
+
+    this.idleTime += effectiveDelta;
     if (this.interval > 0 && this.idleTime >= this.interval) {
       this.app.emit("term:anti-idle");
       this.idleTime = 0;

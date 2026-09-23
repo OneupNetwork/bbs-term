@@ -1827,11 +1827,15 @@ test('src/plugins exports AntiIdle and delegates keepalive to site', async () =>
   });
   const eventAntiIdle = new antiIdleModule.AntiIdle(eventApp, {
     enabled: true,
-    interval: 1000,
+    interval: 30000,
   });
-  eventAntiIdle.tick(1000);
+  const baseNow = Date.now();
+  eventAntiIdle.resetIdle(baseNow);
+  // Simulate background tab throttling: callback passes deltaMs=1000, but 60s elapsed on wall clock
+  eventAntiIdle.tick(1000, baseNow + 60000);
   assert.ok(eventApp.events.includes('term:anti-idle'));
   assert.equal(appAntiIdleSent, true);
+  assert.equal(eventAntiIdle.idleTime, 0);
 });
 
 test('src/plugins exports AutoWrap and wraps pasted text', async () => {
