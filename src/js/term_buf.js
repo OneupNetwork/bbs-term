@@ -535,9 +535,17 @@ export class TermBuf extends EventEmitter {
           line.uris=null;
         }
         let s = '';
+        const colMap = [];
+        const colEndMap = [];
         for (let col = 0; col < cols; ++col) {
           const c = line[col];
-          s += (c && !c.isDBCSTrail && c.ch !== '') ? c.ch : ' ';
+          if (!c || c.isDBCSTrail || c.ch === '') {
+            continue;
+          }
+          colMap.push(col);
+          const colWidth = (c.isDBCSLead || isFullWidth(c.ch)) ? 2 : 1;
+          colEndMap.push(col + colWidth);
+          s += c.ch;
         }
 
         let res;
@@ -546,7 +554,11 @@ export class TermBuf extends EventEmitter {
         // pairs of URI start and end positions are stored in line.uris.
         while ( (res = this.uriRegEx.exec(s)) !== null ) {
           if (!uris)   uris = [];
-          const uri = [res.index, res.index+res[0].length];
+          const startCol = colMap[res.index] ?? res.index;
+          const endCol = (res[0].length > 0 && colEndMap)
+            ? (colEndMap[res.index + res[0].length - 1] ?? (res.index + res[0].length))
+            : (startCol + res[0].length);
+          const uri = [startCol, endCol];
           uris.push(uri);
           // dump('found URI: ' + res[0] + '\n');
         }
@@ -556,10 +568,14 @@ export class TermBuf extends EventEmitter {
           for (let i = 0; i < customLinks.length; ++i) {
             const cl = customLinks[i];
             if (cl && typeof cl.start === 'number' && typeof cl.end === 'number' && cl.end > cl.start) {
-              const overlap = uris && uris.some(u => !(cl.end <= u[0] || cl.start >= u[1]));
+              const startCol = colMap[cl.start] ?? cl.start;
+              const endCol = (cl.end > cl.start && colEndMap)
+                ? (colEndMap[cl.end - 1] ?? cl.end)
+                : cl.end;
+              const overlap = uris && uris.some(u => !(endCol <= u[0] || startCol >= u[1]));
               if (!overlap) {
                 if (!uris) uris = [];
-                uris.push([cl.start, cl.end, cl.url]);
+                uris.push([startCol, endCol, cl.url]);
               }
             }
           }

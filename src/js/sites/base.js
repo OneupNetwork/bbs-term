@@ -27,6 +27,7 @@ export class BaseSite extends EventEmitter {
     this._textBuffer = '';
     this.pageState = PAGE_STATE.NORMAL;
     this.prevPageState = PAGE_STATE.NORMAL;
+    this.hasWeb = false;
   }
 
   set charset(val) {
@@ -54,6 +55,14 @@ export class BaseSite extends EventEmitter {
 
   get supportNavKeys() {
     return false;
+  }
+
+  get hasWeb() {
+    return this._hasWeb !== undefined ? this._hasWeb : false;
+  }
+
+  set hasWeb(val) {
+    this._hasWeb = Boolean(val);
   }
 
   /**
@@ -194,6 +203,9 @@ export class BaseSite extends EventEmitter {
    * @returns {number} 0-based row index
    */
   getLastRowNum(termBuf) {
+    if (!termBuf || typeof termBuf.rows !== 'number') {
+      return 23;
+    }
     if (this.fixed_last_row !== null && this.fixed_last_row !== undefined) {
       return Math.min(this.fixed_last_row, termBuf.rows - 1);
     }
@@ -224,10 +236,11 @@ export class BaseSite extends EventEmitter {
    * @returns {boolean}
    */
   isPassScreen(termBuf) {
+    if (!termBuf) return false;
     let lastRowNum = this.getLastRowNum(termBuf);
     let cols = termBuf ? termBuf.cols : 80;
     let lastRowText = termBuf ? termBuf.getRowText(lastRowNum, 0, cols) : '';
-    const regex = /(?:請\s*)?按\s*(?:任\s*意\s*鍵|空\s*白\s*鍵|[([]?Space(?:\/Return)?[)\]]?)\s*繼續/i;
+    const regex = /(?:請\s*)?按\s*(?:任意鍵|空白鍵|[([]?Space(?:\/Return)?[)\]]?)\s*繼續/i;
     if (regex.test(lastRowText)) return true;
     if (termBuf && termBuf.rows > 24) {
       let row23Text = termBuf.getRowText(23, 0, cols);

@@ -5,6 +5,7 @@ import {
   getSiteProfile,
   BaseSite,
   PttSite,
+  Ptt2Site,
   Maple3Site,
   AutoSite,
   CHARSETS,
@@ -536,6 +537,17 @@ test('PttSite detects custom links for AID codes in lines', () => {
   assert.equal(links6[0].aid, '1gUp14J-');
   assert.equal(links6[0].board, 'C_Chat');
   assert.equal(links6[0].url, 'https://www.ptt.cc/bbs/C_Chat/M.1786458180.A.4FE.html');
+  assert.equal(line6.substring(links6[0].start, links6[0].end), '[本文轉錄自 C_Chat 看板 #1gUp14J- ]');
+
+  const lineSysop = '[本文轉錄自 SYSOP 看板 #1gQCkSMX ]';
+  const linksSysop = ptt.detectCustomLinks(lineSysop, null, null);
+  assert.equal(linksSysop.length, 1);
+  assert.equal(linksSysop[0].aid, '1gQCkSMX');
+  assert.equal(linksSysop[0].board, 'SYSOP');
+  assert.equal(linksSysop[0].url, 'https://www.ptt.cc/bbs/SYSOP/M.1785252764.A.5A1.html');
+  assert.equal(lineSysop.substring(linksSysop[0].start, linksSysop[0].end), '[本文轉錄自 SYSOP 看板 #1gQCkSMX ]');
+
+
 
   // Article reading screen header: 作者 ... 看板 Gossiping
   const mockTermArticle = {
@@ -557,6 +569,22 @@ test('PttSite detects custom links for AID codes in lines', () => {
   assert.equal(links8[0].aid, '1gU3wwNZ');
   assert.equal(links8[0].board, 'Browsers');
   assert.equal(links8[0].url, 'https://www.ptt.cc/bbs/Browsers/M.1786265274.A.5E3.html');
+
+  // Prefix notation: <Board> 看板 #<AID>
+  const line9 = 'Ptt2Issue 看板 #1Q4rxKuM';
+  const links9 = ptt.detectCustomLinks(line9, null, null);
+  assert.equal(links9.length, 1);
+  assert.equal(links9[0].aid, '1Q4rxKuM');
+  assert.equal(links9[0].board, 'Ptt2Issue');
+  assert.equal(links9[0].url, 'https://www.ptt.cc/bbs/Ptt2Issue/M.1511218900.A.E16.html');
+  assert.equal(line9.substring(links9[0].start, links9[0].end), 'Ptt2Issue 看板 #1Q4rxKuM');
+
+  const line10 = '請看 Ptt2Issue 看板 #1Q4rxKuM 討論';
+  const links10 = ptt.detectCustomLinks(line10, null, null);
+  assert.equal(links10.length, 1);
+  assert.equal(links10[0].aid, '1Q4rxKuM');
+  assert.equal(links10[0].board, 'Ptt2Issue');
+  assert.equal(line10.substring(links10[0].start, links10[0].end), 'Ptt2Issue 看板 #1Q4rxKuM');
 
   // AutoSite forwards detectCustomLinks and retains currentBoard across scrolled pages
   const auto = new AutoSite();
@@ -624,6 +652,160 @@ test('PttSite and AutoSite handleCustomLink execute in-terminal AID jumps and pa
   assert.equal(ptt.handleCustomLink(null, mockApp), false);
   assert.equal(ptt.handleCustomLink('', mockApp), false);
   assert.equal(ptt.handleCustomLink('#aid=123', mockApp), false);
+});
+
+test('Ptt2Site has no web and always generates #aid links, and handleCustomLink sends space before AID on press anykey', () => {
+  const ptt = new PttSite();
+  const ptt2 = new Ptt2Site();
+  const base = new BaseSite();
+
+  // hasWeb flag
+  assert.equal(base.hasWeb, false);
+  assert.equal(ptt.hasWeb, true);
+  assert.equal(ptt2.hasWeb, false);
+
+  // 1. PTT2 detectCustomLinks never generates web URLs even when board is present
+  const lineWithBoard = '推薦文章請看 #1gU3wwNZ (Browsers) 超級詳細';
+  const pttLinks = ptt.detectCustomLinks(lineWithBoard, null, null);
+  assert.equal(pttLinks[0].url, 'https://www.ptt.cc/bbs/Browsers/M.1786265274.A.5E3.html');
+
+  const ptt2Links1 = ptt2.detectCustomLinks(lineWithBoard, null, null);
+  assert.equal(ptt2Links1.length, 1);
+  assert.equal(ptt2Links1[0].aid, '1gU3wwNZ');
+  assert.equal(ptt2Links1[0].board, 'Browsers');
+  assert.equal(ptt2Links1[0].url, '#aid=1gU3wwNZ&board=Browsers');
+  assert.equal(lineWithBoard.substring(ptt2Links1[0].start, ptt2Links1[0].end), '#1gU3wwNZ (Browsers)');
+
+  const lineWithSysop = '請參考 #1gUp14J-@SYSOP 說明公告';
+  const ptt2Links2 = ptt2.detectCustomLinks(lineWithSysop, null, null);
+  assert.equal(ptt2Links2[0].url, '#aid=1gUp14J-&board=SYSOP');
+
+  const mockTermBoard = {
+    rows: 24,
+    cols: 80,
+    getRowText: (r) => (r === 0 ? '【板主:admin】         看板《Secret》        線上:12345' : ''),
+  };
+  const lineInBoard = '剛才有人發在 #1gU3wwNZ 趕快去看';
+  const ptt2Links3 = ptt2.detectCustomLinks(lineInBoard, null, mockTermBoard);
+  assert.equal(ptt2Links3[0].aid, '1gU3wwNZ');
+  assert.equal(ptt2Links3[0].board, 'Secret');
+  assert.equal(ptt2Links3[0].url, '#aid=1gU3wwNZ&board=Secret');
+
+  const lineCrossPost = '※ [本文轉錄自 C_Chat 看板 #1gUp14J- ]';
+  const ptt2Links4 = ptt2.detectCustomLinks(lineCrossPost, null, null);
+  assert.equal(ptt2Links4[0].url, '#aid=1gUp14J-&board=C_Chat');
+
+  // PTT2 prefix notation: Ptt2Issue 看板 #1Q4rxKuM generates #aid link with board
+  const linePrefixPtt2 = 'Ptt2Issue 看板 #1Q4rxKuM';
+  const ptt2LinksPrefix = ptt2.detectCustomLinks(linePrefixPtt2, null, null);
+  assert.equal(ptt2LinksPrefix.length, 1);
+  assert.equal(ptt2LinksPrefix[0].aid, '1Q4rxKuM');
+  assert.equal(ptt2LinksPrefix[0].board, 'Ptt2Issue');
+  assert.equal(ptt2LinksPrefix[0].url, '#aid=1Q4rxKuM&board=Ptt2Issue');
+  assert.equal(linePrefixPtt2.substring(ptt2LinksPrefix[0].start, ptt2LinksPrefix[0].end), 'Ptt2Issue 看板 #1Q4rxKuM');
+
+  const linePrefixPtt2Bracket = '《Ptt2Issue》看板 #1Q4rxKuM';
+  const ptt2LinksPrefixBracket = ptt2.detectCustomLinks(linePrefixPtt2Bracket, null, null);
+  assert.equal(ptt2LinksPrefixBracket.length, 1);
+  assert.equal(ptt2LinksPrefixBracket[0].aid, '1Q4rxKuM');
+  assert.equal(ptt2LinksPrefixBracket[0].board, 'Ptt2Issue');
+  assert.equal(ptt2LinksPrefixBracket[0].url, '#aid=1Q4rxKuM&board=Ptt2Issue');
+
+  // PTT2 cross-post tag: [本文轉錄自 SYSOP 看板 #1gQCkSMX ]
+  const lineSysopPtt2 = '[本文轉錄自 SYSOP 看板 #1gQCkSMX ]';
+  const ptt2LinksSysop = ptt2.detectCustomLinks(lineSysopPtt2, null, null);
+  assert.equal(ptt2LinksSysop.length, 1);
+  assert.equal(ptt2LinksSysop[0].aid, '1gQCkSMX');
+  assert.equal(ptt2LinksSysop[0].board, 'SYSOP');
+  assert.equal(ptt2LinksSysop[0].url, '#aid=1gQCkSMX&board=SYSOP');
+  assert.equal(lineSysopPtt2.substring(ptt2LinksSysop[0].start, ptt2LinksSysop[0].end), '[本文轉錄自 SYSOP 看板 #1gQCkSMX ]');
+
+
+
+  // Boardless AID on PTT2: url is #aid=<aid>
+  const lineBoardless = '代碼: #1gU3wwNZ';
+  const ptt2LinksBoardless = ptt2.detectCustomLinks(lineBoardless, null, null);
+  assert.equal(ptt2LinksBoardless[0].url, '#aid=1gU3wwNZ');
+
+  // 2. handleCustomLink on Ptt2Site directly simulates keystrokes
+  let sentData = '';
+  let sentCommands = [];
+  let focused = false;
+  const mockApp = {
+    send: (data) => {
+      sentData += data;
+      sentCommands.push(data);
+    },
+    setInputAreaFocus: () => {
+      focused = true;
+    },
+  };
+
+  // Same board (currentBoard === 'Browsers'): sends #AID\r directly
+  ptt2.pageState = PAGE_STATE.LIST;
+  ptt2.currentBoard = 'Browsers';
+  assert.equal(ptt2.handleCustomLink(ptt2Links1[0].url, mockApp), true);
+  assert.equal(sentData, '#1gU3wwNZ\r');
+  assert.deepEqual(sentCommands, ['#1gU3wwNZ\r']);
+  assert.equal(focused, true);
+
+  // Different board (currentBoard === 'Secret', targetBoard === 'Ptt2Issue'):
+  // sends s<board>\r then #<aid>\r
+  sentData = '';
+  sentCommands = [];
+  focused = false;
+  ptt2.currentBoard = 'Secret';
+  assert.equal(ptt2.handleCustomLink('https://term.ptt2.cc/#aid=1Q4rxKuM&board=Ptt2Issue', mockApp), true);
+  assert.equal(sentData, 'sPtt2Issue\r#1Q4rxKuM\r');
+  assert.deepEqual(sentCommands, ['sPtt2Issue\r', '#1Q4rxKuM\r']);
+  assert.equal(focused, true);
+
+  // Different board with press anykey (PAGE_STATE.PASS): sends space first, then s<board>\r, then #<aid>\r
+  sentData = '';
+  sentCommands = [];
+  focused = false;
+  ptt2.pageState = PAGE_STATE.PASS;
+  ptt2.currentBoard = 'Secret';
+  assert.equal(ptt2.handleCustomLink(ptt2LinksPrefix[0].url, mockApp), true);
+  assert.equal(sentData, ' sPtt2Issue\r#1Q4rxKuM\r');
+  assert.deepEqual(sentCommands, [' ', 'sPtt2Issue\r', '#1Q4rxKuM\r']);
+  assert.equal(focused, true);
+
+  // Press anykey with boardless AID: sends space first, then #AID\r
+  sentData = '';
+  sentCommands = [];
+  focused = false;
+  ptt2.pageState = PAGE_STATE.PASS;
+  assert.equal(ptt2.handleCustomLink('#aid=1gU3wwNZ', mockApp), true);
+  assert.equal(sentData, ' #1gU3wwNZ\r');
+  assert.deepEqual(sentCommands, [' ', '#1gU3wwNZ\r']);
+  assert.equal(focused, true);
+
+  // Screen buffer waiting for any key: sends space first, then #AID\r
+  sentData = '';
+  sentCommands = [];
+  focused = false;
+  ptt2.pageState = PAGE_STATE.NORMAL;
+  const mockAppWithPassBuf = {
+    ...mockApp,
+    buf: {
+      rows: 24,
+      cols: 80,
+      getRowText: (r) => (r === 23 ? '請按任意鍵繼續' : ''),
+    },
+  };
+  assert.equal(ptt2.handleCustomLink('#aid=1gU3wwNZ', mockAppWithPassBuf), true);
+  assert.equal(sentData, ' #1gU3wwNZ\r');
+  assert.deepEqual(sentCommands, [' ', '#1gU3wwNZ\r']);
+
+  // PttSite also sends space first when clicking AID while in press anykey state
+  sentData = '';
+  sentCommands = [];
+  focused = false;
+  ptt.pageState = PAGE_STATE.PASS;
+  assert.equal(ptt.handleCustomLink('#aid=1gU3wwNZ', mockApp), true);
+  assert.equal(sentData, ' #1gU3wwNZ\r');
+  assert.deepEqual(sentCommands, [' ', '#1gU3wwNZ\r']);
 });
 
 test('BaseSite resolves URLs including pid:// scheme', () => {
@@ -3708,4 +3890,38 @@ test('EasyReading respects mouseWheelChangePost preference (default false) at to
   } finally {
     globalThis.document = originalDoc;
   }
+});
+
+test('TermBuf filters isDBCSTrail when capturing line text and maps custom links to correct column ranges', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+
+  // PTT2 cross-post tag on TermBuf
+  const ptt2Buf = new TermBuf(80, 24);
+  ptt2Buf.site = new Ptt2Site();
+  ptt2Buf.puts('※ [本文轉錄自 SYSOP 看板 #1gQCkSMX ]');
+  ptt2Buf.updateCharAttr();
+
+  const ptt2Line = ptt2Buf.lines[0];
+  assert.ok(ptt2Line.uris && ptt2Line.uris.length === 1);
+  const [p2Start, p2End, p2Url] = ptt2Line.uris[0];
+  assert.equal(p2Start, 3); // '[' column
+  assert.equal(p2End, 37); // after ']' column
+  assert.equal(p2Url, '#aid=1gQCkSMX&board=SYSOP');
+  assert.equal(ptt2Line[p2Start].startOfURL, true);
+  assert.equal(ptt2Line[p2End - 1].endOfURL, true);
+
+  // PTT cross-post tag on TermBuf
+  const pttBuf = new TermBuf(80, 24);
+  pttBuf.site = new PttSite();
+  pttBuf.puts('※ [本文轉錄自 SYSOP 看板 #1gQCkSMX ]');
+  pttBuf.updateCharAttr();
+
+  const pttLine = pttBuf.lines[0];
+  assert.ok(pttLine.uris && pttLine.uris.length === 1);
+  const [p1Start, p1End, p1Url] = pttLine.uris[0];
+  assert.equal(p1Start, 3);
+  assert.equal(p1End, 37);
+  assert.equal(p1Url, 'https://www.ptt.cc/bbs/SYSOP/M.1785252764.A.5A1.html');
+  assert.equal(pttLine[p1Start].startOfURL, true);
+  assert.equal(pttLine[p1End - 1].endOfURL, true);
 });

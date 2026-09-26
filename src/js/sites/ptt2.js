@@ -60,6 +60,15 @@ export class Ptt2Site extends PttSite {
   constructor() {
     super();
     this.name = 'ptt2';
+    this.hasWeb = false;
+  }
+
+  get hasWeb() {
+    return this._hasWeb !== undefined ? this._hasWeb : false;
+  }
+
+  set hasWeb(val) {
+    this._hasWeb = Boolean(val);
   }
 
   isMenuScreen(termBuf) {

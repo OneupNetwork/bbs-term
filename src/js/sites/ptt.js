@@ -75,6 +75,15 @@ export class PttSite extends BaseSite {
   constructor() {
     super('ptt');
     this.currentBoard = null;
+    this.hasWeb = true;
+  }
+
+  get hasWeb() {
+    return this._hasWeb !== undefined ? this._hasWeb : true;
+  }
+
+  set hasWeb(val) {
+    this._hasWeb = Boolean(val);
   }
 
   get supportNavKeys() {
@@ -380,20 +389,19 @@ export class PttSite extends BaseSite {
     }
     if (!lineText) return [];
     const links = [];
-    const crossPostMatch = /本文轉錄自\s+([0-9A-Za-z_.-]{2,})\s+看板/.exec(lineText);
-    const crossPostBoard = crossPostMatch ? crossPostMatch[1] : null;
-    const re = /(?<![0-9A-Za-z_#-])#([0-9A-Za-z_-]{8})(?![0-9A-Za-z_-])(?:\s*(?:\(([0-9A-Za-z_.-]+)\)|\[([0-9A-Za-z_.-]+)\]|@([0-9A-Za-z_.-]+)))?/g;
+    const re =
+      /(?:(?<![0-9A-Za-z_.-])(?:\[\s*)?(?:(?:本文)?轉錄[自至]\s+)?[《\[]?([0-9A-Za-z_.-]{2,})[》\]]?\s*看板\s*#([0-9A-Za-z_-]{8})(?![0-9A-Za-z_-])(?:\s*\])?|(?<![0-9A-Za-z_#-])#([0-9A-Za-z_-]{8})(?![0-9A-Za-z_-])(?:\s*(?:\(([0-9A-Za-z_.-]+)\)|\[([0-9A-Za-z_.-]+)\]|@([0-9A-Za-z_.-]+)))?)/g;
     let m;
     while ((m = re.exec(lineText)) !== null) {
-      const aid = m[1];
+      const aid = m[2] || m[3];
       if (!isAidc(aid)) continue;
-      const board = m[2] || m[3] || m[4] || crossPostBoard || this.extractBoardName(termBuf);
+      const board = m[1] || m[4] || m[5] || m[6] || this.extractBoardName(termBuf);
       let url;
-      if (board) {
+      if (this.hasWeb && board) {
         const fn = aidToFn(aid);
         url = fn ? `https://www.ptt.cc/bbs/${board}/${fn}.html` : `https://www.ptt.cc/bbs/${board}/#${aid}`;
       } else {
-        url = `#aid=${aid}`;
+        url = board ? `#aid=${aid}&board=${board}` : `#aid=${aid}`;
       }
       links.push({
         start: m.index,
@@ -408,8 +416,10 @@ export class PttSite extends BaseSite {
 
   /**
    * Handle custom link clicks.
-   * If the URL is a boardless AID action (#aid=...), send keystrokes to terminal.
+   * If the URL is an AID action (#aid=...), send keystrokes to terminal.
    * If it is a web URL (https://www.ptt.cc/...), return false to let browser open the page.
+   * If page state is press anykey (PAGE_STATE.PASS), sends space before #AID keystroke.
+   * In non-web mode, if target board differs from current board, switches board first (s<board>\r).
    * @param {string} url
    * @param {object} app
    * @returns {boolean}
@@ -419,8 +429,50 @@ export class PttSite extends BaseSite {
     const m = /#aid=([0-9A-Za-z_-]{8})/.exec(url);
     if (m) {
       const aid = m[1];
-      app.send(`#${aid}\r`);
-      app.setInputAreaFocus();
+      let targetBoard = null;
+      const bMatch = /[&?]board=([0-9A-Za-z_.-]+)/.exec(url);
+      if (bMatch) {
+        targetBoard = bMatch[1];
+      } else {
+        const pathBoardMatch = /\/bbs\/([0-9A-Za-z_.-]+)\//.exec(url);
+        if (pathBoardMatch) {
+          targetBoard = pathBoardMatch[1];
+        }
+      }
+
+      const send = (data) => {
+        if (typeof app.send === 'function') {
+          app.send(data);
+        } else if (app.conn?.send) {
+          app.conn.send(data);
+        }
+      };
+      const isAnyKey =
+        this.pageState === PAGE_STATE.PASS ||
+        app.site?.pageState === PAGE_STATE.PASS ||
+        Boolean(app.buf && this.isPassScreen?.(app.buf)) ||
+        Boolean(app.buf && app.site?.isPassScreen?.(app.buf));
+      if (isAnyKey) {
+        send(' ');
+      }
+
+      const currentBoard =
+        (app.buf ? this.extractBoardName(app.buf) : null) ||
+        this.currentBoard ||
+        app.site?.currentBoard ||
+        null;
+      const isSameBoard = Boolean(
+        currentBoard &&
+        targetBoard &&
+        currentBoard.toLowerCase() === targetBoard.toLowerCase()
+      );
+
+      if (!this.hasWeb && targetBoard && !isSameBoard) {
+        send(`s${targetBoard}\r`);
+      }
+
+      send(`#${aid}\r`);
+      app.setInputAreaFocus?.();
       return true;
     }
     return false;
