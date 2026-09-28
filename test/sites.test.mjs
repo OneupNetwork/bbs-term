@@ -2636,19 +2636,34 @@ test('ClipboardManager normalizes CRLF/LF and BaseSite.onPaste transforms ESC ch
   const pasteEvent = clipboard.createPasteEvent('foo\r\nbar\nbaz');
   assert.equal(pasteEvent.data, 'foo\rbar\rbaz');
 
+  const base = new BaseSite();
   const ptt = new PttSite();
   const maple = new Maple3Site();
   const auto = new AutoSite();
 
-  // PTT replaces \x1b with \x15 (Ctrl-U) via event handler
+  // BaseSite defaults to \x1b (standard ANSI escape, no transformation)
+  assert.equal(base.getEditorEscapeChar(), '\x1b');
+  const baseEvt = { data: 'a\rb\x1b[1;31mred\x1b[m' };
+  base.onPaste(baseEvt);
+  assert.equal(baseEvt.data, 'a\rb\x1b[1;31mred\x1b[m');
+
+  // Custom escape registration on BaseSite
+  base.registerEditorEscapeChar('\x15');
+  assert.equal(base.getEditorEscapeChar(), '\x15');
+  base.onPaste(baseEvt);
+  assert.equal(baseEvt.data, 'a\rb\x15[1;31mred\x15[m');
+
+  // PTT registers Esc=Ctrl-U (\x15)
+  assert.equal(ptt.getEditorEscapeChar(), '\x15');
   const pttEvt = clipboard.createPasteEvent('line1\r\nline2\n\x1b[1;31mred\x1b[m');
   ptt.onPaste(pttEvt);
   assert.equal(pttEvt.data, 'line1\rline2\r\x15[1;31mred\x15[m');
 
-  // Maple3 replaces \x1b with \x03 (Ctrl-C) via event handler
+  // Maple3 also registers Esc=Ctrl-U (\x15) per maplebbs-itoc edit.c (case Ctrl('U'): ve_char(KEY_ESC))
+  assert.equal(maple.getEditorEscapeChar(), '\x15');
   const mapleEvt = { text: 'line1\rline2\r\x1b[1;31mred\x1b[m' };
   maple.onPaste(mapleEvt);
-  assert.equal(mapleEvt.text, 'line1\rline2\r\x03[1;31mred\x03[m');
+  assert.equal(mapleEvt.text, 'line1\rline2\r\x15[1;31mred\x15[m');
 
   // AutoSite delegates onPaste to active site (defaults to PTT, switches when locked to Maple3)
   const autoEvt1 = { data: 'a\rb\x1b[m' };
@@ -2658,7 +2673,7 @@ test('ClipboardManager normalizes CRLF/LF and BaseSite.onPaste transforms ESC ch
   auto.lockSite('maple3');
   const autoEvt2 = { data: 'a\rb\x1b[m' };
   auto.onPaste(autoEvt2);
-  assert.equal(autoEvt2.data, 'a\rb\x03[m');
+  assert.equal(autoEvt2.data, 'a\rb\x15[m');
 
   // ClipboardManager.completePaste invokes view.buf.site.onPaste(event) before sending to view.paste
   let finalPasted = null;

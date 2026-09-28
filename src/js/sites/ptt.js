@@ -76,6 +76,7 @@ export class PttSite extends BaseSite {
     super('ptt');
     this.currentBoard = null;
     this.hasWeb = true;
+    this.registerEditorEscapeChar('\x15'); // Esc = Ctrl-U
   }
 
   get hasWeb() {

@@ -28,6 +28,8 @@ export class BaseSite extends EventEmitter {
     this.pageState = PAGE_STATE.NORMAL;
     this.prevPageState = PAGE_STATE.NORMAL;
     this.hasWeb = false;
+    this._editorEscapeChar = '\x1b';
+    this._editorEscapeFrom = '\x1b';
   }
 
   set charset(val) {
@@ -764,11 +766,22 @@ export class BaseSite extends EventEmitter {
   }
 
   /**
-   * Get escape character for article editor ANSI sequences (e.g. '\x15' / Ctrl-U for PTT).
+   * Register escape character mapping for article editor (e.g. Esc -> Ctrl-U).
+   * @param {string} toChar - Target character to replace '\x1b' (e.g. '\x15' / Ctrl-U)
+   * @param {string} [fromChar='\x1b'] - Source character to replace (default '\x1b')
+   */
+  registerEditorEscapeChar(toChar, fromChar = '\x1b') {
+    this._editorEscapeChar = toChar;
+    this._editorEscapeFrom = fromChar;
+  }
+
+  /**
+   * Get escape character for article editor ANSI sequences.
+   * Defaults to '\x1b' if no custom escape character was registered.
    * @returns {string}
    */
   getEditorEscapeChar() {
-    return '\x15';
+    return this._editorEscapeChar || '\x1b';
   }
 
   /**
@@ -781,9 +794,13 @@ export class BaseSite extends EventEmitter {
     if (typeof text !== 'string') return;
     // FIXME: stop user from pasting DBCS words with 2-color
     const escChar = this.getEditorEscapeChar();
-    const transformed = text.replace(/\x1b/g, escChar);
-    if ('data' in event) event.data = transformed;
-    if ('text' in event) event.text = transformed;
+    const fromChar = this._editorEscapeFrom || '\x1b';
+    if (escChar && escChar !== fromChar) {
+      const regex = new RegExp(fromChar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      const transformed = text.replace(regex, escChar);
+      if ('data' in event) event.data = transformed;
+      if ('text' in event) event.text = transformed;
+    }
   }
 
   /**
