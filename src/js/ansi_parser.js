@@ -361,15 +361,25 @@ export class AnsiParser {
           case 'P':
             term.del(getParam(0, 1));
             break;
-          case 'r': // scroll range
-            if (params.length < 2) {
-              term.scrollStart = 0;
-              term.scrollEnd = term.rows - 1;
+          case 'r': { // DECSTBM: Set Top and Bottom Margins
+            const top = (params[0] && params[0] > 0) ? params[0] : 1;
+            const bottom = (params[1] && params[1] > 0) ? params[1] : (term.rows || 24);
+            if (typeof term.handleDECSTBM === 'function') {
+              term.handleDECSTBM(top, bottom);
+            } else if (typeof term.setScrollRegion === 'function') {
+              term.setScrollRegion(top - 1, bottom - 1);
             } else {
-              term.scrollStart = Math.max(0, getParam(0, 1) - 1);
-              term.scrollEnd = Math.max(0, getParam(1, 1) - 1);
+              const rows = term.rows || 24;
+              if (top < bottom && top >= 1 && bottom <= rows) {
+                term.scrollStart = top - 1;
+                term.scrollEnd = bottom - 1;
+                if (typeof term.gotoPos === 'function') {
+                  term.gotoPos(0, 0);
+                }
+              }
             }
             break;
+          }
           case 's':
             term.cur_x_sav = term.cur_x;
             term.cur_y_sav = term.cur_y;
@@ -483,14 +493,22 @@ export class AnsiParser {
           }
           break;
         case 'D':
-          term.scroll(false,1);
+          if (typeof term.lineFeed === 'function') {
+            term.lineFeed();
+          } else {
+            term.scroll(false, 1);
+          }
           break;
         case 'E':
           term.lineFeed();
           term.carriageReturn();
           break;
         case 'M':
-          term.scroll(true,1);
+          if (typeof term.reverseLineFeed === 'function') {
+            term.reverseLineFeed();
+          } else {
+            term.scroll(true, 1);
+          }
           break;
         /*
         case '=':

@@ -326,8 +326,8 @@ function describeCSI(body, finalChar) {
       return `ANSI CSI: Scroll Down (${getParam(0, 1)})`;
     case "r": {
       const top = getParam(0, 1);
-      const bottom = rawParams.length >= 2 ? getParam(1, 24) : "end";
-      return `ANSI CSI: Set Scroll Region (${top}..${bottom})`;
+      const bottom = rawParams.length >= 2 && rawParams[1] ? getParam(1, 24) : 24;
+      return `ANSI CSI: Set Top and Bottom Margins (DECSTBM) (${top}..${bottom})`;
     }
     case "s":
       return "ANSI CSI: Save Cursor Position";

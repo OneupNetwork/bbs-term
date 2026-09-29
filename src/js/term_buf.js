@@ -205,8 +205,14 @@ export class TermBuf extends EventEmitter {
     this.scrollStart = 0;
     this.scrollEnd = validRows - 1;
     this.locator = new Locator(this);
-    this.on('term:connect', () => this.locator?.reset?.());
-    this.on('term:disconnect', () => this.locator?.reset?.());
+    this.on('term:connect', () => {
+      this.resetScrollRegion();
+      this.locator?.reset?.();
+    });
+    this.on('term:disconnect', () => {
+      this.resetScrollRegion();
+      this.locator?.reset?.();
+    });
     //this.scrollingTop=0;
     //this.scrollingBottom=23;
     this.attr = new TermChar(' ');
@@ -258,6 +264,7 @@ export class TermBuf extends EventEmitter {
     this.cols = cols;
     this.rows = rows;
     this.lineChangeds.length = rows;
+    this.scrollStart = 0;
     this.scrollEnd = rows - 1;
     this.lines.length = rows;
     for (let r = 0; r < rows; r++) {
@@ -940,8 +947,10 @@ export class TermBuf extends EventEmitter {
    * @param {number} [param]
    */
   deleteLine(param) {
+    const scrollStart = (typeof this.scrollStart === 'number' && Number.isFinite(this.scrollStart)) ? Math.floor(this.scrollStart) : 0;
+    const scrollEnd = (typeof this.scrollEnd === 'number' && Number.isFinite(this.scrollEnd)) ? Math.floor(this.scrollEnd) : this.rows - 1;
+    if (this.cur_y < scrollStart || this.cur_y > scrollEnd) return;
     const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
-    const scrollStart = this.scrollStart;
     this.scrollStart = Math.max(0, Math.min(this.rows - 1, (typeof this.cur_y === 'number' && Number.isFinite(this.cur_y)) ? Math.floor(this.cur_y) : 0));
     this.scroll(false, p);
     this.scrollStart = scrollStart;
@@ -953,12 +962,12 @@ export class TermBuf extends EventEmitter {
    * @param {number} [param]
    */
   insertLine(param) {
+    const scrollStart = (typeof this.scrollStart === 'number' && Number.isFinite(this.scrollStart)) ? Math.floor(this.scrollStart) : 0;
+    const scrollEnd = (typeof this.scrollEnd === 'number' && Number.isFinite(this.scrollEnd)) ? Math.floor(this.scrollEnd) : this.rows - 1;
+    if (this.cur_y < scrollStart || this.cur_y > scrollEnd) return;
     const p = (typeof param === 'number' && Number.isFinite(param) && param > 0) ? Math.floor(param) : 1;
-    const scrollStart = this.scrollStart;
-    if (this.cur_y < this.scrollEnd) {
-      this.scrollStart = Math.max(0, Math.min(this.rows - 1, (typeof this.cur_y === 'number' && Number.isFinite(this.cur_y)) ? Math.floor(this.cur_y) : 0));
-      this.scroll(true, p);
-    }
+    this.scrollStart = Math.max(0, Math.min(this.rows - 1, (typeof this.cur_y === 'number' && Number.isFinite(this.cur_y)) ? Math.floor(this.cur_y) : 0));
+    this.scroll(true, p);
     this.scrollStart = scrollStart;
     this.changed = true;
     this.queueUpdate();
@@ -975,54 +984,57 @@ export class TermBuf extends EventEmitter {
       scrollStart = 0;
       if (scrollEnd < 1) scrollEnd = this.rows - 1;
     }
+    scrollStart = Math.max(0, Math.min(this.rows - 1, scrollStart));
+    scrollEnd = Math.max(0, Math.min(this.rows - 1, scrollEnd));
     let count = (typeof n === 'number' && Number.isFinite(n) && n > 0) ? Math.floor(n) : 1;
-    if (count >= this.rows) { // scroll more than 1 page = clear
+    const regionHeight = scrollEnd - scrollStart + 1;
+    if (scrollStart === 0 && scrollEnd === this.rows - 1 && count >= this.rows) { // scroll full screen by >= rows = clear
       this.clear(2);
       return;
-    } else if (count >= scrollEnd - scrollStart + 1) {
+    } else if (count >= regionHeight) {
       const lines = this.lines;
       const cols = this.cols;
       for (let row = scrollStart; row <= scrollEnd; ++row) {
-        if (lines[row]) {
+        if (this.lineChangeds) this.lineChangeds[row] = true;
+        const line = lines[row];
+        if (line) {
           for (let col = 0; col < cols; ++col) {
-            if (lines[row][col]) {
-              lines[row][col].copyFromNewChar();
-              lines[row][col].needUpdate = true;
+            if (line[col]) {
+              line[col].copyFromNewChar();
+              line[col].needUpdate = true;
             }
           }
         }
       }
     } else {
       const lines = this.lines;
-      const rows = this.rows;
       const cols = this.cols;
 
-      if (up) { // move lines down
-        for (let i = 0; i < rows - 1 - scrollEnd; ++i)
-          lines.unshift(lines.pop());
-        while (--count >= 0) {
-          const line = lines.pop();
-          lines.splice(rows - 1 - scrollEnd + scrollStart, 0, line);
-          for (let col = 0; col < cols; ++col)
-            if (line[col]) line[col].copyFromNewChar();
+      if (up) { // move lines down (insert blank lines at scrollStart)
+        const removed = lines.splice(scrollEnd - count + 1, count);
+        for (const line of removed) {
+          if (line) {
+            for (let col = 0; col < cols; ++col) {
+              if (line[col]) line[col].copyFromNewChar();
+            }
+          }
         }
-        for (let i = 0; i < rows - 1 - scrollEnd; ++i)
-          lines.push(lines.shift());
-      } else { // move lines up
-        for (let i = 0; i < scrollStart; ++i)
-          lines.push(lines.shift());
-        while (--count >= 0) {
-          const line = lines.shift();
-          lines.splice(scrollEnd - scrollStart, 0, line);
-          for (let col = 0; col < cols; ++col) // clear the line
-            if (line[col]) line[col].copyFromNewChar();
+        lines.splice(scrollStart, 0, ...removed);
+      } else { // move lines up (insert blank lines at scrollEnd)
+        const removed = lines.splice(scrollStart, count);
+        for (const line of removed) {
+          if (line) {
+            for (let col = 0; col < cols; ++col) {
+              if (line[col]) line[col].copyFromNewChar();
+            }
+          }
         }
-        for (let i = 0; i < scrollStart; ++i)
-          lines.unshift(lines.pop());
+        lines.splice(scrollEnd - count + 1, 0, ...removed);
       }
 
       // update the whole screen within scroll region
       for (let row = scrollStart; row <= scrollEnd; ++row) {
+        if (this.lineChangeds) this.lineChangeds[row] = true;
         const line = lines[row];
         if (line) {
           for (let col = 0; col < cols; ++col) {
@@ -1033,6 +1045,45 @@ export class TermBuf extends EventEmitter {
     }
     this.changed = true;
     this.queueUpdate();
+  }
+
+  /**
+   * Set Top and Bottom Margins (DECSTBM).
+   * Pt (top) and Pb (bottom) are 1-based line numbers.
+   * If Pt is omitted or 0, it defaults to 1.
+   * If Pb is omitted or 0, it defaults to this.rows.
+   * Pt must be strictly less than Pb, with 1 <= Pt and Pb <= this.rows.
+   * On success, cursor is moved to the home position (0, 0).
+   * @param {number} [top=1] 1-based top line number
+   * @param {number} [bottom=this.rows] 1-based bottom line number
+   */
+  handleDECSTBM(top = 1, bottom = this.rows) {
+    const t = (typeof top === 'number' && Number.isFinite(top) && top > 0) ? Math.floor(top) : 1;
+    const b = (typeof bottom === 'number' && Number.isFinite(bottom) && bottom > 0) ? Math.floor(bottom) : this.rows;
+    if (t < b && t >= 1 && b <= this.rows) {
+      this.scrollStart = t - 1;
+      this.scrollEnd = b - 1;
+      this.gotoPos(0, 0);
+    }
+  }
+
+  /**
+   * Set scrolling region using 0-based row indices.
+   * @param {number} [top=0] 0-based top row index
+   * @param {number} [bottom=this.rows-1] 0-based bottom row index
+   */
+  setScrollRegion(top = 0, bottom = this.rows - 1) {
+    const t = (typeof top === 'number' && Number.isFinite(top) && top >= 0) ? Math.floor(top) + 1 : 1;
+    const b = (typeof bottom === 'number' && Number.isFinite(bottom) && bottom >= 0) ? Math.floor(bottom) + 1 : this.rows;
+    this.handleDECSTBM(t, b);
+  }
+
+  /**
+   * Reset scrolling region to full screen.
+   */
+  resetScrollRegion() {
+    this.scrollStart = 0;
+    this.scrollEnd = this.rows - 1;
   }
 
   /**
@@ -1058,12 +1109,25 @@ export class TermBuf extends EventEmitter {
 
   lineFeed() {
     if (!Number.isFinite(this.cur_y) || this.cur_y < 0) this.cur_y = 0;
-    if (this.cur_y < this.scrollEnd) {
+    const scrollEnd = (typeof this.scrollEnd === 'number' && Number.isFinite(this.scrollEnd)) ? Math.floor(this.scrollEnd) : this.rows - 1;
+    if (this.cur_y === scrollEnd) {
+      this.scroll(false, 1);
+    } else if (this.cur_y < this.rows - 1) {
       ++this.cur_y;
       this.posChanged = true;
       this.queueUpdate();
-    } else { // at bottom of screen
-      this.scroll(false, 1);
+    }
+  }
+
+  reverseLineFeed() {
+    if (!Number.isFinite(this.cur_y) || this.cur_y < 0) this.cur_y = 0;
+    const scrollStart = (typeof this.scrollStart === 'number' && Number.isFinite(this.scrollStart)) ? Math.floor(this.scrollStart) : 0;
+    if (this.cur_y === scrollStart) {
+      this.scroll(true, 1);
+    } else if (this.cur_y > 0) {
+      --this.cur_y;
+      this.posChanged = true;
+      this.queueUpdate();
     }
   }
 

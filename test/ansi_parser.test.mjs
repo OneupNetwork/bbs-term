@@ -567,7 +567,7 @@ test('TermBuf handles VT100 DECAWM and prevents auto-wrap when wrap=false', asyn
   assert.equal(buf.autoWrap, false);
   assert.equal(buf.wrap, false);
 
-  // Print 85 ASCII characters: must NOT wrap to row 1, clamps at col 79
+// Print 85 ASCII characters: must NOT wrap to row 1, clamps at col 79
   buf.gotoPos(0, 0);
   parser.feed('B'.repeat(85));
   assert.equal(buf.cur_y, 0, 'cur_y must stay on row 0 when autoWrap is off');
@@ -584,6 +584,263 @@ test('TermBuf handles VT100 DECAWM and prevents auto-wrap when wrap=false', asyn
   assert.equal(buf.cur_x, 1);
 });
 
+test('AnsiParser parses VT100 DECSTBM (CSI Pt ; Pb r)', () => {
+  const calls = [];
+  const mockTerm = {
+    rows: 24,
+    puts() {},
+    assignParamsToAttrs() {},
+    gotoPos() {},
+    clear() {},
+    insert() {},
+    tab() {},
+    beginSyncUpdate() {},
+    endSyncUpdate() {},
+    handleDECSTBM(top, bottom) { calls.push(['DECSTBM', top, bottom]); },
+  };
 
+  const parser = new AnsiParser(mockTerm);
 
+  // Default / reset: CSI r -> (1, 24)
+  parser.feed('\x1b[r');
+  assert.deepEqual(calls[0], ['DECSTBM', 1, 24]);
 
+  // CSI ; r -> (1, 24)
+  parser.feed('\x1b[;r');
+  assert.deepEqual(calls[1], ['DECSTBM', 1, 24]);
+
+  // Explicit margins: CSI 5 ; 20 r -> (5, 20)
+  parser.feed('\x1b[5;20r');
+  assert.deepEqual(calls[2], ['DECSTBM', 5, 20]);
+
+  // Top specified, bottom omitted: CSI 10 r -> (10, 24)
+  parser.feed('\x1b[10r');
+  assert.deepEqual(calls[3], ['DECSTBM', 10, 24]);
+
+  // Top specified with semicolon: CSI 10 ; r -> (10, 24)
+  parser.feed('\x1b[10;r');
+  assert.deepEqual(calls[4], ['DECSTBM', 10, 24]);
+
+  // Top omitted, bottom specified: CSI ; 15 r -> (1, 15)
+  parser.feed('\x1b[;15r');
+  assert.deepEqual(calls[5], ['DECSTBM', 1, 15]);
+});
+
+test('TermBuf handles DECSTBM and clamps/ignores invalid parameters', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+  const buf = new TermBuf(80, 24);
+  const parser = new AnsiParser(buf);
+
+  // Initial full screen margins (0-based: 0..23)
+  assert.equal(buf.scrollStart, 0);
+  assert.equal(buf.scrollEnd, 23);
+
+  // Position cursor away from home
+  buf.gotoPos(10, 10);
+  assert.equal(buf.cur_x, 10);
+  assert.equal(buf.cur_y, 10);
+
+  // Valid margins: 5..20 (1-based), 0-based: 4..19. Cursor moves to (0, 0)
+  parser.feed('\x1b[5;20r');
+  assert.equal(buf.scrollStart, 4);
+  assert.equal(buf.scrollEnd, 19);
+  assert.equal(buf.cur_x, 0);
+  assert.equal(buf.cur_y, 0);
+
+  // Invalid: Pt >= Pb (e.g. 20;5) must be ignored, margins & cursor untouched
+  buf.gotoPos(5, 5);
+  parser.feed('\x1b[20;5r');
+  assert.equal(buf.scrollStart, 4, 'Invalid Pt >= Pb must not change scrollStart');
+  assert.equal(buf.scrollEnd, 19, 'Invalid Pt >= Pb must not change scrollEnd');
+  assert.equal(buf.cur_x, 5, 'Invalid sequence must not move cursor');
+  assert.equal(buf.cur_y, 5);
+
+  // Invalid: Pt == Pb (e.g. 10;10) must be ignored
+  parser.feed('\x1b[10;10r');
+  assert.equal(buf.scrollStart, 4);
+  assert.equal(buf.scrollEnd, 19);
+
+  // Invalid: Pb > rows (e.g. 1;30 on 24-row term) must be ignored
+  parser.feed('\x1b[1;30r');
+  assert.equal(buf.scrollStart, 4);
+  assert.equal(buf.scrollEnd, 19);
+
+  // Reset margins: CSI r
+  parser.feed('\x1b[r');
+  assert.equal(buf.scrollStart, 0);
+  assert.equal(buf.scrollEnd, 23);
+  assert.equal(buf.cur_x, 0);
+  assert.equal(buf.cur_y, 0);
+});
+
+test('TermBuf lineFeed with DECSTBM margins scrolls within margins and preserves outside rows', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+  const buf = new TermBuf(80, 24);
+  const parser = new AnsiParser(buf);
+
+  // Populate rows 0..23 with identifiable text
+  for (let r = 0; r < 24; ++r) {
+    buf.gotoPos(0, r);
+    parser.feed(`Line ${r.toString().padStart(2, '0')}`);
+  }
+
+  // Set scrolling region: lines 5..10 (1-based -> rows 4..9 in 0-based)
+  parser.feed('\x1b[5;10r');
+  assert.equal(buf.scrollStart, 4);
+  assert.equal(buf.scrollEnd, 9);
+
+  // Move cursor to bottom of scroll region (row 9)
+  buf.gotoPos(0, 9);
+
+  // Linefeed: should scroll rows 4..9 up by 1 line
+  buf.lineFeed();
+
+  // Verify rows 0..3 (above margin) are untouched
+  for (let r = 0; r < 4; ++r) {
+    const text = buf.getText(r, 0, 7);
+    assert.equal(text, `Line ${r.toString().padStart(2, '0')}`);
+  }
+
+  // Verify scrolled region:
+  // Row 4 was old row 5
+  assert.equal(buf.getText(4, 0, 7), 'Line 05');
+  // Row 8 was old row 9
+  assert.equal(buf.getText(8, 0, 7), 'Line 09');
+  // Row 9 is newly cleared blank line
+  assert.equal(buf.getText(9, 0, 7).trim(), '');
+
+  // Verify rows 10..23 (below margin) are untouched
+  for (let r = 10; r < 24; ++r) {
+    const text = buf.getText(r, 0, 7);
+    assert.equal(text, `Line ${r.toString().padStart(2, '0')}`);
+  }
+
+  // Cursor remains at row 9
+  assert.equal(buf.cur_y, 9);
+
+  // Cursor below margin: linefeed advances cursor without scrolling margin
+  buf.gotoPos(0, 20);
+  buf.lineFeed();
+  assert.equal(buf.cur_y, 21);
+  assert.equal(buf.getText(4, 0, 7), 'Line 05', 'Margin must not scroll when cursor is below margin');
+
+  // Cursor at bottom of screen (row 23) outside margin: linefeed does not scroll
+  buf.gotoPos(0, 23);
+  buf.lineFeed();
+  assert.equal(buf.cur_y, 23);
+  assert.equal(buf.getText(4, 0, 7), 'Line 05');
+});
+
+test('TermBuf reverseLineFeed (ESC M) with DECSTBM margins scrolls down at top margin', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+  const buf = new TermBuf(80, 24);
+  const parser = new AnsiParser(buf);
+
+  // Populate rows 0..23 with identifiable text
+  for (let r = 0; r < 24; ++r) {
+    buf.gotoPos(0, r);
+    parser.feed(`Line ${r.toString().padStart(2, '0')}`);
+  }
+
+  // Set margins to lines 5..10 (rows 4..9)
+  parser.feed('\x1b[5;10r');
+
+  // Position cursor inside margin but below top margin (row 6)
+  buf.gotoPos(0, 6);
+  // ESC M: cursor moves up to row 5, no scroll
+  parser.feed('\x1bM');
+  assert.equal(buf.cur_y, 5);
+  assert.equal(buf.getText(4, 0, 7), 'Line 04');
+
+  // Move to top margin (row 4)
+  buf.gotoPos(0, 4);
+  // ESC M at top margin: scrolls margin DOWN by 1 line
+  parser.feed('\x1bM');
+  assert.equal(buf.cur_y, 4, 'Cursor must stay at top margin after scroll down');
+
+  // Row 4 is newly cleared blank line
+  assert.equal(buf.getText(4, 0, 7).trim(), '');
+  // Old row 4 moved to row 5
+  assert.equal(buf.getText(5, 0, 7), 'Line 04');
+  // Old row 8 moved to row 9
+  assert.equal(buf.getText(9, 0, 7), 'Line 08');
+
+  // Rows 0..3 and 10..23 outside margin are untouched
+  assert.equal(buf.getText(3, 0, 7), 'Line 03');
+  assert.equal(buf.getText(10, 0, 7), 'Line 10');
+});
+
+test('TermBuf insertLine and deleteLine respect DECSTBM scrolling margins', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+  const buf = new TermBuf(80, 24);
+  const parser = new AnsiParser(buf);
+
+  for (let r = 0; r < 24; ++r) {
+    buf.gotoPos(0, r);
+    parser.feed(`Line ${r.toString().padStart(2, '0')}`);
+  }
+
+  // Margins: lines 5..10 (rows 4..9)
+  parser.feed('\x1b[5;10r');
+
+  // 1. Cursor outside margins (row 2): IL and DL have no effect
+  buf.gotoPos(0, 2);
+  parser.feed('\x1b[1L'); // Insert Line
+  assert.equal(buf.getText(2, 0, 7), 'Line 02', 'IL outside margin must be ignored');
+  parser.feed('\x1b[1M'); // Delete Line
+  assert.equal(buf.getText(2, 0, 7), 'Line 02', 'DL outside margin must be ignored');
+
+  // 2. Cursor inside margins (row 6):
+  buf.gotoPos(0, 6);
+  // Delete Line (CSI 1 M): deletes row 6, shifts rows 7..9 up to 6..8, blanks row 9
+  parser.feed('\x1b[1M');
+  assert.equal(buf.getText(6, 0, 7), 'Line 07');
+  assert.equal(buf.getText(7, 0, 7), 'Line 08');
+  assert.equal(buf.getText(8, 0, 7), 'Line 09');
+  assert.equal(buf.getText(9, 0, 7).trim(), '');
+  // Rows outside margin untouched
+  assert.equal(buf.getText(3, 0, 7), 'Line 03');
+  assert.equal(buf.getText(10, 0, 7), 'Line 10');
+
+  // Insert Line (CSI 1 L) at row 6: shifts rows 6..8 down to 7..9, blanks row 6
+  parser.feed('\x1b[1L');
+  assert.equal(buf.getText(6, 0, 7).trim(), '');
+  assert.equal(buf.getText(7, 0, 7), 'Line 07');
+  assert.equal(buf.getText(8, 0, 7), 'Line 08');
+  assert.equal(buf.getText(9, 0, 7), 'Line 09');
+  assert.equal(buf.getText(3, 0, 7), 'Line 03');
+  assert.equal(buf.getText(10, 0, 7), 'Line 10');
+});
+
+test('TermBuf resize, connect, and disconnect reset DECSTBM margins', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+  const buf = new TermBuf(80, 24);
+  const parser = new AnsiParser(buf);
+
+  // Set subregion margins
+  parser.feed('\x1b[5;15r');
+  assert.equal(buf.scrollStart, 4);
+  assert.equal(buf.scrollEnd, 14);
+
+  // Buffer resize resets margins to full height
+  buf.resize(100, 30);
+  assert.equal(buf.scrollStart, 0);
+  assert.equal(buf.scrollEnd, 29);
+
+  // Re-set margins on resized buffer
+  parser.feed('\x1b[8;25r');
+  assert.equal(buf.scrollStart, 7);
+  assert.equal(buf.scrollEnd, 24);
+
+  // Connect event resets margins
+  buf.emit('term:connect');
+  assert.equal(buf.scrollStart, 0);
+  assert.equal(buf.scrollEnd, 29);
+
+  // Disconnect event resets margins
+  parser.feed('\x1b[8;25r');
+  assert.equal(buf.scrollStart, 7);
+  buf.emit('term:disconnect');
+  assert.equal(buf.scrollStart, 0);
+  assert.equal(buf.scrollEnd, 29);
+});
