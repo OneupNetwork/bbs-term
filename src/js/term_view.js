@@ -1328,10 +1328,15 @@ export class TermView extends EventEmitter {
     fontSizePx = Math.floor((fontSizePx + 1) / 2) * 2;
     let width = this.termWidth ? this.termWidth : this.innerBounds.width;
     let height = this.termHeight ? this.termHeight : this.innerBounds.height;
-    let cols = Math.max(80, Math.min(200, Math.floor(2 * (width - 10) / fontSizePx)));
+    const site = this.buf && this.buf.site;
+    const minCols = site && site.min_cols != null ? site.min_cols : 80;
+    const maxCols = site && site.max_cols != null ? site.max_cols : 200;
+    const minRows = site && site.min_rows != null ? site.min_rows : 24;
+    const maxRows = site && site.max_rows != null ? site.max_rows : 100;
+    let cols = Math.max(minCols, Math.min(maxCols, Math.floor((2 * (width - 10)) / fontSizePx)));
     let rowHeight = Math.round(fontSizePx * (this.lineHeight || 1.0));
-    let rows = Math.max(24, Math.min(100, Math.floor(height / rowHeight)));
-    return this.buf.site.clampTermSize(cols, rows);
+    let rows = Math.max(minRows, Math.min(maxRows, Math.floor(height / rowHeight)));
+    return site ? site.clampTermSize(cols, rows) : { cols, rows };
   }
 
   getRowLineElement(node) {

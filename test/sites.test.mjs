@@ -46,11 +46,27 @@ test('BaseSite clamps terminal size and computes last row', () => {
   site.max_rows = 24;
   assert.deepEqual(site.clampTermSize(100, 40), { cols: 80, rows: 24 });
 
+  site.min_cols = 20;
+  site.min_rows = 15;
+  assert.deepEqual(site.clampTermSize(10, 10), { cols: 20, rows: 15 });
+  assert.deepEqual(site.clampTermSize(50, 20), { cols: 50, rows: 20 });
+
   const mockTerm = { rows: 30, cols: 80 };
   assert.equal(site.getLastRowNum(mockTerm), 29);
 
   site.fixed_last_row = 23;
   assert.equal(site.getLastRowNum(mockTerm), 23);
+});
+
+test('Ptt2Site configures min_cols = 20 and clamps terminal size accordingly', () => {
+  const ptt2 = new Ptt2Site();
+  assert.equal(ptt2.name, 'ptt2');
+  assert.equal(ptt2.min_cols, 20);
+
+  // Clamps columns below 20 up to 20
+  assert.deepEqual(ptt2.clampTermSize(10, 24), { cols: 20, rows: 24 });
+  assert.deepEqual(ptt2.clampTermSize(38, 24), { cols: 38, rows: 24 });
+  assert.deepEqual(ptt2.clampTermSize(80, 24), { cols: 80, rows: 24 });
 });
 
 test('BaseSite detects pass/continue prompt screen', () => {

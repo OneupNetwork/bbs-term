@@ -90,11 +90,15 @@ export class App extends EventEmitter {
       if (this.stream) {
         this.stream.charset = site.charset;
       }
-      if (clampRows && this.buf.rows > clampRows) {
+      const clamped = site.clampTermSize(this.buf.cols, this.buf.rows);
+      if (clampRows && clamped.rows > clampRows) {
+        clamped.rows = clampRows;
+      }
+      if (clamped.cols !== this.buf.cols || clamped.rows !== this.buf.rows) {
         if (this.resizer) {
           this.resizer();
         } else {
-          this.setTermSize(this.buf.cols, clampRows);
+          this.setTermSize(clamped.cols, clamped.rows);
           this.view.fontResize();
           this.view.redraw(true);
         }
@@ -495,6 +499,9 @@ export class App extends EventEmitter {
 
     this.site = getSite(siteType || process.env.SITE_TYPE || 'auto');
     this.buf.site = this.site;
+    if (this.resizer) {
+      this.resizer();
+    }
 
     const wsConn = new Websocket(parsed.url);
     this.emit('term:socket', { socket: wsConn });

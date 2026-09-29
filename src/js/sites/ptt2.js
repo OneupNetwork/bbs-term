@@ -61,6 +61,7 @@ export class Ptt2Site extends PttSite {
     super();
     this.name = 'ptt2';
     this.hasWeb = false;
+    this.min_cols = 20;
   }
 
   get hasWeb() {
