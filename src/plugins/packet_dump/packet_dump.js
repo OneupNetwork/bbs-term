@@ -87,6 +87,7 @@ const DEC_MOUSE_MODE_NAMES = {
 const DEC_MODE_NAMES = {
   ...DEC_MOUSE_MODE_NAMES,
   1: "Application Cursor Keys (1)",
+  7: "Auto-Wrap Mode (DECAWM) (7)",
   25: "Cursor Visible (25)",
   47: "Alt Screen Buffer (47)",
   1047: "Alt Screen Buffer (1047)",

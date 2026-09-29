@@ -276,6 +276,22 @@ export class TermBuf extends EventEmitter {
     this.emit('resize', { cols, rows });
   }
 
+  get autoWrap() {
+    return !this.disableLinefeed;
+  }
+
+  set autoWrap(val) {
+    this.disableLinefeed = !val;
+  }
+
+  get wrap() {
+    return this.autoWrap;
+  }
+
+  set wrap(val) {
+    this.autoWrap = val;
+  }
+
   get site() {
     return this._site;
   }
@@ -287,6 +303,9 @@ export class TermBuf extends EventEmitter {
     this._site = val;
     if (val) {
       val.attach(this);
+      if (val.wrap !== undefined) {
+        this.autoWrap = Boolean(val.wrap);
+      }
     }
   }
 
@@ -372,11 +391,15 @@ export class TermBuf extends EventEmitter {
 
       if (this.cur_x >= cols) {
         // next line
-        if(!this.disableLinefeed) this.lineFeed();
-        this.cur_x = 0;
-        line = lines[this.cur_y];
-        if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
-        this.posChanged = true;
+        if (!this.disableLinefeed) {
+          this.lineFeed();
+          this.cur_x = 0;
+          line = lines[this.cur_y];
+          if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
+          this.posChanged = true;
+        } else {
+          this.cur_x = cols - 1;
+        }
       }
 
       switch (ch) {
@@ -386,11 +409,28 @@ export class TermBuf extends EventEmitter {
       default: {
         const isWide = isFullWidth(ch);
         if (isWide && this.cur_x >= cols - 1) {
-          if (!this.disableLinefeed) this.lineFeed();
-          this.cur_x = 0;
-          line = lines[this.cur_y];
-          if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
-          this.posChanged = true;
+          if (!this.disableLinefeed) {
+            this.lineFeed();
+            this.cur_x = 0;
+            line = lines[this.cur_y];
+            if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
+            this.posChanged = true;
+          } else {
+            if (this.cur_x >= cols) this.cur_x = cols - 1;
+            let ch2 = line[this.cur_x];
+            if (ch2) {
+              const leadAttr = attr || this.halfAttr || this.attr;
+              this.halfAttr = null;
+              ch2.ch = ch;
+              ch2.copyAttr(leadAttr);
+              ch2.needUpdate = true;
+              ch2.isDBCSLead = false;
+              ch2.isDBCSTrail = false;
+              this.changed = true;
+              this.posChanged = true;
+            }
+            break;
+          }
         }
 
         if (this.cur_x >= cols) this.cur_x = cols - 1;
@@ -416,6 +456,9 @@ export class TermBuf extends EventEmitter {
               ++this.cur_x;
             }
           }
+          if (this.disableLinefeed && this.cur_x >= cols) {
+            this.cur_x = cols - 1;
+          }
           this.changed = true;
           this.posChanged = true;
         }
@@ -440,11 +483,27 @@ export class TermBuf extends EventEmitter {
     if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
 
     if (this.cur_x >= cols - 1) {
-      if (!this.disableLinefeed) this.lineFeed();
-      this.cur_x = 0;
-      line = lines[this.cur_y];
-      if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
-      this.posChanged = true;
+      if (!this.disableLinefeed) {
+        this.lineFeed();
+        this.cur_x = 0;
+        line = lines[this.cur_y];
+        if (!line) line = lines[this.cur_y] = new Array(cols).fill(null).map(() => new TermChar(' '));
+        this.posChanged = true;
+      } else {
+        if (this.cur_x >= cols) this.cur_x = cols - 1;
+        let ch2 = line[this.cur_x];
+        if (ch2) {
+          ch2.ch = ch;
+          ch2.copyAttr(leadAttr || this.attr);
+          ch2.needUpdate = true;
+          ch2.isDBCSLead = false;
+          ch2.isDBCSTrail = false;
+          this.changed = true;
+          this.posChanged = true;
+        }
+        this.queueUpdate();
+        return;
+      }
     }
 
     if (this.cur_x >= cols) this.cur_x = cols - 1;
@@ -467,6 +526,9 @@ export class TermBuf extends EventEmitter {
           chTrail.isDBCSTrail = true;
           ++this.cur_x;
         }
+      }
+      if (this.disableLinefeed && this.cur_x >= cols) {
+        this.cur_x = cols - 1;
       }
       this.changed = true;
       this.posChanged = true;
@@ -1050,10 +1112,18 @@ export class TermBuf extends EventEmitter {
   }
 
   handleDECSET(mode) {
+    if (mode === 7) {
+      this.autoWrap = true;
+      return;
+    }
     this.locator?.handleDECSET(mode);
   }
 
   handleDECRST(mode) {
+    if (mode === 7) {
+      this.autoWrap = false;
+      return;
+    }
     this.locator?.handleDECRST(mode);
   }
 

@@ -5,6 +5,7 @@ export class Maple3Site extends BaseSite {
     super('maple3');
     this.fixed_last_row = 23;
     this.max_rows = 24;
+    this.wrap = false;
     this.registerEditorEscapeChar('\x15'); // Esc = Ctrl-U
   }
 

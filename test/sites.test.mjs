@@ -3940,3 +3940,60 @@ test('TermBuf filters isDBCSTrail when capturing line text and maps custom links
   assert.equal(pttLine[p1Start].startOfURL, true);
   assert.equal(pttLine[p1End - 1].endOfURL, true);
 });
+
+test('Site wrap configuration: BaseSite defaults to wrap=true, Maple3Site defaults to wrap=false, AutoSite delegates and binds to TermBuf', async () => {
+  const { BaseSite } = await import('../src/js/sites/base.js');
+  const { Maple3Site } = await import('../src/js/sites/maple3.js');
+  const { PttSite } = await import('../src/js/sites/ptt.js');
+  const { AutoSite } = await import('../src/js/sites/auto.js');
+  const { TermBuf } = await import('../src/js/term_buf.js');
+
+  const base = new BaseSite();
+  assert.equal(base.wrap, true, 'BaseSite wrap must default to true');
+
+  // String values support 'off', 'false', '0'
+  base.wrap = 'off';
+  assert.equal(base.wrap, false);
+  base.wrap = 'on';
+  assert.equal(base.wrap, true);
+  base.wrap = 'false';
+  assert.equal(base.wrap, false);
+  base.wrap = false;
+  assert.equal(base.wrap, false);
+
+  // Maple3Site actively sets wrap=false
+  const maple = new Maple3Site();
+  assert.equal(maple.wrap, false, 'Maple3Site wrap must default to false (wrap=off)');
+
+  // PttSite inherits wrap=true
+  const ptt = new PttSite();
+  assert.equal(ptt.wrap, true, 'PttSite wrap must default to true');
+
+  // AutoSite delegates wrap to active site
+  const auto = new AutoSite();
+  assert.equal(auto.wrap, true, 'AutoSite wrap must default to pttSite.wrap (true)');
+
+  auto.lockSite('maple3');
+  assert.equal(auto.wrap, false, 'AutoSite wrap must switch to maple3.wrap (false) when locked to maple3');
+
+  // TermBuf automatically applies site.wrap on site change
+  const buf = new TermBuf(80, 24);
+  assert.equal(buf.autoWrap, true);
+
+  buf.site = new Maple3Site();
+  assert.equal(buf.autoWrap, false, 'TermBuf autoWrap must become false when attaching Maple3Site');
+
+  buf.site = new PttSite();
+  assert.equal(buf.autoWrap, true, 'TermBuf autoWrap must become true when attaching PttSite');
+
+  // AutoSite lockSite with TermBuf updates termBuf.site and autoWrap
+  const autoBuf = new TermBuf(80, 24);
+  const autoSite2 = new AutoSite();
+  autoBuf.site = autoSite2;
+  assert.equal(autoBuf.autoWrap, true);
+
+  autoSite2.lockSite('maple3', autoBuf);
+  assert.equal(autoBuf.site, autoSite2.detectedSite);
+  assert.equal(autoBuf.autoWrap, false, 'autoBuf autoWrap must become false when AutoSite locks to maple3');
+});
+

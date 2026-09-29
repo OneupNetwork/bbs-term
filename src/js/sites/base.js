@@ -20,7 +20,9 @@ export class BaseSite extends EventEmitter {
     this.name = name;
     this.charset = charset;
     this.fixed_last_row = null;
+    this.min_rows = null;
     this.max_rows = null;
+    this.min_cols = null;
     this.max_cols = null;
     this._loginPromptFired = false;
     this._byteBuffer = null;
@@ -30,6 +32,7 @@ export class BaseSite extends EventEmitter {
     this.hasWeb = false;
     this._editorEscapeChar = '\x1b';
     this._editorEscapeFrom = '\x1b';
+    this._wrap = true;
   }
 
   set charset(val) {
@@ -53,6 +56,19 @@ export class BaseSite extends EventEmitter {
 
   get isUtf8() {
     return this.charset === CHARSETS.UTF8;
+  }
+
+  get wrap() {
+    return this._wrap !== undefined ? this._wrap : true;
+  }
+
+  set wrap(val) {
+    if (typeof val === 'string') {
+      const lower = val.toLowerCase().trim();
+      this._wrap = lower !== 'off' && lower !== 'false' && lower !== '0';
+    } else {
+      this._wrap = Boolean(val);
+    }
   }
 
   get supportNavKeys() {
@@ -187,10 +203,16 @@ export class BaseSite extends EventEmitter {
   clampTermSize(cols, rows) {
     let clampedCols = cols;
     let clampedRows = rows;
-    if (this.max_rows !== null && this.max_rows !== undefined && rows > this.max_rows) {
+    if (this.min_rows !== null && this.min_rows !== undefined && clampedRows < this.min_rows) {
+      clampedRows = this.min_rows;
+    }
+    if (this.max_rows !== null && this.max_rows !== undefined && clampedRows > this.max_rows) {
       clampedRows = this.max_rows;
     }
-    if (this.max_cols !== null && this.max_cols !== undefined && cols > this.max_cols) {
+    if (this.min_cols !== null && this.min_cols !== undefined && clampedCols < this.min_cols) {
+      clampedCols = this.min_cols;
+    }
+    if (this.max_cols !== null && this.max_cols !== undefined && clampedCols > this.max_cols) {
       clampedCols = this.max_cols;
     }
     if (clampedCols !== cols || clampedRows !== rows) {

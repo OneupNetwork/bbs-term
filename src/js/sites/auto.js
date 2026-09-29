@@ -69,6 +69,22 @@ export class AutoSite extends BaseSite {
     return active && active !== this ? Boolean(active.supportNavKeys) : true;
   }
 
+  get wrap() {
+    const active = this.getActiveSite();
+    return active && active !== this ? active.wrap : (this._wrap ?? true);
+  }
+
+  set wrap(val) {
+    const active = this.getActiveSite();
+    if (active && active !== this) {
+      active.wrap = val;
+    } else {
+      this._wrap = typeof val === 'string'
+        ? (val.toLowerCase().trim() !== 'off' && val.toLowerCase().trim() !== 'false' && val.toLowerCase().trim() !== '0')
+        : Boolean(val);
+    }
+  }
+
   get pageState() {
     const active = this.getActiveSite();
     return active && active !== this ? active.pageState : this._pageState ?? 0;
@@ -95,6 +111,50 @@ export class AutoSite extends BaseSite {
     } else {
       this._prevPageState = val;
     }
+  }
+
+  get min_cols() {
+    const active = this.getActiveSite();
+    return active && active !== this && active.min_cols != null ? active.min_cols : this._min_cols ?? null;
+  }
+
+  set min_cols(val) {
+    this._min_cols = val;
+  }
+
+  get max_cols() {
+    const active = this.getActiveSite();
+    return active && active !== this && active.max_cols != null ? active.max_cols : this._max_cols ?? null;
+  }
+
+  set max_cols(val) {
+    this._max_cols = val;
+  }
+
+  get min_rows() {
+    const active = this.getActiveSite();
+    return active && active !== this && active.min_rows != null ? active.min_rows : this._min_rows ?? null;
+  }
+
+  set min_rows(val) {
+    this._min_rows = val;
+  }
+
+  get max_rows() {
+    const active = this.getActiveSite();
+    return active && active !== this && active.max_rows != null ? active.max_rows : this._max_rows ?? null;
+  }
+
+  set max_rows(val) {
+    this._max_rows = val;
+  }
+
+  clampTermSize(cols, rows) {
+    const active = this.getActiveSite();
+    if (active && active !== this) {
+      return active.clampTermSize(cols, rows);
+    }
+    return super.clampTermSize(cols, rows);
   }
 
   attach(term) {

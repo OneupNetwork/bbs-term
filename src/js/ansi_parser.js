@@ -267,7 +267,7 @@ export class AnsiParser {
                 term.beginSyncUpdate();
               }
               for (const p of params) {
-                if ([9, 1000, 1001, 1002, 1003, 1005, 1006, 1015].includes(p)) {
+                if ([7, 9, 1000, 1001, 1002, 1003, 1005, 1006, 1015].includes(p)) {
                   term.handleDECSET?.(p);
                 }
               }
@@ -279,7 +279,7 @@ export class AnsiParser {
                 term.endSyncUpdate();
               }
               for (const p of params) {
-                if ([9, 1000, 1001, 1002, 1003, 1005, 1006, 1015].includes(p)) {
+                if ([7, 9, 1000, 1001, 1002, 1003, 1005, 1006, 1015].includes(p)) {
                   term.handleDECRST?.(p);
                 }
               }

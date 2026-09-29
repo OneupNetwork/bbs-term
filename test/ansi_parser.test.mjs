@@ -514,5 +514,76 @@ test('TermBuf defers rendering during synchronized update and aligns with V-Sync
   }
 });
 
+test('AnsiParser parses VT100 DECAWM (DECSET 7 / DECRST 7)', () => {
+  const calls = [];
+  const mockTerm = {
+    puts() {},
+    assignParamsToAttrs() {},
+    gotoPos() {},
+    clear() {},
+    insert() {},
+    tab() {},
+    beginSyncUpdate() {},
+    endSyncUpdate() {},
+    handleDECSET(mode) { calls.push(['DECSET', mode]); },
+    handleDECRST(mode) { calls.push(['DECRST', mode]); },
+  };
+
+  const parser = new AnsiParser(mockTerm);
+
+  // DECRST 7: Turn auto-wrap OFF (CSI ? 7 l)
+  parser.feed('\x1b[?7l');
+  assert.deepEqual(calls[0], ['DECRST', 7]);
+
+  // DECSET 7: Turn auto-wrap ON (CSI ? 7 h)
+  parser.feed('\x1b[?7h');
+  assert.deepEqual(calls[1], ['DECSET', 7]);
+
+  // Compound parameters with mode 7
+  parser.feed('\x1b[?7;1000h');
+  assert.deepEqual(calls[2], ['DECSET', 7]);
+  assert.deepEqual(calls[3], ['DECSET', 1000]);
+});
+
+test('TermBuf handles VT100 DECAWM and prevents auto-wrap when wrap=false', async () => {
+  const { TermBuf } = await import('../src/js/term_buf.js');
+  const buf = new TermBuf(80, 24);
+  const parser = new AnsiParser(buf);
+
+  // Default autoWrap is true
+  assert.equal(buf.autoWrap, true);
+  assert.equal(buf.wrap, true);
+
+  // Print 85 ASCII characters: should wrap to row 1, col 5
+  parser.feed('A'.repeat(85));
+  assert.equal(buf.cur_y, 1);
+  assert.equal(buf.cur_x, 5);
+
+  // Reset to (0, 0)
+  buf.gotoPos(0, 0);
+
+  // Turn auto-wrap OFF via VT100 DECAWM sequence: CSI ? 7 l
+  parser.feed('\x1b[?7l');
+  assert.equal(buf.autoWrap, false);
+  assert.equal(buf.wrap, false);
+
+  // Print 85 ASCII characters: must NOT wrap to row 1, clamps at col 79
+  buf.gotoPos(0, 0);
+  parser.feed('B'.repeat(85));
+  assert.equal(buf.cur_y, 0, 'cur_y must stay on row 0 when autoWrap is off');
+  assert.equal(buf.cur_x, 79, 'cur_x must clamp to cols - 1 (79) when autoWrap is off');
+
+  // Turn auto-wrap ON via VT100 DECAWM sequence: CSI ? 7 h
+  parser.feed('\x1b[?7h');
+  assert.equal(buf.autoWrap, true);
+  assert.equal(buf.wrap, true);
+
+  // Printing next characters wraps to row 1
+  parser.feed('CD');
+  assert.equal(buf.cur_y, 1);
+  assert.equal(buf.cur_x, 1);
+});
+
+
 
 
