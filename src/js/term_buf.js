@@ -201,6 +201,68 @@ export class TermChar {
 
 TermChar.newChar = new TermChar(' ');
 
+/**
+ * Trims trailing punctuation and unbalanced closing delimiters from a candidate URL string.
+ * Ensures URLs enclosed in parentheses (e.g. `(https://example.com)`) or quotes
+ * do not erroneously include the closing punctuation, while preserving balanced
+ * parentheses (e.g. Wikipedia links like `https://en.wikipedia.org/wiki/Foo_(bar)`).
+ *
+ * @param {string} url
+ * @returns {number} valid URL length (0 if invalid)
+ */
+export function getValidUrlLength(url) {
+  if (!url || typeof url !== 'string') return 0;
+  let len = url.length;
+  while (len > 0) {
+    const last = url[len - 1];
+    if (
+      last === '.' ||
+      last === ',' ||
+      last === ';' ||
+      last === ':' ||
+      last === '?' ||
+      last === '!' ||
+      last === '\'' ||
+      last === '"'
+    ) {
+      len--;
+      continue;
+    }
+    if (last === ')') {
+      let openP = 0;
+      let closeP = 0;
+      for (let i = 0; i < len; i++) {
+        if (url[i] === '(') openP++;
+        else if (url[i] === ')') closeP++;
+      }
+      if (closeP > openP) {
+        len--;
+        continue;
+      }
+    }
+    if (last === ']') {
+      let openB = 0;
+      let closeB = 0;
+      for (let i = 0; i < len; i++) {
+        if (url[i] === '[') openB++;
+        else if (url[i] === ']') closeB++;
+      }
+      if (closeB > openB) {
+        len--;
+        continue;
+      }
+    }
+    break;
+  }
+  if (
+    !/^(https?|ftp|telnet):\/\/.+/i.test(url.slice(0, len)) &&
+    !/^pid:\/\/\d+/i.test(url.slice(0, len))
+  ) {
+    return 0;
+  }
+  return len;
+}
+
 export class TermBuf extends EventEmitter {
   timerUpdate = null;
   animFrameId = null;
@@ -687,10 +749,15 @@ export class TermBuf extends EventEmitter {
         this.uriRegEx.lastIndex = 0;
         // pairs of URI start and end positions are stored in line.uris.
         while ( (res = this.uriRegEx.exec(s)) !== null ) {
+          const matchStr = res[0];
+          const validLen = getValidUrlLength(matchStr);
+          if (validLen <= 0) {
+            continue;
+          }
           const startCol = colMap[res.index] ?? res.index;
-          const endCol = (res[0].length > 0 && colEndMap)
-            ? (colEndMap[res.index + res[0].length - 1] ?? (res.index + res[0].length))
-            : (startCol + res[0].length);
+          const endCol = (validLen > 0 && colEndMap)
+            ? (colEndMap[res.index + validLen - 1] ?? (res.index + validLen))
+            : (startCol + validLen);
           const overlap = uris && uris.some(u => !(endCol <= u[0] || startCol >= u[1]));
           if (!overlap) {
             if (!uris) uris = [];

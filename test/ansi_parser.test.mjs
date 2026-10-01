@@ -1007,3 +1007,51 @@ test('TermBuf does not run regex hyperlink detection on text inside OSC 8', asyn
   assert.equal(buf.lines[0][normalStart].isStartOfURL(), true);
   assert.equal(buf.lines[0][normalStart].getFullURL(), 'https://normal-url.com');
 });
+
+test('TermBuf balances parentheses and trims trailing punctuation in regex URLs', async () => {
+  const { TermBuf, getValidUrlLength } = await import('../src/js/term_buf.js');
+
+  // Direct unit tests for getValidUrlLength
+  assert.equal(getValidUrlLength('https://www.youtube.com/watch?v=55xthmxFINY)'), 43);
+  assert.equal(getValidUrlLength('https://en.wikipedia.org/wiki/Foo_(bar)'), 39);
+  assert.equal(getValidUrlLength('https://en.wikipedia.org/wiki/Foo_(bar))'), 39);
+  assert.equal(getValidUrlLength('https://ptt.cc.'), 14);
+  assert.equal(getValidUrlLength('https://ptt.cc),'), 14);
+  assert.equal(getValidUrlLength('https://ptt.cc]'), 14);
+  assert.equal(getValidUrlLength('https://'), 0);
+
+  const buf = new TermBuf(80, 24);
+  const parser = new AnsiParser(buf);
+
+  // 1. YouTube URL in parentheses: (https://www.youtube.com/watch?v=55xthmxFINY)
+  buf.gotoPos(0, 0);
+  parser.feed('(https://www.youtube.com/watch?v=55xthmxFINY)');
+  buf.updateCharAttr();
+
+  assert.equal(buf.lines[0][0].isPartOfURL(), false, 'Opening paren ( at col 0 must not be part of URL');
+  assert.equal(buf.lines[0][1].isStartOfURL(), true, 'URL starts at col 1');
+  assert.equal(buf.lines[0][1].getFullURL(), 'https://www.youtube.com/watch?v=55xthmxFINY');
+  assert.equal(buf.lines[0][43].isEndOfURL(), true, 'URL ends at col 43 before closing paren');
+  assert.equal(buf.lines[0][44].isPartOfURL(), false, 'Closing paren ) at col 44 must not be part of URL');
+
+  // 2. Wikipedia URL with balanced parentheses in outer parentheses: (https://en.wikipedia.org/wiki/Foo_(bar))
+  buf.gotoPos(0, 1);
+  parser.feed('(https://en.wikipedia.org/wiki/Foo_(bar))');
+  buf.updateCharAttr();
+
+  assert.equal(buf.lines[1][0].isPartOfURL(), false);
+  assert.equal(buf.lines[1][1].isStartOfURL(), true);
+  assert.equal(buf.lines[1][1].getFullURL(), 'https://en.wikipedia.org/wiki/Foo_(bar)');
+  assert.equal(buf.lines[1][39].isEndOfURL(), true);
+  assert.equal(buf.lines[1][40].isPartOfURL(), false, 'Outer closing paren must be trimmed');
+
+  // 3. URL with trailing period: Check out https://ptt.cc.
+  buf.gotoPos(0, 2);
+  parser.feed('Check out https://ptt.cc.');
+  buf.updateCharAttr();
+
+  assert.equal(buf.lines[2][10].isStartOfURL(), true);
+  assert.equal(buf.lines[2][10].getFullURL(), 'https://ptt.cc');
+  assert.equal(buf.lines[2][23].isEndOfURL(), true);
+  assert.equal(buf.lines[2][24].isPartOfURL(), false, 'Trailing period must not be part of URL');
+});
