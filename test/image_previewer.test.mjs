@@ -59,9 +59,71 @@ test("resolveImageUrl resolves Imgur links with or without extension", () => {
     "https://i.imgur.com/abc1234.jpg",
   );
   assert.equal(
-    resolveImageUrl("http://m.imgur.com/gallery/xyz987"),
-    "https://i.imgur.com/xyz987.jpg",
+    resolveImageUrl("http://m.imgur.com/abc1234"),
+    "https://i.imgur.com/abc1234.jpg",
   );
+});
+
+test("resolveImageUrl skips Imgur albums and galleries", () => {
+  assert.equal(resolveImageUrl("https://imgur.com/a/AbCdE"), null);
+  assert.equal(resolveImageUrl("https://imgur.com/a/AbCdE.jpg"), null);
+  assert.equal(resolveImageUrl("http://m.imgur.com/gallery/xyz987"), null);
+  assert.equal(resolveImageUrl("https://imgur.com/gallery/title-slug-xyz987"), null);
+  assert.equal(resolveImageUrl("https://imgur.com/A/AbCdE", false), null);
+});
+
+test("resolveImageUrl resolves YouTube links to video thumbnails", () => {
+  const thumb = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg";
+  const urls = [
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "https://youtube.com/watch?v=dQw4w9WgXcQ&t=42s",
+    "https://www.youtube.com/watch?feature=share&v=dQw4w9WgXcQ",
+    "https://m.youtube.com/watch?v=dQw4w9WgXcQ",
+    "https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVM",
+    "https://youtu.be/dQw4w9WgXcQ",
+    "https://youtu.be/dQw4w9WgXcQ?si=AbCdEfGhIjKlMnOp",
+    "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+    "https://youtube.com/shorts/dQw4w9WgXcQ?si=xyz",
+    "https://www.youtube.com/live/dQw4w9WgXcQ?feature=shared",
+    "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    "http://www.youtube.com/watch?v=dQw4w9WgXcQ#t=10",
+  ];
+  for (const url of urls) {
+    assert.equal(resolveImageUrl(url, true), thumb, url);
+  }
+});
+
+test("resolveImageUrl rejects YouTube links without a valid video id", () => {
+  assert.equal(resolveImageUrl("https://www.youtube.com/", true), null);
+  assert.equal(resolveImageUrl("https://www.youtube.com/watch", true), null);
+  assert.equal(resolveImageUrl("https://www.youtube.com/watch?v=short", true), null);
+  assert.equal(resolveImageUrl("https://www.youtube.com/@channel", true), null);
+  assert.equal(resolveImageUrl("https://www.youtube.com/playlist?list=PL123", true), null);
+  assert.equal(resolveImageUrl("https://youtu.be/", true), null);
+  assert.equal(resolveImageUrl("https://notyoutube.com/watch?v=dQw4w9WgXcQ", false), null);
+});
+
+test("resolveImageUrl blocks YouTube when its domains are removed from whitelist", () => {
+  assert.equal(
+    resolveImageUrl("https://youtu.be/dQw4w9WgXcQ", true, ["imgur.com"]),
+    null,
+  );
+  assert.equal(
+    resolveImageUrl("https://youtu.be/dQw4w9WgXcQ", false, ["imgur.com"]),
+    "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+  );
+});
+
+test("mergeTrustedDomainsWithNewDefaults adds YouTube domains to legacy saved prefs", () => {
+  const merged = mergeTrustedDomainsWithNewDefaults(
+    ["imgur.com", "my-custom.site"],
+    undefined,
+  );
+  assert(merged.includes("youtube.com"));
+  assert(merged.includes("youtu.be"));
+  assert(merged.includes("ytimg.com"));
+  assert(merged.includes("my-custom.site"));
+  assert(!merged.includes("gyazo.com"), "Deleted initial default should stay deleted");
 });
 
 test("resolveImageUrl resolves modern PTT trusted hosts when whitelist is ON", () => {

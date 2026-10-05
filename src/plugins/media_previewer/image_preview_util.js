@@ -11,7 +11,14 @@ export const INITIAL_TRUSTED_IMAGE_DOMAINS = [
   "gyazo.com",
 ];
 
-export const TRUSTED_IMAGE_DOMAINS = [...INITIAL_TRUSTED_IMAGE_DOMAINS];
+// Domains added after the initial release go here so that
+// mergeTrustedDomainsWithNewDefaults() can append them to existing user prefs.
+export const TRUSTED_IMAGE_DOMAINS = [
+  ...INITIAL_TRUSTED_IMAGE_DOMAINS,
+  "youtube.com",
+  "youtu.be",
+  "ytimg.com",
+];
 
 export function normalizeDomain(raw) {
   if (!raw || typeof raw !== "string") return "";
@@ -87,6 +94,27 @@ export function isTrustedImageDomain(
   );
 }
 
+const YOUTUBE_ID_REGEX = /^[\w-]{11}$/;
+
+export function parseYoutubeVideoId(url) {
+  const hostname = url.hostname.toLowerCase();
+  let id = null;
+  if (hostname === "youtu.be") {
+    id = url.pathname.split("/")[1];
+  } else if (
+    hostname === "youtube.com" ||
+    hostname.endsWith(".youtube.com")
+  ) {
+    if (url.pathname === "/watch") {
+      id = url.searchParams.get("v");
+    } else {
+      const m = url.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/]+)/);
+      id = m ? m[1] : null;
+    }
+  }
+  return id && YOUTUBE_ID_REGEX.test(id) ? id : null;
+}
+
 export function resolveImageUrl(
   href,
   whitelistOnly = true,
@@ -112,9 +140,16 @@ export function resolveImageUrl(
     return null;
   }
 
-  // 1. Imgur resolver (supports with or without extension)
+  // 1. Imgur resolver (supports with or without extension).
+  // Album / gallery IDs are not image IDs, so they cannot be previewed.
+  if (
+    /(^|\.)imgur\.com$/.test(hostname) &&
+    /^\/(?:a|gallery)\//i.test(url.pathname)
+  ) {
+    return null;
+  }
   const imgurMatch = href.match(
-    /^https?:\/\/(?:[im]\.)?imgur\.com\/(?:gallery\/|a\/)?([a-zA-Z0-9]+)(?:\.([a-zA-Z0-9]+))?(?:[?#].*)?$/i,
+    /^https?:\/\/(?:[im]\.)?imgur\.com\/([a-zA-Z0-9]+)(?:\.([a-zA-Z0-9]+))?(?:[?#].*)?$/i,
   );
   if (imgurMatch) {
     const photoId = imgurMatch[1];
@@ -130,7 +165,13 @@ export function resolveImageUrl(
     return href;
   }
 
-  // 3. URLs with common image extensions (.jpg, .jpeg, .png, .gif, .webp, .bmp)
+  // 3. YouTube video thumbnail (watch / shorts / live / embed / youtu.be)
+  const youtubeId = parseYoutubeVideoId(url);
+  if (youtubeId) {
+    return `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
+  }
+
+  // 4. URLs with common image extensions (.jpg, .jpeg, .png, .gif, .webp, .bmp)
   const IMAGE_EXT_REGEX = /\.(jpe?g|png|gif|webp|bmp)(?:[?#].*)?$/i;
   if (IMAGE_EXT_REGEX.test(url.pathname + url.search)) {
     return href;
